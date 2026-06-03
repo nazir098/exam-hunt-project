@@ -1,0 +1,21 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: exam-hunt-api
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://127.0.0.1:27017/neetlu}
+
+app:
+  cors-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  extractor-root: ${EXTRACTOR_ROOT:}
+  extractor-manifest-base-url: ${EXTRACTOR_MANIFEST_BASE_URL:}
+  admin-import-key: ${ADMIN_IMPORT_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

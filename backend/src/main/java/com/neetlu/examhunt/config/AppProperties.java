@@ -1,0 +1,11 @@
+package com.neetlu.examhunt.config;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix = "app")
+public record AppProperties(
+        String corsOrigins,
+        String extractorRoot,
+        String extractorManifestBaseUrl,
+        String adminImportKey
+) {}

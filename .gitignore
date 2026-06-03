@@ -1,0 +1,14 @@
+.env
+.env.local
+*.log
+
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+
+frontend/node_modules/
+frontend/dist/
+
+.DS_Store
+.idea/
+*.iml
+.vscode/
