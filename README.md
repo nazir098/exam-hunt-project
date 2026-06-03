@@ -34,7 +34,7 @@ Neetlu frontend (public browse, study / practice modes)
 
 2. Edit `.env`:
 
-   - `MONGODB_URI` — Atlas connection string with database name, e.g. `...mongodb.net/neetlu?retryWrites=true&w=majority`
+   - `MONGODB_URI` — Atlas connection string with database name, e.g. `...mongodb.net/exam-hunt?retryWrites=true&w=majority`
    - `EXTRACTOR_ROOT` — absolute path to your `pdf-qa-extractor` repo
    - Optional `ADMIN_IMPORT_KEY` — if set, import endpoints require header `X-Admin-Key`
 
