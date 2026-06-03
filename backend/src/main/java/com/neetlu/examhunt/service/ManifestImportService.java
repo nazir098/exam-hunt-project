@@ -46,6 +46,16 @@ public class ManifestImportService {
     }
 
     public ImportResult importAllPublishedFolders() throws IOException {
+        return importPublishedFolders(manifest -> true);
+    }
+
+    public ImportResult importAllNeetFolders() throws IOException {
+        return importPublishedFolders(manifest ->
+                "NEET".equalsIgnoreCase(text(manifest, "exam")));
+    }
+
+    private ImportResult importPublishedFolders(java.util.function.Predicate<JsonNode> include)
+            throws IOException {
         Path outputRoot = resolveOutputRoot();
         if (!Files.isDirectory(outputRoot)) {
             throw new IOException("Extractor output not found: " + outputRoot);
@@ -58,11 +68,15 @@ public class ManifestImportService {
                     continue;
                 }
                 JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
+                if (!include.test(manifest)) {
+                    continue;
+                }
                 results.add(importManifestNode(manifest, dir.getFileName().toString()));
             }
         }
         int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
-        return new ImportResult("ALL", questions, results.size(), results);
+        String label = results.size() == 1 ? results.get(0).packId() : "NEET";
+        return new ImportResult(label, questions, results.size(), results);
     }
 
     private JsonNode loadManifestFromDisk(String folderName) throws IOException {

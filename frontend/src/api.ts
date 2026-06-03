@@ -46,6 +46,24 @@ export type PageResponse<T> = {
   size: number;
 };
 
+export type YearCatalogEntry = {
+  year: number;
+  status: "available" | "coming_soon";
+  packId: string | null;
+  questionCount: number;
+  message: string | null;
+};
+
+export type ExamCatalogEntry = {
+  id: string;
+  name: string;
+  status: "available" | "coming_soon";
+  description: string;
+  totalQuestions: number;
+  availableYears: number;
+  years: YearCatalogEntry[];
+};
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) {
@@ -57,6 +75,10 @@ async function getJson<T>(path: string): Promise<T> {
 
 export function fetchPacks() {
   return getJson<PackSummary[]>("/api/packs");
+}
+
+export function fetchExams() {
+  return getJson<ExamCatalogEntry[]>("/api/exams");
 }
 
 export function fetchPack(packId: string) {

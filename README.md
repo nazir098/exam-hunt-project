@@ -61,6 +61,22 @@ curl -X POST http://127.0.0.1:8081/api/admin/import/folder/2016
 curl -X POST http://127.0.0.1:8081/api/admin/import/all
 ```
 
+**Import NEET data** (recommended — only NEET papers are live in the app):
+
+```bash
+curl -X POST http://127.0.0.1:8081/api/admin/import/neet
+# or one published year folder:
+curl -X POST http://127.0.0.1:8081/api/admin/import/folder/2016
+```
+
+Remove old placeholder demo packs from MongoDB:
+
+```bash
+curl -X POST http://127.0.0.1:8081/api/admin/seed/cleanup-demo
+```
+
+Other exams (JEE, UPSC, CAT) show as **coming soon** in the UI until content is added.
+
 **Frontend**
 
 ```bash
@@ -75,13 +91,16 @@ Open http://127.0.0.1:5173 — dev server proxies `/api` to the backend.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/packs` | List exam packs |
+| GET | `/api/exams` | Exam catalog (NEET years + coming-soon exams) |
+| GET | `/api/packs` | List NEET exam packs |
 | GET | `/api/packs/{packId}` | Pack detail + stats |
 | GET | `/api/packs/{packId}/facets` | Subject/chapter facets |
 | GET | `/api/questions?packId=&subject=&chapter=&page=&size=` | Paginated questions (no answer) |
 | GET | `/api/questions/{questionId}` | Full question + answer (for reveal) |
 | POST | `/api/admin/import/folder/{folder}` | Import one year folder |
+| POST | `/api/admin/import/neet` | Import all published NEET manifests |
 | POST | `/api/admin/import/all` | Import all published manifests |
+| POST | `/api/admin/seed/cleanup-demo` | Remove DEMO_* placeholder packs |
 
 ## Product choices (v1)
 

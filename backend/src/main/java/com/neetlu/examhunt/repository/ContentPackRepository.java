@@ -12,5 +12,7 @@ public interface ContentPackRepository extends MongoRepository<ContentPack, Stri
 
     List<ContentPack> findAllByOrderByYearDesc();
 
+    List<ContentPack> findByExamIgnoreCaseOrderByYearDesc(String exam);
+
     void deleteByPackId(String packId);
 }
