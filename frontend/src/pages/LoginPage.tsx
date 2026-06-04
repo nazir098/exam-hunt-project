@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
 import { sessionIdleMinutes } from "../auth/session";
 
@@ -28,28 +29,56 @@ export default function LoginPage() {
 
   return (
     <main className="auth-page">
-      <div className="auth-card card">
-        <h1>Sign in</h1>
-        <p className="muted">
+      <div className="auth-card glass-card">
+        <div className="auth-card__icon" aria-hidden>
+          <span className="material-symbols-outlined">login</span>
+        </div>
+        <h1 className="auth-card__title">Sign in</h1>
+        <p className="auth-card__desc">
           Track marks, progress, and ratings. You stay signed in until you log out or{" "}
           {sessionIdleMinutes()} minutes of inactivity.
         </p>
+
         <form onSubmit={onSubmit} className="auth-form">
-          <label>
-            Email
-            <input name="email" type="email" required autoComplete="email" />
+          <label className="auth-field">
+            <span className="auth-field__label">Email</span>
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              className="auth-field__input"
+              placeholder="you@example.com"
+            />
           </label>
-          <label>
-            Password
-            <input name="password" type="password" required minLength={6} autoComplete="current-password" />
+          <label className="auth-field">
+            <span className="auth-field__label">Password</span>
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="current-password"
+              className="auth-field__input"
+              placeholder="••••••••"
+            />
           </label>
-          {error && <p className="error-text">{error}</p>}
-          <button type="submit" className="btn primary btn-block" disabled={busy}>
+          {error && <p className="auth-error">{error}</p>}
+          <button type="submit" className="auth-submit electric-glow-bg" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <p className="auth-footer muted">
-          New here? <Link to="/register">Create an account</Link>
+
+        <p className="auth-card__footer">
+          New here?{" "}
+          <Link to="/register" className="auth-link">
+            Create an account
+          </Link>
+        </p>
+        <p className="auth-card__brand-muted">
+          <Link to="/" className="auth-link auth-link--subtle">
+            ← Back to {BRAND_NAME}
+          </Link>
         </p>
       </div>
     </main>

@@ -5,6 +5,7 @@ import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { initTheme } from "./utils/theme";
 import "./styles/stitch.css";
+import "./styles/analytics.css";
 import "./styles.css";
 
 document.documentElement.classList.add("dark");

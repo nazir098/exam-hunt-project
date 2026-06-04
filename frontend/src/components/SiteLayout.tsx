@@ -7,6 +7,8 @@ import {
   fetchQuestions,
 } from "../api";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
+import DesktopSiteFooter from "./DesktopSiteFooter";
+import DesktopSiteHeader from "./DesktopSiteHeader";
 import StitchShell from "./StitchShell";
 import StitchViewport from "./StitchViewport";
 
@@ -76,16 +78,24 @@ export default function SiteLayout() {
   }
 
   const isAnalytics = pathname === "/analytics";
-  const hideChrome =
+  const hideMobileChrome =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     !!pathname.match(/^\/practice\/[^/]+\//);
 
-  if (hideChrome) {
+  const outlet = <Outlet context={{ startPracticeFromBank, practiceBusy }} />;
+
+  if (hideMobileChrome) {
     return (
-      <div className="legacy-ui min-h-[100dvh]">
-        <Outlet context={{ startPracticeFromBank, practiceBusy }} />
-      </div>
+      <StitchViewport>
+        <div className="flex flex-col min-h-[100dvh] stitch-shell">
+          <DesktopSiteHeader />
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="stitch-page-content flex-1">{outlet}</div>
+            <DesktopSiteFooter />
+          </div>
+        </div>
+      </StitchViewport>
     );
   }
 
@@ -96,7 +106,7 @@ export default function SiteLayout() {
         showFab={!isQuestionDetail}
         fabIcon={isAnalytics ? "smart_toy" : "chat_bubble"}
       >
-        <Outlet context={{ startPracticeFromBank, practiceBusy }} />
+        {outlet}
       </StitchShell>
     </StitchViewport>
   );

@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
 
 export default function RegisterPage() {
@@ -29,29 +30,65 @@ export default function RegisterPage() {
 
   return (
     <main className="auth-page">
-      <div className="auth-card card">
-        <h1>Create account</h1>
-        <p className="muted">Free account — save adaptive practice progress and NEET marks.</p>
+      <div className="auth-card glass-card">
+        <div className="auth-card__icon" aria-hidden>
+          <span className="material-symbols-outlined">person_add</span>
+        </div>
+        <h1 className="auth-card__title">Create account</h1>
+        <p className="auth-card__desc">
+          Free account — save adaptive practice progress, NEET marks, and leaderboard rank.
+        </p>
+
         <form onSubmit={onSubmit} className="auth-form">
-          <label>
-            Display name
-            <input name="displayName" type="text" autoComplete="name" placeholder="Optional" />
+          <label className="auth-field">
+            <span className="auth-field__label">Display name</span>
+            <input
+              name="displayName"
+              type="text"
+              autoComplete="name"
+              className="auth-field__input"
+              placeholder="Optional"
+            />
           </label>
-          <label>
-            Email
-            <input name="email" type="email" required autoComplete="email" />
+          <label className="auth-field">
+            <span className="auth-field__label">Email</span>
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              className="auth-field__input"
+              placeholder="you@example.com"
+            />
           </label>
-          <label>
-            Password
-            <input name="password" type="password" required minLength={6} autoComplete="new-password" />
+          <label className="auth-field">
+            <span className="auth-field__label">Password</span>
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="new-password"
+              className="auth-field__input"
+              placeholder="At least 6 characters"
+            />
           </label>
-          {error && <p className="error-text">{error}</p>}
-          <button type="submit" className="btn primary btn-block" disabled={busy}>
+          {error && <p className="auth-error">{error}</p>}
+          <button type="submit" className="auth-submit electric-glow-bg" disabled={busy}>
             {busy ? "Creating…" : "Create account"}
           </button>
         </form>
-        <p className="auth-footer muted">
-          Already have an account? <Link to="/login">Sign in</Link>
+
+        <p className="auth-card__footer">
+          Already have an account?{" "}
+          <Link to="/login" className="auth-link">
+            Sign in
+          </Link>
+        </p>
+        <p className="auth-card__brand-muted">
+          <Link to="/" className="auth-link auth-link--subtle">
+            ← Back to {BRAND_NAME}
+          </Link>
         </p>
       </div>
     </main>

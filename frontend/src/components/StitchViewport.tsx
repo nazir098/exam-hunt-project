@@ -1,10 +1,12 @@
 import { ReactNode } from "react";
 
-/** Constrains UI to Stitch mobile frame (~390px) so desktop matches the export mocks. */
+/**
+ * Mobile: optional centered frame. Desktop (lg+): full-width website canvas.
+ */
 export default function StitchViewport({ children }: { children: ReactNode }) {
   return (
-    <div className="stitch-viewport-root min-h-[100dvh] w-full flex justify-center bg-[#0a0a14]">
-      <div className="stitch-viewport w-full max-w-[430px] min-h-[100dvh] relative flex flex-col bg-background shadow-2xl shadow-black/50 overflow-x-hidden">
+    <div className="stitch-viewport-root min-h-[100dvh] w-full bg-[#0a0a14] lg:bg-background">
+      <div className="stitch-viewport w-full min-h-[100dvh] relative flex flex-col bg-background overflow-x-hidden max-lg:max-w-[430px] max-lg:mx-auto max-lg:shadow-2xl max-lg:shadow-black/50 lg:max-w-none lg:mx-0 lg:shadow-none">
         {children}
       </div>
     </div>

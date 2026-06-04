@@ -55,12 +55,23 @@ export default function BrowsePage() {
     }));
 
   useEffect(() => {
-    Promise.all([fetchExams(), fetchPacks()])
-      .then(([exams, packList]) => {
-        setCatalog(exams);
-        setPacks(packList);
-      })
-      .catch((e) => setError(e.message));
+    Promise.allSettled([fetchExams(), fetchPacks()]).then(([examsResult, packsResult]) => {
+      if (examsResult.status === "fulfilled") {
+        setCatalog(examsResult.value);
+      } else {
+        console.warn("Exam catalog unavailable:", examsResult.reason);
+      }
+      if (packsResult.status === "fulfilled") {
+        setPacks(packsResult.value);
+      } else {
+        setError(packsResult.reason instanceof Error ? packsResult.reason.message : "Could not load packs");
+      }
+      if (examsResult.status === "rejected" && packsResult.status === "rejected") {
+        setError(
+          examsResult.reason instanceof Error ? examsResult.reason.message : "Could not load question bank"
+        );
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -247,7 +258,12 @@ export default function BrowsePage() {
 
       <BankSearchSection onOpenFilters={() => setFiltersOpen(true)} />
 
-      <div className="space-y-gutter">
+      <div className="lg:grid lg:grid-cols-[minmax(240px,280px)_1fr] lg:gap-gutter lg:items-start">
+        <aside className="hidden lg:block sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto custom-scrollbar">
+          <FilterPanel {...filterProps} />
+        </aside>
+
+      <div className="space-y-gutter min-w-0">
         <div className="space-y-gutter">
         {!neetAvailable && !loading && (
           <div className="neet-import-hint card">
@@ -353,6 +369,7 @@ export default function BrowsePage() {
           </div>
         )}
         </div>
+      </div>
       </div>
     </main>
   );

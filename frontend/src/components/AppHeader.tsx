@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 const NAV = [
   { to: "/", label: "Dashboard", match: (p: string) => p === "/" },
   { to: "/bank?exam=NEET", label: "Practice", match: (p: string) => p === "/bank" || p.startsWith("/pack/") },
-  { to: "/practice", label: "Sessions", match: (p: string) => p === "/practice" },
+  { to: "/practice", label: "Practice", match: (p: string) => p === "/practice" },
   { to: "/analytics", label: "Analytics", match: (p: string) => p === "/analytics" },
 ] as const;
 

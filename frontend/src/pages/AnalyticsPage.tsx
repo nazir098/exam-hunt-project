@@ -1,78 +1,60 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { PracticeSessionView } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import { STITCH_ANALYTICS_HERO } from "../design/stitchAssets";
-
-function sessionAccuracy(s: PracticeSessionView): number {
-  const total = s.correctCount + s.wrongCount;
-  if (total === 0) return 0;
-  return Math.round((s.correctCount / total) * 100);
-}
-
-function heatmapClass(level: number): string {
-  if (level <= 0) return "bg-surface-container-highest";
-  if (level === 1) return "bg-secondary/30";
-  if (level === 2) return "bg-secondary/60";
-  if (level === 3) return "bg-secondary";
-  return "bg-secondary/80";
-}
-
-function buildHeatmap(sessions: PracticeSessionView[]): number[] {
-  const cells = Array(21).fill(0);
-  const now = new Date();
-  sessions.forEach((s) => {
-    const d = new Date(s.startedAt);
-    const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
-    if (diffDays >= 0 && diffDays < 21) {
-      const idx = 20 - diffDays;
-      cells[idx] = Math.min(4, cells[idx] + 1);
-    }
-  });
-  return cells;
-}
+import InsightChartsPanel from "../components/InsightChartsPanel";
+import Scorecard from "../components/Scorecard";
+import SessionHistoryList from "../components/SessionHistoryList";
+import WeeklyActivityPanel from "../components/WeeklyActivityPanel";
+import {
+  buildDashboardStats,
+  meaningfulSessions,
+  NEET_SUBJECT_MASTERY,
+  sessionAccuracy,
+} from "../utils/dashboardStats";
 
 export default function AnalyticsPage() {
-  const { user, progress, loading } = useAuth();
+  const { user, progress, loading, refreshProgress } = useAuth();
 
-  const stats = useMemo(() => {
-    const sessions = progress?.recentSessions ?? [];
-    const completed = sessions.filter((s) => s.correctCount + s.wrongCount > 0);
-    const lastSix = completed.slice(0, 6).reverse();
-    const bars = lastSix.map((s) => sessionAccuracy(s));
-    const trend =
-      bars.length >= 2 ? bars[bars.length - 1] - bars[0] : progress?.accuracyPercent ?? 12;
-    const totalMarks = sessions.reduce((sum, s) => sum + s.totalMarks, 0);
-    const maxMarks = sessions.reduce((sum, s) => sum + s.maxMarks, 0);
-    return { sessions, bars, trend, heatmap: buildHeatmap(sessions), totalMarks, maxMarks, packs: progress?.byPack ?? [] };
-  }, [progress]);
+  useEffect(() => {
+    if (user) refreshProgress();
+  }, [user, refreshProgress]);
 
-  const name = user?.displayName?.split(" ")[0] || "Scholar";
+  const stats = useMemo(() => buildDashboardStats(progress), [progress]);
+
   const accuracy = progress?.accuracyPercent ?? null;
   const attempts = progress?.totalAttempts ?? 0;
   const barHeights = stats.bars.length ? stats.bars : [40, 55, 45, 60, 70, accuracy ?? 50];
 
+  const subjects = useMemo(() => {
+    if (!progress?.byPack.length) return [...NEET_SUBJECT_MASTERY];
+    const base = accuracy ?? 70;
+    return [
+      { name: "Physics", pct: Math.min(99, base + 8) },
+      { name: "Chemistry", pct: Math.max(40, base - 6) },
+      { name: "Biology", pct: Math.min(99, base + 2) },
+    ];
+  }, [progress, accuracy]);
+
   if (loading) {
     return (
-      <main className="analytics-page px-margin-mobile pb-8">
-        <p className="text-outline">Loading analytics…</p>
+      <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8">
+        <p className="analytics-loading">Loading analytics…</p>
       </main>
     );
   }
 
   if (!user) {
     return (
-      <main className="analytics-page px-margin-mobile pb-8">
-        <section className="glass-card rounded-xl p-lg md:p-xl flex flex-col gap-lg">
-          <h1 className="text-headline-lg font-headline-lg">Analytics &amp; insights</h1>
-          <p className="text-on-surface-variant text-body-md max-w-xl">
-            Sign in and complete practice sessions to unlock accuracy trends, activity heatmaps, and
-            personalized recommendations.
+      <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8">
+        <p className="page-eyebrow">Progress lab</p>
+        <section className="analytics-guest glass-card">
+          <span className="dashboard-badge">Analytics</span>
+          <h1 className="analytics-page-title">Scores, trends &amp; history</h1>
+          <p className="analytics-hero-sub">
+            Unlike the home dashboard, this page shows full scorecards, accuracy charts, weekly heatmaps,
+            and every practice session you&apos;ve completed.
           </p>
-          <Link
-            to="/login?next=/analytics"
-            className="electric-glow-bg px-xl py-md rounded-lg text-on-primary-fixed font-bold w-fit"
-          >
+          <Link to="/login?next=/analytics" className="electric-glow-bg analytics-guest__cta">
             Sign in to view analytics
           </Link>
         </section>
@@ -81,251 +63,125 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <main className="analytics-page px-margin-mobile pb-8">
-      <section className="mb-xxl relative overflow-hidden rounded-xl p-lg glass-card flex flex-col gap-lg">
-        <div className="relative z-10 flex-1">
-          <div className="flex items-center gap-xs mb-sm">
-            <span className="px-3 py-1 rounded-full bg-secondary-container/20 text-secondary text-caption font-bold uppercase tracking-wider">
-              Academic Excellence
-            </span>
-          </div>
-          <h2 className="text-headline-lg-mobile md:text-headline-lg font-headline-lg text-on-surface mb-sm leading-tight">
-            Hello, {name}!{" "}
-            {accuracy != null && accuracy >= 80
-              ? "You're in the top 5% today."
-              : "Keep building your mastery."}
-          </h2>
-          <p className="text-on-surface-variant text-body-md max-w-xl">
-            {attempts > 0
-              ? `Overall accuracy ${accuracy}% across ${attempts} attempts. Review trends below.`
-              : "Complete your first practice session to populate charts and recommendations."}
-          </p>
-          <div className="mt-lg flex flex-wrap gap-md">
-            <div className="flex items-center gap-sm bg-surface-container-highest/50 px-md py-sm rounded-xl border border-white/5">
-              <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                local_fire_department
-              </span>
-              <span className="font-bold">{attempts} attempts</span>
-            </div>
-            <div className="flex items-center gap-sm bg-surface-container-highest/50 px-md py-sm rounded-xl border border-white/5">
-              <span className="material-symbols-outlined text-primary">military_tech</span>
-              <span className="font-bold">{stats.totalMarks} marks</span>
-            </div>
-          </div>
-        </div>
-        <div className="relative w-full aspect-video rounded-xl overflow-hidden group">
-          <img
-            alt=""
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-            src={STITCH_ANALYTICS_HERO}
+    <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
+      <header className="analytics-page-header">
+        <p className="page-eyebrow">Progress lab</p>
+        <h1 className="analytics-page-title">Analytics &amp; scores</h1>
+        <p className="analytics-page-desc">
+          Full scorecard, trends, and session history. Use the{" "}
+          <Link to="/" className="text-primary font-bold">
+            Dashboard
+          </Link>{" "}
+          for quick actions and daily study shortcuts.
+        </p>
+      </header>
+
+      <Scorecard progress={progress} summaryOnly showSessionNote={false} />
+
+      <div className="analytics-grid">
+        <div className="analytics-main">
+          <InsightChartsPanel
+            stats={stats}
+            accuracy={accuracy}
+            attempts={attempts}
+            subjects={subjects}
+            barHeights={barHeights}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-          <div className="absolute bottom-4 left-4 right-4 text-center">
-            <Link
-              to="/practice"
-              className="w-full py-3 electric-glow-bg rounded-lg text-on-primary-fixed font-bold shadow-lg shadow-primary-container/20 active:scale-95 transition-transform duration-150 block"
-            >
-              {stats.sessions.some((s) => s.status === "active" && s.currentQuestionId)
-                ? "Resume Practice Session"
-                : "Start Practice Session"}
-            </Link>
-          </div>
-        </div>
-      </section>
 
-      <div className="space-y-lg">
-        <div className="space-y-lg">
-          <div className="glass-card p-lg rounded-xl relative overflow-hidden group">
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all" />
-            <div className="flex items-start gap-md mb-lg">
-              <div className="p-3 rounded-xl bg-primary-container/20 text-primary">
-                <span className="material-symbols-outlined text-headline-md">psychology</span>
-              </div>
+          <section className="analytics-card glass-card">
+            <header className="analytics-card-head spread">
               <div>
-                <h3 className="text-headline-md font-headline-md">AI Insights &amp; Trends</h3>
-                <p className="text-on-surface-variant text-body-sm">Personalized corrective measures based on last 5 tests.</p>
+                <h2>Session history</h2>
+                <p className="analytics-card-sub">
+                  Sessions where you submitted at least one answer (empty abandoned runs omitted).
+                </p>
               </div>
-            </div>
-            <div className="bg-surface-container-lowest/50 p-md rounded-xl border-l-4 border-error mb-lg">
-              <p className="text-body-md">
-                {attempts === 0 ? (
-                  '"Start a practice session to receive personalized focus areas."'
-                ) : (
-                  <>
-                    Focus on <span className="text-primary font-bold">weak chapters</span>: your accuracy is{" "}
-                    <span className="text-error font-bold">{accuracy}%</span>.
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-md">
-              <div className="p-md rounded-xl bg-surface-container-high/40">
-                <div className="flex justify-between items-end mb-sm">
-                  <span className="text-label-md uppercase tracking-wider text-on-surface-variant">Accuracy Trend</span>
-                  <span className="text-secondary font-bold text-headline-md">
-                    {stats.trend >= 0 ? "+" : ""}
-                    {stats.trend}%
-                  </span>
-                </div>
-                <div className="h-16 flex items-end gap-1">
-                  {barHeights.map((h, i) => (
-                    <div
-                      key={i}
-                      className={`flex-1 rounded-t ${
-                        i >= barHeights.length - 2
-                          ? i === barHeights.length - 1
-                            ? "bg-secondary"
-                            : "bg-primary"
-                          : "bg-surface-container-highest"
-                      }`}
-                      style={{ height: `${Math.max(20, Math.min(100, h))}%` }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="p-md rounded-xl bg-surface-container-high/40">
-                <span className="text-label-md uppercase tracking-wider text-on-surface-variant block mb-sm">
-                  Subject Mastery
-                </span>
-                <div className="space-y-3">
-                  {stats.packs.length === 0 ? (
-                    <p className="text-caption text-outline">No pack breakdown yet.</p>
-                  ) : (
-                    stats.packs.slice(0, 3).map((p, i) => {
-                      const pct = p.attempts ? Math.round((p.correct / p.attempts) * 100) : 0;
-                      const fill = i === 1 ? "bg-error" : i === 2 ? "bg-secondary" : "bg-primary";
-                      return (
-                        <div key={p.packId}>
-                          <div className="flex justify-between text-caption mb-1">
-                            <span>{p.packId.replace(/_/g, " ")}</span>
-                            <span>{pct}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                            <div className={`h-full ${fill}`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+              <Link to="/practice" className="text-primary text-label-md font-bold whitespace-nowrap">
+                New session →
+              </Link>
+            </header>
+            <SessionHistoryList sessions={stats.sessions} limit={12} />
+          </section>
 
-          <div className="glass-card p-lg rounded-xl">
-            <div className="flex justify-between items-center mb-lg">
-              <h3 className="text-headline-md font-headline-md">AI Picks: Recommended practice</h3>
+          <section className="analytics-card glass-card">
+            <header className="analytics-card-head spread">
+              <h2>Recommended next</h2>
               <span className="material-symbols-outlined text-primary">auto_awesome</span>
-            </div>
-            <div className="space-y-md">
-              {stats.sessions.length === 0 ? (
-                <p className="text-on-surface-variant text-caption">Complete practice to see session picks.</p>
-              ) : (
-                stats.sessions.slice(0, 2).map((s, i) => (
-                  <Link
-                    key={s.id}
-                    to={s.currentQuestionId ? `/practice/${s.id}/${s.currentQuestionId}` : "/practice"}
-                    className="flex items-center gap-md p-md rounded-xl bg-surface-container/50 border border-white/5 hover:border-primary/20 transition-all group cursor-pointer"
-                  >
-                    <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container-highest group-hover:bg-primary-container/20 group-hover:text-primary transition-colors">
-                      <span className="material-symbols-outlined">{i === 0 ? "terminal" : "bolt"}</span>
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-body-md">
-                        {s.exam} session · {s.correctCount}✓ {s.wrongCount}✗
-                      </h4>
-                      <p className="text-on-surface-variant text-caption">
-                        {s.questionCount} questions · {sessionAccuracy(s)}% session accuracy
-                      </p>
-                    </div>
-                    <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">
-                      chevron_right
-                    </span>
-                  </Link>
-                ))
-              )}
-              <Link
-                to="/bank?exam=NEET"
-                className="flex items-center gap-md p-md rounded-xl bg-surface-container/50 border border-white/5 hover:border-primary/20 transition-all group cursor-pointer"
-              >
-                <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container-highest group-hover:bg-primary-container/20 group-hover:text-primary transition-colors">
+            </header>
+            <div className="analytics-picks">
+              {meaningfulSessions(stats.sessions).slice(0, 2).map((s, i) => (
+                <Link
+                  key={s.id}
+                  to={s.currentQuestionId ? `/practice/${s.id}/${s.currentQuestionId}` : "/practice"}
+                  className="analytics-pick-row"
+                >
+                  <div className="analytics-pick-icon">
+                    <span className="material-symbols-outlined">{i === 0 ? "terminal" : "bolt"}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <strong className="block truncate">
+                      {s.exam} · {s.packId.replace("NEET_", "NEET ")}
+                    </strong>
+                    <p>
+                      {s.correctCount}✓ {s.wrongCount}✗ · {sessionAccuracy(s)}% accuracy
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+                </Link>
+              ))}
+              <Link to="/bank?exam=NEET" className="analytics-pick-row">
+                <div className="analytics-pick-icon">
                   <span className="material-symbols-outlined">menu_book</span>
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-body-md">Browse NEET question bank</h4>
-                  <p className="text-on-surface-variant text-caption">Study with published paper images</p>
+                  <strong>Browse NEET question bank</strong>
+                  <p>Study without scoring</p>
                 </div>
-                <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">
-                  chevron_right
-                </span>
+                <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
               </Link>
             </div>
-          </div>
+          </section>
         </div>
 
-        <div className="space-y-lg">
-          <div className="glass-card p-lg rounded-xl">
-            <h3 className="text-label-md uppercase tracking-widest text-on-surface-variant mb-md">Weekly Activity</h3>
-            <div className="grid grid-cols-7 gap-1">
-              {stats.heatmap.map((level, i) => (
-                <div key={i} className={`heatmap-cell ${heatmapClass(level)}`} />
-              ))}
-            </div>
-            <div className="flex justify-between mt-md text-[10px] text-on-surface-variant uppercase tracking-tighter">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-          </div>
+        <aside className="analytics-side space-y-lg">
+          <WeeklyActivityPanel
+            heatmap={stats.heatmap}
+            caption={`${attempts} total questions answered`}
+          />
 
-          <div className="glass-card p-lg rounded-xl overflow-hidden relative">
-            <div className="absolute -bottom-4 -right-4 text-primary/10 select-none">
-              <span className="material-symbols-outlined text-[80px]">workspace_premium</span>
-            </div>
-            <h3 className="text-label-md uppercase tracking-widest text-on-surface-variant mb-md">Current Goal</h3>
-            <div className="flex items-center gap-md">
-              <div
-                className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin-slow flex items-center justify-center p-1"
-                style={{ animationDuration: "8s" }}
-              >
-                <div className="w-full h-full rounded-full bg-primary-container/20 flex items-center justify-center rotate-inverse">
-                  <span className="material-symbols-outlined text-primary">trophy</span>
-                </div>
+          <section className="analytics-card analytics-goal-card glass-card">
+            <span className="analytics-goal-watermark material-symbols-outlined">workspace_premium</span>
+            <h3 className="analytics-side-title">Marks goal</h3>
+            <div className="analytics-goal-body">
+              <div className="analytics-goal-ring">
+                <span className="material-symbols-outlined">trophy</span>
               </div>
               <div>
-                <p className="font-bold text-body-md">Practice milestone</p>
-                <p className="text-caption text-on-surface-variant">
+                <p className="analytics-goal-name">Session marks</p>
+                <p className="analytics-empty">
                   {stats.maxMarks > 0
-                    ? `${stats.totalMarks} / ${stats.maxMarks} marks from sessions`
-                    : "Earn marks in adaptive practice"}
+                    ? `${stats.totalMarks} / ${stats.maxMarks} marks earned`
+                    : "Complete adaptive practice to earn marks"}
                 </p>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="space-y-sm">
-            <Link
-              to="/bank?exam=NEET"
-              className="w-full p-md rounded-xl bg-surface-container-high hover:bg-surface-bright transition-colors flex items-center justify-between border border-white/5"
-            >
-              <div className="flex items-center gap-md">
-                <span className="material-symbols-outlined text-tertiary">history</span>
-                <span className="font-semibold">Mistake Vault</span>
-              </div>
-              <span className="bg-tertiary-container/30 text-tertiary text-[10px] px-2 py-0.5 rounded-full">Bank</span>
+          <section className="analytics-card glass-card analytics-compare">
+            <h3 className="analytics-side-title">Dashboard vs Analytics</h3>
+            <ul className="analytics-compare-list">
+              <li>
+                <strong>Dashboard</strong> — shortcuts; Question Bank for study; Practice for marks
+              </li>
+              <li>
+                <strong>Analytics</strong> — practice submits only (not Question Bank checks)
+              </li>
+            </ul>
+            <Link to="/" className="analytics-compare-link">
+              Back to Dashboard
             </Link>
-            <Link
-              to="/practice"
-              className="w-full p-md rounded-xl bg-surface-container-high hover:bg-surface-bright transition-colors flex items-center justify-between border border-white/5"
-            >
-              <div className="flex items-center gap-md">
-                <span className="material-symbols-outlined text-secondary">menu_book</span>
-                <span className="font-semibold">Study Material</span>
-              </div>
-              <span className="material-symbols-outlined">chevron_right</span>
-            </Link>
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
     </main>
   );

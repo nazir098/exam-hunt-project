@@ -142,6 +142,26 @@ export type ProgressSummary = {
   byPack: { packId: string; attempts: number; correct: number; marks: number }[];
 };
 
+export type LeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string;
+  totalMarks: number;
+  attempts: number;
+  correct: number;
+  accuracyPercent: number;
+  you: boolean;
+};
+
+export type LeaderboardPeriod = "weekly" | "monthly" | "all";
+
+export type LeaderboardResponse = {
+  period: LeaderboardPeriod;
+  entries: LeaderboardEntry[];
+  you: LeaderboardEntry | null;
+  totalPlayers: number;
+};
+
 export type RatingView = {
   yourScore: number;
   yourVotes: number;
@@ -163,7 +183,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const msg = (err as { message?: string }).message;
+    const body = err as { message?: string; error?: string };
+    const msg = body.message || body.error;
     throw new Error(msg || formatHttpError(res.status, res.statusText, path));
   }
   return res.json() as Promise<T>;
@@ -173,8 +194,14 @@ function formatHttpError(status: number, statusText: string, path: string): stri
   if (status === 404 && path.startsWith("/api/auth")) {
     return "Auth API not found — restart the backend (mvn spring-boot:run in backend/).";
   }
+  if (status === 401) {
+    return "Please sign in again.";
+  }
   if (status === 403) {
-    return "Forbidden — restart the backend after pulling latest code, or use Vite dev server without VITE_API_BASE_URL_FORCE.";
+    if (path.startsWith("/api/practice") || path.startsWith("/api/auth/me")) {
+      return "Please sign in to use Practice and saved progress.";
+    }
+    return "Access denied. If developing locally, use npm run dev (Vite proxy) and avoid VITE_API_BASE_URL_FORCE unless needed.";
   }
   return statusText || `HTTP ${status}`;
 }
@@ -275,6 +302,10 @@ export function submitPracticeAnswer(body: {
 
 export function fetchProgress() {
   return request<ProgressSummary>("/api/practice/progress");
+}
+
+export function fetchLeaderboard(limit = 50, period: LeaderboardPeriod = "weekly") {
+  return getJson<LeaderboardResponse>(`/api/leaderboard?limit=${limit}&period=${period}`);
 }
 
 export function rateQuestion(questionId: string, score: number, comment?: string) {

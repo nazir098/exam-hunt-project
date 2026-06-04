@@ -45,6 +45,34 @@ public class ManifestImportService {
         return importManifestNode(manifest, folderName);
     }
 
+    /** Imports every published folder whose manifest {@code exam} is NEET. */
+    public ImportResult importNeetFolders() throws IOException {
+        Path outputRoot = resolveOutputRoot();
+        if (!Files.isDirectory(outputRoot)) {
+            throw new IOException("Extractor output not found: " + outputRoot);
+        }
+        List<ImportResult> results = new ArrayList<>();
+        try (Stream<Path> dirs = Files.list(outputRoot)) {
+            for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
+                Path manifestPath = dir.resolve("published").resolve("manifest.json");
+                if (!Files.isRegularFile(manifestPath)) {
+                    continue;
+                }
+                JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
+                if (!"NEET".equalsIgnoreCase(text(manifest, "exam"))) {
+                    continue;
+                }
+                results.add(importManifestNode(manifest, dir.getFileName().toString()));
+            }
+        }
+        if (results.isEmpty()) {
+            throw new IOException(
+                    "No NEET manifests under " + outputRoot + " — publish years in pdf-qa-extractor first.");
+        }
+        int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
+        return new ImportResult("NEET", questions, results.size(), results);
+    }
+
     public ImportResult importAllPublishedFolders() throws IOException {
         Path outputRoot = resolveOutputRoot();
         if (!Files.isDirectory(outputRoot)) {

@@ -1,6 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
+import DesktopSiteFooter from "./DesktopSiteFooter";
+import DesktopSiteHeader from "./DesktopSiteHeader";
+import UserProgressPanel from "./UserProgressPanel";
 import {
   BRAND_NAME,
   STITCH_AVATAR_ANALYTICS,
@@ -8,6 +11,7 @@ import {
   STITCH_AVATAR_DETAIL,
   STITCH_AVATAR_HOME,
 } from "../design/stitchAssets";
+import { MOBILE_BOTTOM_NAV } from "../navigation/siteNav";
 
 type Props = {
   children: ReactNode;
@@ -15,13 +19,6 @@ type Props = {
   showFab?: boolean;
   fabIcon?: "chat_bubble" | "smart_toy";
 };
-
-const MOBILE_TABS = [
-  { to: "/", icon: "dashboard", label: "Dashboard", match: (p: string) => p === "/" },
-  { to: "/bank?exam=NEET", icon: "menu_book", label: "Practice", match: (p: string) => p === "/bank" || p.startsWith("/pack/") },
-  { to: null as string | null, icon: "psychology", label: "AI Tutor" },
-  { to: "/analytics", icon: "insights", label: "Analytics", match: (p: string) => p === "/analytics" },
-] as const;
 
 function avatarFor(pathname: string): string {
   if (pathname.startsWith("/question/")) return STITCH_AVATAR_DETAIL;
@@ -43,50 +40,67 @@ export default function StitchShell({
   const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
   const isAnalytics = pathname === "/analytics";
   const isHome = pathname === "/";
+  const isPractice =
+    pathname === "/practice" || !!pathname.match(/^\/practice\/[^/]+\//);
+  const isLeaderboard = pathname === "/leaderboard";
   const profileTo = user ? "/analytics" : "/login";
 
-  const navClass =
-    "bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile h-16 z-50 sticky top-0 shrink-0";
+  const mobileNavClass =
+    "lg:hidden bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile h-16 z-50 sticky top-0 shrink-0";
 
   return (
-    <div className="flex flex-col min-h-[100dvh] flex-1">
-      <header className={navClass}>
+    <div className="flex flex-col min-h-[100dvh] flex-1 stitch-shell">
+      <DesktopSiteHeader />
+
+      <header className={mobileNavClass}>
         {isDetail ? (
           <>
-            <div className="flex items-center gap-sm">
-              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border border-primary/20">
+            <div className="flex items-center gap-sm min-w-0">
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border border-primary/20 shrink-0">
                 <img alt="" className="stitch-avatar-lg" src={avatar} />
               </div>
-              <Link to="/" className="stitch-logo">
+              <Link to="/" className="stitch-logo truncate">
                 {BRAND_NAME}
               </Link>
             </div>
-            <button type="button" className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/5" disabled>
-              <span className="material-symbols-outlined text-primary">smart_toy</span>
-            </button>
+            <div className="flex items-center gap-sm shrink-0">
+              {user && <UserProgressPanel variant="inline" />}
+              <button type="button" className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/5" disabled>
+                <span className="material-symbols-outlined text-primary">smart_toy</span>
+              </button>
+            </div>
           </>
         ) : isAnalytics ? (
           <>
-            <div className="flex items-center gap-md">
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/30">
+            <div className="flex items-center gap-md min-w-0">
+              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/30 shrink-0">
                 <img alt="" className="stitch-avatar-lg" src={avatar} />
               </div>
-              <Link to="/" className="stitch-logo">
+              <Link to="/" className="stitch-logo truncate">
                 {BRAND_NAME}
               </Link>
             </div>
-            <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 text-primary" disabled>
-              <span className="material-symbols-outlined">smart_toy</span>
-            </button>
+            <div className="flex items-center gap-sm shrink-0">
+              {user && <UserProgressPanel variant="inline" />}
+              <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 text-primary" disabled>
+                <span className="material-symbols-outlined">smart_toy</span>
+              </button>
+            </div>
           </>
         ) : (
           <>
-            <Link to="/" className="stitch-logo">
+            <Link to="/" className="stitch-logo shrink-0">
               {BRAND_NAME}
             </Link>
-            <div className="flex items-center gap-md">
-              <span className="material-symbols-outlined text-primary">smart_toy</span>
-              <Link to={profileTo} className="block rounded-full overflow-hidden" style={{ border: "1px solid rgba(138,43,226,0.2)" }}>
+            <div className="flex items-center gap-sm min-w-0">
+              {user && <UserProgressPanel variant="inline" />}
+              <span className="material-symbols-outlined text-primary shrink-0">smart_toy</span>
+              <Link
+                to={profileTo}
+                className="block rounded-full overflow-hidden shrink-0"
+                style={{ border: "1px solid rgba(138,43,226,0.2)" }}
+                title={user?.displayName || "Profile"}
+              >
                 <img alt="" className="stitch-avatar" src={avatar} />
               </Link>
             </div>
@@ -94,38 +108,49 @@ export default function StitchShell({
         )}
       </header>
 
-      <div className="flex-1">{children}</div>
+      {user && <UserProgressPanel variant="strip" />}
+
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="stitch-page-content flex-1">{children}</div>
+        <DesktopSiteFooter />
+      </div>
 
       {!showAiBar && (
-        <nav className="sticky bottom-0 z-50 flex justify-around items-center px-2 pb-2 h-20 bg-surface-container-high/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-xl shrink-0">
-          {MOBILE_TABS.map((tab) => {
-            const active = "match" in tab && tab.match(pathname);
+        <nav className="mobile-bottom-nav lg:hidden" aria-label="Mobile">
+          {MOBILE_BOTTOM_NAV.map((tab) => {
+            const active = tab.match(pathname);
             const cls = active
-              ? "flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-3 py-1 scale-90 transition-all duration-200"
-              : "flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-3 py-1";
-            if (tab.to) {
-              return (
-                <Link key={tab.label} to={tab.to} className={cls}>
-                  <span
-                    className="material-symbols-outlined"
-                    style={active && isHome && tab.to === "/" ? { fontVariationSettings: "'FILL' 1" } : active && tab.to.includes("bank") && isBank ? { fontVariationSettings: "'FILL' 1" } : active && tab.to === "/analytics" && isAnalytics ? { fontVariationSettings: "'FILL' 1" } : undefined}
-                  >
-                    {tab.icon}
-                  </span>
-                  <span className="text-label-md font-label-md">{tab.label}</span>
-                </Link>
-              );
-            }
+              ? "flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-2 py-1 scale-90 transition-all duration-200 min-w-0"
+              : "flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-2 py-1 min-w-0";
             return (
-              <button key={tab.label} type="button" className={cls} disabled>
-                <span className="material-symbols-outlined">{tab.icon}</span>
-                <span className="text-label-md font-label-md">{tab.label}</span>
-              </button>
+                <Link
+                  key={tab.to}
+                  to={tab.to}
+                  data-tooltip={tab.hint || undefined}
+                  className={`${cls}${tab.hint ? " nav-tip nav-tip--below" : ""}`}
+                >
+                <span
+                  className="material-symbols-outlined text-[22px]"
+                  style={
+                    active && (isHome || isBank || isAnalytics || isPractice || isLeaderboard)
+                      ? { fontVariationSettings: "'FILL' 1" }
+                      : undefined
+                  }
+                >
+                  {tab.icon}
+                </span>
+                <span className="text-[10px] font-label-md leading-tight text-center truncate max-w-[4.5rem]">
+                  {tab.label === "Question Bank" ? "Bank" : tab.label}
+                </span>
+              </Link>
             );
           })}
-          <Link to={profileTo} className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-3 py-1">
-            <span className="material-symbols-outlined">person</span>
-            <span className="text-label-md font-label-md">Profile</span>
+          <Link
+            to={profileTo}
+            className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-2 py-1"
+          >
+            <span className="material-symbols-outlined text-[22px]">person</span>
+            <span className="text-[10px] font-label-md">Profile</span>
           </Link>
         </nav>
       )}
@@ -133,19 +158,22 @@ export default function StitchShell({
       {showFab && !showAiBar && (
         <button
           type="button"
-          className={`absolute z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform hover:scale-110 active:scale-95 right-6 bottom-24 pointer-events-none opacity-90 ${
+          className={`lg:hidden absolute z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform right-6 bottom-24 pointer-events-none opacity-90 ${
             fabIcon === "smart_toy" ? "electric-glow-bg shadow-primary-container/40" : "electric-glow"
           }`}
           disabled
         >
-          <span className={`material-symbols-outlined ${fabIcon === "smart_toy" ? "text-white text-3xl" : "text-[28px]"}`} style={fabIcon === "chat_bubble" ? { fontVariationSettings: "'FILL' 1" } : undefined}>
+          <span
+            className={`material-symbols-outlined ${fabIcon === "smart_toy" ? "text-white text-3xl" : "text-[28px]"}`}
+            style={fabIcon === "chat_bubble" ? { fontVariationSettings: "'FILL' 1" } : undefined}
+          >
             {fabIcon}
           </span>
         </button>
       )}
 
       {showAiBar && (
-        <div className="sticky bottom-0 z-40 bg-surface-container-high/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] shrink-0">
+        <div className="mobile-bottom-bar mobile-bottom-bar--ai lg:hidden">
           <div className="px-margin-mobile h-24 flex items-center justify-between gap-md">
             <div className="flex items-center gap-sm flex-1">
               <button type="button" className="flex-1 px-md py-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-on-surface" disabled>

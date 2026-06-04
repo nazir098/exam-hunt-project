@@ -55,9 +55,10 @@ public class PracticeService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No questions match these filters");
         }
 
+        int startLevel = 2;
         List<Question> ordered = req.adaptive()
                 ? list.stream()
-                        .sorted(Comparator.comparingInt(q -> Math.abs(q.getDifficulty() - 2)))
+                        .sorted(Comparator.comparingInt(q -> Math.abs(q.getDifficulty() - startLevel)))
                         .toList()
                 : list;
 
@@ -120,6 +121,7 @@ public class PracticeService {
         }
         session.setTotalMarks(session.getTotalMarks() + marks);
         session.setAdaptiveLevel(clampAdaptive(session.getAdaptiveLevel() + (correct ? 1 : -1)));
+        reorderRemainingByAdaptive(session, req.questionId());
 
         int idx = session.getQuestionIds().indexOf(req.questionId());
         if (idx >= session.getCurrentIndex()) {
@@ -264,6 +266,25 @@ public class PracticeService {
 
     private static int clampAdaptive(int level) {
         return Math.max(1, Math.min(3, level));
+    }
+
+    /** Re-sort unanswered questions so the next one matches the updated adaptive level (1=easy … 3=hard). */
+    private void reorderRemainingByAdaptive(PracticeSession session, String answeredQuestionId) {
+        List<String> ids = session.getQuestionIds();
+        int answeredIdx = ids.indexOf(answeredQuestionId);
+        if (answeredIdx < 0 || answeredIdx >= ids.size() - 1) {
+            return;
+        }
+        List<String> head = new ArrayList<>(ids.subList(0, answeredIdx + 1));
+        List<String> tail = new ArrayList<>(ids.subList(answeredIdx + 1, ids.size()));
+        int target = session.getAdaptiveLevel();
+        tail.sort(Comparator.comparingInt(qid -> {
+            return questions.findByQuestionId(qid)
+                    .map(q -> Math.abs(q.getDifficulty() - target))
+                    .orElse(999);
+        }));
+        head.addAll(tail);
+        session.setQuestionIds(head);
     }
 
     private SessionView sessionView(PracticeSession s) {

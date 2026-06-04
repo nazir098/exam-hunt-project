@@ -8,7 +8,9 @@ import {
   PackSummary,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import { sessionIdleMinutes } from "../auth/session";
+import Scorecard from "../components/Scorecard";
+import HintTooltip from "../components/HintTooltip";
+import { PRACTICE_MODE_HINT } from "../navigation/modeHints";
 
 const EXAM_OPTIONS = [
   { id: "NEET", label: "NEET", live: true },
@@ -46,7 +48,6 @@ export default function PracticePage() {
 
   const selectedPack = packs.find((p) => p.packId === packId);
   const neetLive = catalog.find((c) => c.id === "NEET")?.status === "available";
-  const totalMarks = progress?.byPack.reduce((s, p) => s + p.marks, 0) ?? 0;
 
   async function startSession() {
     if (!user) {
@@ -77,103 +78,20 @@ export default function PracticePage() {
   }
 
   return (
-    <main className="practice-landing browse-main">
-      <section className="practice-hero">
-        <span className="practice-hero-icon" aria-hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
-          </svg>
-        </span>
-        <h1>Adaptive Practice</h1>
-        <p className="practice-hero-lead">
-          Submit your answer before seeing the solution. Marks follow NEET rules: +4 correct, −1 wrong.
-          Difficulty adapts as you go.
+    <main className="practice-page pb-28 lg:pb-10 pt-4 lg:pt-6 space-y-md">
+      <header className="practice-page-header">
+        <h1 className="practice-page-title">
+          Practice
+          <HintTooltip text={PRACTICE_MODE_HINT} />
+        </h1>
+        <p className="practice-page-desc">
+          Adaptive NEET sessions — marks save when you submit each answer.
         </p>
-        <div className="practice-features">
-          <div className="practice-feature card">
-            <span className="practice-feature-icon">◎</span>
-            <strong>You answer</strong>
-            <span className="muted">Pick 1–4, then validate</span>
-          </div>
-          <div className="practice-feature card">
-            <span className="practice-feature-icon">⚡</span>
-            <strong>AI adapts</strong>
-            <span className="muted">Harder when you&apos;re on a roll</span>
-          </div>
-          <div className="practice-feature card">
-            <span className="practice-feature-icon">📈</span>
-            <strong>You improve</strong>
-            <span className="muted">Progress saved to your account</span>
-          </div>
-        </div>
-      </section>
+      </header>
 
-      {user && (
-        <section className="practice-stats card" id="progress">
-          <h2>Your progress & scores</h2>
-          <p className="muted practice-session-note">
-            Stay signed in until you log out, or after {sessionIdleMinutes()} minutes of inactivity.
-          </p>
-          <div className="practice-stats-grid">
-            <div>
-              <span className="practice-stat-value">{totalMarks}</span>
-              <span className="muted">total marks</span>
-            </div>
-            <div>
-              <span className="practice-stat-value">{progress?.accuracyPercent ?? 0}%</span>
-              <span className="muted">accuracy</span>
-            </div>
-            <div>
-              <span className="practice-stat-value">{progress?.totalAttempts ?? 0}</span>
-              <span className="muted">questions answered</span>
-            </div>
-            <div>
-              <span className="practice-stat-value">{progress?.correctAttempts ?? 0}</span>
-              <span className="muted">correct</span>
-            </div>
-          </div>
+      {user && <Scorecard progress={progress} showDetails />}
 
-          {progress && progress.byPack.length > 0 && (
-            <div className="practice-pack-scores">
-              <p className="filter-label">By year</p>
-              <ul className="practice-pack-list">
-                {progress.byPack.map((p) => (
-                  <li key={p.packId}>
-                    <strong>{p.packId.replace("NEET_", "NEET ")}</strong>
-                    <span>
-                      {p.marks} marks · {p.correct}/{p.attempts} correct
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {progress && progress.recentSessions.length > 0 && (
-            <div className="practice-recent-sessions">
-              <p className="filter-label">Recent practice sessions</p>
-              <ul className="practice-pack-list">
-                {progress.recentSessions.slice(0, 5).map((s) => (
-                  <li key={s.id}>
-                    <strong>
-                      {s.packId.replace("NEET_", "NEET ")} · {s.status}
-                    </strong>
-                    <span>
-                      {s.totalMarks}/{s.maxMarks} marks · {s.correctCount}✓ {s.wrongCount}✗
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(progress?.totalAttempts ?? 0) === 0 && (
-            <p className="muted">Start a session below — your marks and accuracy will appear here.</p>
-          )}
-        </section>
-      )}
-
-      <section className="practice-config card">
+      <section className="practice-config glass-card">
         <h2>Configure your session</h2>
         {!user && !authLoading && (
           <p className="practice-login-hint">
@@ -240,12 +158,10 @@ export default function PracticePage() {
         <button type="button" className="btn primary btn-block practice-start" onClick={startSession} disabled={busy}>
           {busy ? "Starting…" : user ? "Start practice session" : "Sign in & start"}
         </button>
-        <p className="muted practice-note">20 questions per session · answers validated on the server</p>
+        <p className="muted practice-note">
+          20 questions per session · submit each answer to record marks
+        </p>
       </section>
-
-      <p className="muted practice-browse-link">
-        Prefer to browse without scoring? <Link to="/bank?exam=NEET">Open question bank</Link>
-      </p>
     </main>
   );
 }

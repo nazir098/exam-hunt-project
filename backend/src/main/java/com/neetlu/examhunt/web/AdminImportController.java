@@ -40,6 +40,23 @@ public class AdminImportController {
         ));
     }
 
+    @PostMapping("/neet")
+    public ResponseEntity<?> importNeet(
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
+    ) throws IOException {
+        checkAdminKey(adminKey);
+        var result = importService.importNeetFolders();
+        return ResponseEntity.ok(Map.of(
+                "packsProcessed", result.packsProcessed(),
+                "questionsImported", result.questionsImported(),
+                "packIds",
+                        result.details().stream()
+                                .map(ManifestImportService.ImportResult::packId)
+                                .toList(),
+                "message", "Imported " + result.questionsImported() + " NEET questions across "
+                        + result.packsProcessed() + " pack(s)"));
+    }
+
     @PostMapping("/all")
     public ResponseEntity<?> importAll(
             @RequestHeader(value = "X-Admin-Key", required = false) String adminKey

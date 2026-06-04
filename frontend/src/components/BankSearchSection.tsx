@@ -1,4 +1,6 @@
 import { FormEvent, useState } from "react";
+import HintTooltip from "./HintTooltip";
+import { BANK_MODE_HINT } from "../navigation/modeHints";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 type Props = {
@@ -39,7 +41,8 @@ export default function BankSearchSection({ onOpenFilters }: Props) {
         <div className="w-full flex-1 space-y-2">
           <div className="flex items-center gap-2 px-2 text-primary">
             <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-            <span className="text-label-md font-label-md uppercase tracking-widest">AI Intelligent Search</span>
+            <span className="text-label-md font-label-md uppercase tracking-widest">Question Bank</span>
+            <HintTooltip text={BANK_MODE_HINT} />
           </div>
           <form onSubmit={submit}>
             <div className={`relative group ${glow ? "ai-glow rounded-xl" : ""}`}>

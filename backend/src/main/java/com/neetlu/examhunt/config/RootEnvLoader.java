@@ -45,6 +45,15 @@ public final class RootEnvLoader {
                     if (MONGODB_URI.equals(key)) {
                         defaults.put("spring.data.mongodb.uri", value);
                     }
+                    if ("EXTRACTOR_ROOT".equals(key)) {
+                        defaults.put("app.extractor-root", value);
+                    }
+                    if ("ADMIN_IMPORT_KEY".equals(key)) {
+                        defaults.put("app.admin-import-key", value);
+                    }
+                    if ("JWT_SECRET".equals(key)) {
+                        defaults.put("app.jwt-secret", value);
+                    }
                     if (PUBLIC_FILES_BASE_URL.equals(key) || R2_PUBLIC_BASE_URL.equals(key)) {
                         defaults.put("app.public-files-base-url", value);
                     }

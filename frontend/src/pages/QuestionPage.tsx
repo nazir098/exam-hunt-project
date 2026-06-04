@@ -134,7 +134,7 @@ export default function QuestionPage() {
   const diff = difficultyLabel(q.difficulty);
 
   return (
-    <main className="px-margin-mobile pb-28">
+    <main className="px-margin-mobile lg:px-0 pb-28 lg:pb-8 lg:pt-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
         <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
           <Link to={backHref()} className="hover:text-primary cursor-pointer transition-colors">
@@ -192,7 +192,7 @@ export default function QuestionPage() {
             <div className="flex items-center gap-md p-md bg-primary-container/10 border-l-4 border-primary rounded-r-lg">
               <span className="material-symbols-outlined text-primary">info</span>
               <p className="text-body-sm text-on-surface-variant">
-                Question and solution are shown as published exam images from your verified catalog.
+                Published exam images from your verified catalog.
               </p>
             </div>
           </div>

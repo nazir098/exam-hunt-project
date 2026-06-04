@@ -7,5 +7,8 @@ public record AppProperties(
         String corsOrigins,
         String extractorRoot,
         String extractorManifestBaseUrl,
-        String adminImportKey
+        String adminImportKey,
+        String jwtSecret,
+        long jwtExpirationHours,
+        boolean leaderboardDemoSeed
 ) {}

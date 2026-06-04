@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import SiteLayout from "./components/SiteLayout";
 import BrowsePage from "./pages/BrowsePage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import PracticePage from "./pages/PracticePage";
@@ -15,6 +16,7 @@ export default function App() {
       <Route element={<SiteLayout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/bank" element={<BrowsePage />} />
         <Route path="/pack/:packId" element={<BrowsePage />} />
         <Route path="/question/:questionId" element={<QuestionPage />} />

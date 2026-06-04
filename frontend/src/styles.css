@@ -1456,15 +1456,25 @@ a {
 }
 
 .user-progress-panel {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
 }
 
-@media (min-width: 480px) {
-  .user-progress-panel {
-    display: flex;
+@media (min-width: 1024px) {
+  .legacy-ui .auth-page {
+    max-width: 28rem;
+    margin: 2.5rem auto 3rem;
+    padding: 0 1rem;
+  }
+
+  .legacy-ui .practice-question-page,
+  .legacy-ui .practice-landing {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -1560,73 +1570,6 @@ a {
 .practice-landing {
   max-width: 42rem;
   margin: 0 auto;
-}
-
-.practice-hero {
-  text-align: center;
-  padding: 1rem 0 1.5rem;
-}
-
-.practice-hero-icon {
-  display: inline-flex;
-  width: 3rem;
-  height: 3rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-lg);
-  background: var(--primary-soft);
-  color: var(--primary);
-  margin-bottom: 0.75rem;
-}
-
-.practice-hero-icon svg {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.practice-hero h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.5rem;
-}
-
-.practice-hero-lead {
-  margin: 0 auto 1.25rem;
-  max-width: 28rem;
-  color: var(--muted-foreground);
-  font-size: 0.95rem;
-}
-
-.practice-features {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
-}
-
-@media (min-width: 640px) {
-  .practice-features {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.practice-feature {
-  padding: 0.85rem;
-  text-align: center;
-}
-
-.practice-feature-icon {
-  display: block;
-  font-size: 1.25rem;
-  color: var(--primary);
-  margin-bottom: 0.35rem;
-}
-
-.practice-feature strong {
-  display: block;
-  font-size: 0.85rem;
-}
-
-.practice-feature .muted {
-  font-size: 0.75rem;
 }
 
 .practice-config {

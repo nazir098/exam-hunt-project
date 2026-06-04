@@ -5,7 +5,7 @@ const TABS = [
   { to: "/", icon: "dashboard", label: "Dashboard" },
   { to: "/bank?exam=NEET", icon: "menu_book", label: "Practice" },
   { to: "/analytics", icon: "insights", label: "Analytics" },
-  { to: "/practice", icon: "bolt", label: "Sessions" },
+  { to: "/practice", icon: "bolt", label: "Practice" },
 ] as const;
 
 export default function BottomNav() {

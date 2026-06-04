@@ -13,6 +13,9 @@ app:
   extractor-root: ${EXTRACTOR_ROOT:}
   extractor-manifest-base-url: ${EXTRACTOR_MANIFEST_BASE_URL:}
   admin-import-key: ${ADMIN_IMPORT_KEY:}
+  jwt-secret: ${JWT_SECRET:exam-hunt-dev-jwt-secret-change-in-prod-32b}
+  jwt-expiration-hours: ${JWT_EXPIRATION_HOURS:168}
+  leaderboard-demo-seed: ${LEADERBOARD_DEMO_SEED:true}
 
 management:
   endpoints:
