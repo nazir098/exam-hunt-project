@@ -53,23 +53,6 @@ public class AdminImportController {
         ));
     }
 
-    @PostMapping("/neet")
-    public ResponseEntity<?> importNeet(
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
-    ) throws IOException {
-        checkAdminKey(adminKey);
-        var result = importService.importAllNeetFolders();
-        return ResponseEntity.ok(Map.of(
-                "packId", result.packId(),
-                "packsProcessed", result.packsProcessed(),
-                "questionsImported", result.questionsImported(),
-                "message", result.packsProcessed() > 0
-                        ? "Imported " + result.questionsImported() + " NEET questions from "
-                        + result.packsProcessed() + " published folder(s)"
-                        : "No published NEET manifests found under EXTRACTOR_ROOT/output/*/published/"
-        ));
-    }
-
     private void checkAdminKey(String provided) {
         String expected = appProperties.adminImportKey();
         if (expected != null && !expected.isBlank()) {

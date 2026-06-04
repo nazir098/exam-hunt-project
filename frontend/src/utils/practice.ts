@@ -1,0 +1,33 @@
+import { QuestionPublic } from "../api";
+import { difficultyLabel } from "./labels";
+
+export function filterQuestionsForPractice(
+  questions: QuestionPublic[],
+  params: {
+    topic?: string;
+    difficulty?: string;
+    q?: string;
+  }
+): QuestionPublic[] {
+  let list = questions;
+  if (params.topic) list = list.filter((q) => q.topic === params.topic);
+  if (params.difficulty) {
+    list = list.filter((q) => difficultyLabel(q.difficulty) === params.difficulty);
+  }
+  const qSearch = (params.q || "").toLowerCase();
+  if (qSearch) {
+    list = list.filter(
+      (q) =>
+        q.topic?.toLowerCase().includes(qSearch) ||
+        q.chapter?.toLowerCase().includes(qSearch) ||
+        q.subject?.toLowerCase().includes(qSearch) ||
+        q.questionTextPreview?.toLowerCase().includes(qSearch)
+    );
+  }
+  return list;
+}
+
+export function browsePathFromPack(packId: string, search: string): string {
+  const qs = search ? (search.startsWith("?") ? search : `?${search}`) : "";
+  return `/pack/${packId}${qs}`;
+}

@@ -14,6 +14,8 @@ import java.util.Map;
 public final class RootEnvLoader {
 
     private static final String MONGODB_URI = "MONGODB_URI";
+    private static final String PUBLIC_FILES_BASE_URL = "PUBLIC_FILES_BASE_URL";
+    private static final String R2_PUBLIC_BASE_URL = "R2_PUBLIC_BASE_URL";
 
     private RootEnvLoader() {}
 
@@ -42,6 +44,9 @@ public final class RootEnvLoader {
                     defaults.put(key, value);
                     if (MONGODB_URI.equals(key)) {
                         defaults.put("spring.data.mongodb.uri", value);
+                    }
+                    if (PUBLIC_FILES_BASE_URL.equals(key) || R2_PUBLIC_BASE_URL.equals(key)) {
+                        defaults.put("app.public-files-base-url", value);
                     }
                 }
             } catch (IOException ignored) {

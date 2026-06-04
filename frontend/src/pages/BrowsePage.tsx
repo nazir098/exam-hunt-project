@@ -10,11 +10,12 @@ import {
   QuestionPublic,
   YearCatalogEntry,
 } from "../api";
+import BankSearchSection from "../components/BankSearchSection";
 import ComingSoon from "../components/ComingSoon";
 import FilterPanel, { activeFilterCount } from "../components/FilterPanel";
 import QuestionCard from "../components/QuestionCard";
 import { defaultExamId, findExam } from "../utils/exams";
-import { difficultyLabel } from "../utils/labels";
+import { filterQuestionsForPractice } from "../utils/practice";
 
 export default function BrowsePage() {
   const { pathname } = useLocation();
@@ -30,7 +31,6 @@ export default function BrowsePage() {
   const difficulty = searchParams.get("difficulty") || "";
   const qSearch = (searchParams.get("q") || "").toLowerCase();
   const page = Number(searchParams.get("page") || "0");
-  const view = searchParams.get("view") || "grid";
 
   const [catalog, setCatalog] = useState<ExamCatalogEntry[]>([]);
   const [packs, setPacks] = useState<PackSummary[]>([]);
@@ -97,7 +97,7 @@ export default function BrowsePage() {
   }, [showComingSoon, activePackId, packs, yearFilter, neetYears]);
 
   useEffect(() => {
-    if (showComingSoon || pathname !== "/" || !resolvedPackId || packIdParam) return;
+    if (showComingSoon || pathname !== "/bank" || !resolvedPackId || packIdParam) return;
     navigate(`/pack/${resolvedPackId}?${searchParams.toString()}`, { replace: true });
   }, [showComingSoon, pathname, resolvedPackId, packIdParam, navigate, searchParams]);
 
@@ -128,21 +128,15 @@ export default function BrowsePage() {
       .finally(() => setLoading(false));
   }, [resolvedPackId, subject, chapter, page, showComingSoon]);
 
-  const displayed = useMemo(() => {
-    let list = questions;
-    if (topic) list = list.filter((q) => q.topic === topic);
-    if (difficulty) list = list.filter((q) => difficultyLabel(q.difficulty) === difficulty);
-    if (qSearch) {
-      list = list.filter(
-        (q) =>
-          q.topic?.toLowerCase().includes(qSearch) ||
-          q.chapter?.toLowerCase().includes(qSearch) ||
-          q.subject?.toLowerCase().includes(qSearch) ||
-          q.questionTextPreview?.toLowerCase().includes(qSearch)
-      );
-    }
-    return list;
-  }, [questions, topic, difficulty, qSearch]);
+  const displayed = useMemo(
+    () =>
+      filterQuestionsForPractice(questions, {
+        topic: topic || undefined,
+        difficulty: difficulty || undefined,
+        q: qSearch || undefined,
+      }),
+    [questions, topic, difficulty, qSearch]
+  );
 
   const subjects = pack?.facets?.subjects || [];
   const chapters = (pack?.facets?.chapters || []).filter(
@@ -181,7 +175,7 @@ export default function BrowsePage() {
   function goToNeet() {
     const next = new URLSearchParams();
     next.set("exam", "NEET");
-    navigate(`/?${next.toString()}`);
+    navigate(`/bank?${next.toString()}`);
   }
 
   const totalShown = qSearch || topic || difficulty ? displayed.length : totalElements;
@@ -221,8 +215,7 @@ export default function BrowsePage() {
 
   if (showComingSoon) {
     return (
-      <div className="browse-shell browse-shell--solo">
-        <main className="browse-main">
+      <main className="bank-page px-margin-mobile pb-8">
           <ComingSoon
             examName={selectedExam?.name || examFilter}
             description={
@@ -231,32 +224,31 @@ export default function BrowsePage() {
             }
             onBack={goToNeet}
           />
-        </main>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="browse-shell">
-      <aside className="filter-sidebar" aria-label="Filters">
-        <FilterPanel {...filterProps} />
-      </aside>
-
-      {filtersOpen && (
-        <div className="filter-drawer-backdrop" onClick={() => setFiltersOpen(false)}>
-          <aside
-            className="filter-drawer"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal
-            aria-label="Filters"
-          >
-            <FilterPanel {...filterProps} onClose={() => setFiltersOpen(false)} />
-          </aside>
+    <main className="bank-page px-margin-mobile pb-8">
+      <div
+        className={`fixed inset-0 z-[60] transition-transform duration-300 lg:hidden ${
+          filtersOpen ? "" : "translate-x-full pointer-events-none"
+        }`}
+      >
+        <div
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          onClick={() => setFiltersOpen(false)}
+          aria-hidden
+        />
+        <div className="absolute right-0 top-0 bottom-0 w-80 bg-surface-container-high p-lg flex flex-col custom-scrollbar overflow-y-auto">
+          <FilterPanel {...filterProps} onClose={() => setFiltersOpen(false)} />
         </div>
-      )}
+      </div>
 
-      <main className="browse-main">
+      <BankSearchSection onOpenFilters={() => setFiltersOpen(true)} />
+
+      <div className="space-y-gutter">
+        <div className="space-y-gutter">
         {!neetAvailable && !loading && (
           <div className="neet-import-hint card">
             <h2>NEET data not loaded yet</h2>
@@ -293,59 +285,26 @@ export default function BrowsePage() {
           </section>
         )}
 
-        <div className="browse-toolbar">
-          <div className="browse-toolbar-left">
-            <p className="browse-showing">
-              <strong>{displayed.length}</strong> questions
+            <p className="bank-results-count">
+              <strong className="text-on-surface">{displayed.length}</strong> questions
               {pack ? ` · NEET ${pack.year}` : ""}
+              {filterCount > 0 && <span className="text-primary"> · {filterCount} filters</span>}
             </p>
-            <button
-              type="button"
-              className="mobile-filter-btn"
-              onClick={() => setFiltersOpen(true)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" />
-              </svg>
-              Filters
-              {filterCount > 0 && <span className="filter-badge">{filterCount}</span>}
-            </button>
-          </div>
-          <div className="view-toggle">
-            <button
-              type="button"
-              className={view === "grid" ? "view-btn active" : "view-btn"}
-              onClick={() => updateParam("view", "grid")}
-              aria-label="Grid view"
-            >
-              ⊞
-            </button>
-            <button
-              type="button"
-              className={view === "list" ? "view-btn active" : "view-btn"}
-              onClick={() => updateParam("view", "list")}
-              aria-label="List view"
-            >
-              ☰
-            </button>
-          </div>
-        </div>
 
         {activeChips.length > 0 && (
-          <div className="active-filters">
+          <div className="flex flex-wrap gap-sm mb-md">
             {activeChips.map((chip) => (
               <button
                 key={chip.key}
                 type="button"
-                className="active-filter-chip"
+                className="badge-pill"
                 onClick={() => updateParam(chip.key, "")}
                 aria-label={`Remove ${chip.label} filter`}
               >
-                {chip.label}
-                <span aria-hidden>×</span>
+                {chip.label} ×
               </button>
             ))}
-            <button type="button" className="active-filter-clear" onClick={clearFilters}>
+            <button type="button" className="font-caption text-primary" onClick={clearFilters}>
               Clear all
             </button>
           </div>
@@ -355,11 +314,17 @@ export default function BrowsePage() {
         {loading && neetAvailable && <p className="muted state-msg">Loading questions…</p>}
 
         {!loading && neetAvailable && resolvedPackId && (
-          <div className={view === "list" ? "q-grid q-grid--list" : "q-grid"}>
+          <>
             {displayed.map((q) => (
               <QuestionCard key={q.questionId} question={q} packId={resolvedPackId} />
             ))}
-          </div>
+            {displayed.length > 0 && (
+              <div className="flex flex-col items-center justify-center py-xxl opacity-50">
+                <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
+                <span className="text-caption tracking-[0.2em] font-bold text-outline">LOADING MORE CHALLENGES</span>
+              </div>
+            )}
+          </>
         )}
 
         {!loading && displayed.length === 0 && resolvedPackId && neetAvailable && (
@@ -367,10 +332,10 @@ export default function BrowsePage() {
         )}
 
         {resolvedPackId && (
-          <div className="pager">
+          <div className="flex items-center justify-center gap-md mt-xl">
             <button
               type="button"
-              className="btn"
+              className="glass-card px-md py-sm rounded-lg font-label"
               disabled={page <= 0}
               onClick={() => updateParam("page", String(page - 1))}
             >
@@ -379,7 +344,7 @@ export default function BrowsePage() {
             <span className="muted">Page {page + 1}</span>
             <button
               type="button"
-              className="btn"
+              className="glass-card px-md py-sm rounded-lg font-label"
               disabled={displayed.length < 60}
               onClick={() => updateParam("page", String(page + 1))}
             >
@@ -387,7 +352,8 @@ export default function BrowsePage() {
             </button>
           </div>
         )}
-      </main>
-    </div>
+        </div>
+      </div>
+    </main>
   );
 }

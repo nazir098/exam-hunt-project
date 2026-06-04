@@ -1,64 +1,91 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
+import { subjectIcon } from "../utils/subjectIcon";
 
 type Props = {
   question: QuestionPublic;
   packId: string;
 };
 
-export default function QuestionCard({ question: q }: Props) {
+export default function QuestionCard({ question: q, packId }: Props) {
+  const [searchParams] = useSearchParams();
   const diff = difficultyLabel(q.difficulty);
-  const preview =
-    q.questionTextPreview ||
-    `Q${q.questionNo}: ${q.chapter || q.subject}${q.topic ? ` · ${q.topic}` : ""}`;
+  const isJee = q.exam?.toUpperCase().includes("JEE");
+  const practiceQs = (() => {
+    const next = new URLSearchParams(searchParams);
+    next.set("fromPack", packId);
+    const s = next.toString();
+    return s ? `?${s}` : "";
+  })();
+  const questionHref = `/question/${q.questionId}${practiceQs}`;
+  const title =
+    q.questionTextPreview?.slice(0, 200) ||
+    `Question ${q.questionNo} — ${q.chapter || q.subject}`;
+
+  const badgeClass = isJee
+    ? "text-caption px-3 py-1 bg-secondary-container/20 text-secondary border border-secondary/30 rounded-full font-bold"
+    : "text-caption px-3 py-1 bg-primary-container/20 text-primary border border-primary/30 rounded-full font-bold";
 
   return (
-    <article className="q-card">
-      <div className="q-card-head">
-        <div className="q-card-head-left">
-          <span className="q-card-num">{q.questionNo}</span>
-          <span className="q-card-crumb">
-            {q.chapter || q.subject}
-            {q.topic ? (
-              <>
-                <span className="q-card-dot">·</span>
-                {q.topic}
-              </>
-            ) : null}
+    <div className="glass-card glass-card--bank p-lg rounded-xl relative group overflow-hidden">
+      <div className="absolute top-0 right-0 p-4">
+        <span className={badgeClass}>
+          {examDisplayName(q.exam, q.year)} {q.year}
+        </span>
+      </div>
+      <div className="flex items-start gap-4 mb-md">
+        <div className="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center shrink-0">
+          <span className={`material-symbols-outlined ${isJee ? "text-secondary" : "text-primary"}`}>
+            {subjectIcon(q.subject)}
           </span>
         </div>
-        <div className="q-card-badges">
-          <span className={`badge badge-${diff.toLowerCase()}`}>{diff}</span>
-          <span className="badge badge-year">{q.year}</span>
+        <div className="space-y-1 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-label-md text-secondary">{q.subject}</span>
+            <span className="text-outline text-[12px]">•</span>
+            <span className="text-label-md text-on-surface-variant">{q.chapter || q.topic || "General"}</span>
+          </div>
+          <h2 className="text-body-lg font-semibold leading-snug pr-20">{title}</h2>
         </div>
       </div>
-
-      <Link to={`/question/${q.questionId}`} className="q-card-preview">
-        {q.questionImageUrl ? (
-          <img src={q.questionImageUrl} alt="" loading="lazy" />
-        ) : (
-          <span className="q-card-preview-text">{preview}</span>
-        )}
-      </Link>
-
-      <div className="q-card-foot">
-        <span className="q-card-meta">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
-          </svg>
-          {examDisplayName(q.exam, q.year)}
-        </span>
-        <span className="q-card-meta">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
-          </svg>
-          {marksLabel(q.difficulty, q.questionNo)}
-        </span>
-        <Link to={`/question/${q.questionId}`} className="q-card-view">
-          View
-        </Link>
+      <div className="flex flex-wrap gap-4 items-center justify-between mt-xl pt-md border-t border-white/5">
+        <div className="flex gap-2">
+          <span className="flex items-center gap-1 text-caption text-outline">
+            <span className="material-symbols-outlined text-[14px]">bar_chart</span>
+            {diff}
+          </span>
+          <span className="flex items-center gap-1 text-caption text-outline">
+            <span className="material-symbols-outlined text-[14px]">query_stats</span>
+            {marksLabel(q.difficulty, q.questionNo)}
+          </span>
+        </div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2"
+            disabled
+            title="Soon"
+          >
+            <span className="material-symbols-outlined">bookmark</span>
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-lg text-on-surface hover:bg-surface-container-highest transition-all border border-white/5"
+            disabled
+            title="Coming soon"
+          >
+            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+            <span className="text-label-md">AI Suggest</span>
+          </button>
+          <Link
+            to={questionHref}
+            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold ai-glow hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <span className="text-label-md">Solve</span>
+          </Link>
+        </div>
       </div>
-    </article>
+    </div>
   );
 }

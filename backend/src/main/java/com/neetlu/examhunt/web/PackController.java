@@ -27,8 +27,7 @@ public class PackController {
 
     @GetMapping
     public List<PackSummary> listPacks() {
-        return packRepository.findByExamIgnoreCaseOrderByYearDesc("NEET").stream()
-                .filter(p -> !p.getPackId().startsWith("DEMO_"))
+        return packRepository.findAllByOrderByYearDesc().stream()
                 .map(p -> new PackSummary(
                         p.getPackId(),
                         p.getExam(),

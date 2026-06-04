@@ -1,6 +1,10 @@
 import { PackSummary, YearCatalogEntry } from "../api";
 
-const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
+const DIFFICULTIES = [
+  { label: "Conceptual (Easy)", value: "Easy" },
+  { label: "Application (Medium)", value: "Medium" },
+  { label: "Critical Thinking (Hard)", value: "Hard" },
+] as const;
 
 type ChapterFacet = { subject: string; chapter: string; count: number };
 
@@ -46,137 +50,195 @@ export default function FilterPanel({
   }
 
   return (
-    <>
-      <div className="filter-sidebar-head">
-        <div className="filter-sidebar-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" />
-          </svg>
-          <span>NEET filters</span>
-        </div>
-        {onClose && (
-          <button type="button" className="filter-drawer-close" onClick={onClose} aria-label="Close filters">
-            ×
-          </button>
-        )}
-      </div>
-      <p className="filter-count">
-        <strong>{totalShown}</strong> questions found
-      </p>
-
-      <div className="filter-block">
-        <label className="filter-label" htmlFor="filter-pack">
-          Paper
-        </label>
-        <select
-          id="filter-pack"
-          value={resolvedPackId}
-          onChange={(e) => onPackChange(e.target.value)}
-        >
-          {filteredPacks.map((p) => (
-            <option key={p.packId} value={p.packId}>
-              NEET {p.year} ({p.questionCount})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="filter-block">
-        <span className="filter-label">Year</span>
-        <div className="year-grid">
-          {neetYears.map((y) => {
-            const active = yearFilter === String(y.year);
-            const soon = y.status === "coming_soon";
-            return (
-              <button
-                key={y.year}
-                type="button"
-                className={
-                  soon
-                    ? "year-chip soon"
-                    : active
-                      ? "year-chip active"
-                      : "year-chip"
-                }
-                disabled={soon}
-                title={soon ? y.message || "Coming soon" : undefined}
-                onClick={() => !soon && set("year", active ? "" : String(y.year))}
-              >
-                {y.year}
-                {soon && <span className="chip-soon">Soon</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="filter-block">
-        <label className="filter-label" htmlFor="filter-chapter">
-          Subject
-        </label>
-        <select id="filter-chapter" value={subject} onChange={(e) => set("subject", e.target.value)}>
-          <option value="">All subjects</option>
-          {subjects.map((s) => (
-            <option key={s.name} value={s.name}>
-              {s.name} ({s.count})
-            </option>
-          ))}
-        </select>
-        {subject && (
-          <select
-            id="filter-subchapter"
-            className="filter-select-second"
-            value={chapter}
-            onChange={(e) => set("chapter", e.target.value)}
-          >
-            <option value="">All chapters</option>
-            {chapters.map((c) => (
-              <option key={`${c.subject}-${c.chapter}`} value={c.chapter}>
-                {c.chapter} ({c.count})
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      <div className="filter-block">
-        <label className="filter-label" htmlFor="filter-topic">
-          Topic
-        </label>
-        <select id="filter-topic" value={topic} onChange={(e) => set("topic", e.target.value)}>
-          <option value="">All Topics</option>
-          {topics.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="filter-block">
-        <span className="filter-label">Difficulty</span>
-        <div className="diff-row">
-          {DIFFICULTIES.map((d) => (
-            <button
-              key={d}
-              type="button"
-              className={difficulty === d ? "diff-chip active" : "diff-chip"}
-              onClick={() => set("difficulty", difficulty === d ? "" : d)}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <div className="space-y-gutter">
       {onClose && (
-        <div className="filter-drawer-actions">
-          <button type="button" className="btn btn-block primary" onClick={onClose}>
-            Show {totalShown} questions
+        <div className="flex items-center justify-between lg:hidden">
+          <span className="text-headline-md">Filters</span>
+          <button type="button" className="material-symbols-outlined" onClick={onClose}>
+            close
           </button>
         </div>
       )}
-    </>
+
+      <div className="glass-card glass-card--bank p-lg rounded-xl">
+        <h3 className="text-label-md font-label-md text-primary mb-md flex items-center justify-between">
+          DEEP FILTERING
+          <span className="material-symbols-outlined text-[16px]">filter_list</span>
+        </h3>
+        <div className="space-y-md">
+          <div>
+            <label className="text-caption text-outline mb-2 block">Exam Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="bg-primary-container text-on-primary-container text-caption py-2 rounded-lg font-bold">
+                NEET
+              </button>
+              <button type="button" className="bg-surface-container text-on-surface-variant text-caption py-2 rounded-lg" disabled>
+                JEE
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-caption text-outline mb-2 block" htmlFor="filter-pack">
+              Paper
+            </label>
+            <select
+              id="filter-pack"
+              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface mb-2"
+              value={resolvedPackId}
+              onChange={(e) => onPackChange(e.target.value)}
+            >
+              {filteredPacks.map((p) => (
+                <option key={p.packId} value={p.packId}>
+                  NEET {p.year} ({p.questionCount})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {neetYears.length > 0 && (
+            <div>
+              <label className="text-caption text-outline mb-2 block">Year</label>
+              <div className="grid grid-cols-3 gap-2">
+                {neetYears.map((y) => {
+                  const active = yearFilter === String(y.year);
+                  const soon = y.status === "coming_soon";
+                  return (
+                    <button
+                      key={y.year}
+                      type="button"
+                      disabled={soon}
+                      onClick={() => !soon && set("year", active ? "" : String(y.year))}
+                      className={
+                        soon
+                          ? "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant opacity-50"
+                          : active
+                            ? "text-caption py-2 rounded-lg bg-primary-container text-on-primary-container font-bold"
+                            : "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+                      }
+                    >
+                      {y.year}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-caption text-outline mb-2 block" htmlFor="filter-subject">
+              Subject
+            </label>
+            <select
+              id="filter-subject"
+              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+              value={subject}
+              onChange={(e) => set("subject", e.target.value)}
+            >
+              <option value="">All subjects</option>
+              {subjects.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name} ({s.count})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {subject && chapters.length > 0 && (
+            <div>
+              <label className="text-caption text-outline mb-2 block" htmlFor="filter-chapter">
+                Chapter
+              </label>
+              <select
+                id="filter-chapter"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+                value={chapter}
+                onChange={(e) => set("chapter", e.target.value)}
+              >
+                <option value="">All chapters</option>
+                {chapters.map((c) => (
+                  <option key={`${c.subject}-${c.chapter}`} value={c.chapter}>
+                    {c.chapter} ({c.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {topics.length > 0 && (
+            <div>
+              <label className="text-caption text-outline mb-2 block" htmlFor="filter-topic">
+                Topic
+              </label>
+              <select
+                id="filter-topic"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+                value={topic}
+                onChange={(e) => set("topic", e.target.value)}
+              >
+                <option value="">All topics</option>
+                {topics.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-caption text-outline mb-2 block">Difficulty Level</label>
+            <div className="flex flex-col gap-1">
+              {DIFFICULTIES.map((d) => (
+                <label
+                  key={d.value}
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0"
+                    checked={difficulty === d.value}
+                    onChange={() => set("difficulty", difficulty === d.value ? "" : d.value)}
+                  />
+                  <span className="text-body-sm">{d.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-caption text-outline mb-2 block">AI Recommended</label>
+            <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-primary/20">
+              <span className="text-body-sm text-primary">Target Weak Areas</span>
+              <div className="w-8 h-4 bg-primary-container rounded-full relative">
+                <div className="w-3 h-3 bg-white rounded-full absolute right-0.5 top-0.5" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card glass-card--bank p-lg rounded-xl border-dashed border-primary/20">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="material-symbols-outlined text-primary">psychology</span>
+          <span className="text-label-md font-label-md">Learning Insights</span>
+        </div>
+        <p className="text-body-sm text-outline leading-relaxed">
+          Based on your last mock, you should focus on{" "}
+          <span className="text-secondary font-bold">Inorganic Chemistry</span> trends from 2018-2022.
+        </p>
+      </div>
+
+      {onClose && (
+        <button
+          type="button"
+          className="w-full py-4 bg-primary text-on-primary font-bold rounded-xl lg:hidden"
+          onClick={onClose}
+        >
+          Apply Filters ({totalShown})
+        </button>
+      )}
+    </div>
   );
 }
 
