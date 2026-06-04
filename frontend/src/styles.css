@@ -1152,6 +1152,17 @@ a {
   cursor: not-allowed;
 }
 
+.btn.danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+}
+
+.btn.danger:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: rgba(185, 28, 28, 0.45);
+}
+
 .btn-primary-nav {
   font-weight: 600;
 }
@@ -1568,8 +1579,9 @@ a {
 
 /* —— Adaptive practice landing —— */
 .practice-landing {
-  max-width: 42rem;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .practice-config {

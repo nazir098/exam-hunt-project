@@ -18,23 +18,24 @@ export default function UserProgressPanel({ variant = "legacy" }: Props) {
 
   if (variant === "inline") {
     return (
-      <div className="user-progress-inline flex items-center gap-1.5 shrink-0">
+      <div className="user-progress-inline flex items-center gap-1 shrink-0">
         <Link to="/analytics" className="user-progress-pill user-progress-pill--marks" title="Total marks">
-          <strong>{totalMarks}</strong> marks
+          <strong>{totalMarks}</strong>
+          <span className="user-progress-pill__suffix">marks</span>
         </Link>
         <Link to="/analytics" className="user-progress-pill" title="Accuracy">
           {accuracy}%
         </Link>
-        <Link to="/analytics" className="user-progress-pill hidden xl:inline-flex" title="Questions answered">
+        <Link
+          to="/analytics"
+          className="user-progress-pill user-progress-pill--attempts"
+          title="Questions answered"
+        >
           {attempts} Qs
         </Link>
-        <button
-          type="button"
-          className="user-progress-logout-btn hidden xl:inline-flex"
-          onClick={logout}
-          title="Sign out"
-        >
-          Log out
+        <button type="button" className="user-progress-logout-btn" onClick={logout} title="Sign out">
+          <span className="material-symbols-outlined user-progress-logout-btn__icon">logout</span>
+          <span className="user-progress-logout-btn__label">Log out</span>
         </button>
       </div>
     );

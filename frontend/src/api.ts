@@ -80,7 +80,10 @@ export type UserProfile = {
   id: string;
   email: string;
   displayName: string;
+  admin: boolean;
 };
+
+export type AdminActionResult = Record<string, unknown> & { message?: string };
 
 export type AuthResult = {
   token: string;
@@ -134,12 +137,22 @@ export type SubmitResult = {
   hasSolution: boolean;
 };
 
+export type ChapterProgress = {
+  subject: string;
+  chapter: string;
+  attempts: number;
+  correct: number;
+  marks: number;
+  accuracyPercent: number;
+};
+
 export type ProgressSummary = {
   totalAttempts: number;
   correctAttempts: number;
   accuracyPercent: number;
   recentSessions: PracticeSessionView[];
   byPack: { packId: string; attempts: number; correct: number; marks: number }[];
+  weakChapters: ChapterProgress[];
 };
 
 export type LeaderboardEntry = {
@@ -155,11 +168,32 @@ export type LeaderboardEntry = {
 
 export type LeaderboardPeriod = "weekly" | "monthly" | "all";
 
+export type LeaderboardStats = {
+  scholarsInPeriod: number;
+  totalMarks: number;
+  totalAttempts: number;
+  totalCorrect: number;
+  avgAccuracyPercent: number;
+  allTimeScholars: number;
+  allTimeAttempts: number;
+  questionBankSize: number;
+  weeklyChallengeTarget: number;
+};
+
+export type LeaderboardActivityItem = {
+  displayName: string;
+  correct: boolean;
+  marksAwarded: number;
+  relativeTime: string;
+};
+
 export type LeaderboardResponse = {
   period: LeaderboardPeriod;
   entries: LeaderboardEntry[];
   you: LeaderboardEntry | null;
   totalPlayers: number;
+  stats?: LeaderboardStats;
+  recentActivity?: LeaderboardActivityItem[];
 };
 
 export type RatingView = {
@@ -224,11 +258,12 @@ export function fetchPack(packId: string) {
 
 export function fetchQuestions(
   packId: string,
-  params: { subject?: string; chapter?: string; page?: number; size?: number }
+  params: { subject?: string; chapter?: string; q?: string; page?: number; size?: number }
 ) {
   const q = new URLSearchParams({ packId });
   if (params.subject) q.set("subject", params.subject);
   if (params.chapter) q.set("chapter", params.chapter);
+  if (params.q) q.set("q", params.q);
   if (params.page != null) q.set("page", String(params.page));
   if (params.size != null) q.set("size", String(params.size));
   return getJson<PageResponse<QuestionPublic>>(`/api/questions?${q}`);
@@ -262,6 +297,45 @@ export function login(email: string, password: string) {
 
 export function fetchMe() {
   return request<UserProfile>("/api/auth/me");
+}
+
+export type ImportFolderOption = {
+  folderName: string;
+  packId: string;
+  exam: string;
+  year: number;
+  questionCount: number;
+};
+
+export function fetchAdminImportFolders() {
+  return request<{ folders: ImportFolderOption[]; count: number }>("/api/admin/import/folders");
+}
+
+export function adminImportNeet() {
+  return request<AdminActionResult>("/api/admin/import/neet", { method: "POST" });
+}
+
+export function adminImportAll() {
+  return request<AdminActionResult>("/api/admin/import/all", { method: "POST" });
+}
+
+export function adminImportFolder(folderName: string) {
+  return request<AdminActionResult>(`/api/admin/import/folder/${encodeURIComponent(folderName)}`, {
+    method: "POST",
+  });
+}
+
+export function adminCleanupDemoPacks() {
+  return request<AdminActionResult>("/api/admin/seed/cleanup-demo", { method: "POST" });
+}
+
+export function adminSeedLeaderboardDemo(force = false) {
+  const q = force ? "?force=true" : "";
+  return request<AdminActionResult>(`/api/admin/seed/leaderboard-demo${q}`, { method: "POST" });
+}
+
+export function adminCleanupLeaderboardDemo() {
+  return request<AdminActionResult>("/api/admin/seed/cleanup-leaderboard-demo", { method: "POST" });
 }
 
 export function createPracticeSession(body: {
@@ -301,7 +375,10 @@ export function submitPracticeAnswer(body: {
 }
 
 export function fetchProgress() {
-  return request<ProgressSummary>("/api/practice/progress");
+  return request<ProgressSummary>("/api/practice/progress").then((p) => ({
+    ...p,
+    weakChapters: p.weakChapters ?? [],
+  }));
 }
 
 export function fetchLeaderboard(limit = 50, period: LeaderboardPeriod = "weekly") {
@@ -319,4 +396,121 @@ export function fetchQuestionRating(questionId: string) {
   return request<RatingView>(
     `/api/practice/questions/${encodeURIComponent(questionId)}/rating`
   );
+}
+
+export type PublicPlatformSettings = {
+  marketingPyqFloor: number;
+  displayTotalQuestions: number | null;
+  displayChapters: number | null;
+  bankSearchSuggestions: string[];
+  learningInsightText: string;
+  learningInsightHighlight: string;
+  aiTutorMockEnabled: boolean;
+  aiTutorWelcome: string;
+  bookmarksEnabled: boolean;
+  aiSuggestEnabled: boolean;
+};
+
+export type AdminPlatformSettings = {
+  publicSettings: PublicPlatformSettings;
+  aiTutorFallbackReplies: string[];
+  aiTutorKeywordReplies: Record<string, string>;
+};
+
+export function fetchPublicSettings() {
+  return getJson<PublicPlatformSettings>("/api/settings/public");
+}
+
+export function fetchAdminSettings() {
+  return request<AdminPlatformSettings>("/api/admin/settings");
+}
+
+export function updateAdminSettings(body: Partial<{
+  marketingPyqFloor: number;
+  displayTotalQuestions: number | null;
+  displayChapters: number | null;
+  bankSearchSuggestions: string[];
+  learningInsightText: string;
+  learningInsightHighlight: string;
+  aiTutorMockEnabled: boolean;
+  aiTutorWelcome: string;
+  aiTutorFallbackReplies: string[];
+  aiTutorKeywordReplies: Record<string, string>;
+  bookmarksEnabled: boolean;
+  aiSuggestEnabled: boolean;
+}>) {
+  return request<AdminPlatformSettings>("/api/admin/settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export type BookmarkItem = {
+  questionId: string;
+  packId: string;
+  questionNo: number;
+  exam: string;
+  year: number;
+  subject: string;
+  chapter: string;
+  topic: string;
+  questionTextPreview: string;
+  note: string | null;
+  savedAt: string;
+};
+
+export function fetchBookmarks() {
+  return request<BookmarkItem[]>("/api/bookmarks");
+}
+
+export function fetchBookmarkStatus(questionId: string) {
+  return request<{ questionId: string; saved: boolean }>(
+    `/api/bookmarks/${encodeURIComponent(questionId)}/status`
+  );
+}
+
+export function toggleBookmark(questionId: string, note?: string) {
+  return request<{ questionId: string; saved: boolean; note: string | null; totalBookmarks: number }>(
+    `/api/bookmarks/${encodeURIComponent(questionId)}/toggle`,
+    { method: "POST", body: JSON.stringify(note ? { note } : {}) }
+  );
+}
+
+export function searchQuestions(params: {
+  q: string;
+  exam?: string;
+  packId?: string;
+  page?: number;
+  size?: number;
+}) {
+  const qs = new URLSearchParams({ q: params.q });
+  if (params.exam) qs.set("exam", params.exam);
+  if (params.packId) qs.set("packId", params.packId);
+  if (params.page != null) qs.set("page", String(params.page));
+  if (params.size != null) qs.set("size", String(params.size));
+  return getJson<PageResponse<QuestionPublic>>(`/api/questions/search?${qs}`);
+}
+
+export function aiTutorChat(body: { message: string; questionId?: string; context?: string }) {
+  return request<{ reply: string; source: string; mock: boolean }>("/api/ai-tutor/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function aiTutorHint(body: { mode: string; questionId?: string }) {
+  return request<{ text: string; mode: string }>("/api/ai-tutor/hint", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function adminSeedSampleBookmarks(limit = 8) {
+  return request<AdminActionResult>(`/api/admin/bookmarks/seed-sample?limit=${limit}`, {
+    method: "POST",
+  });
+}
+
+export function adminClearMyBookmarks() {
+  return request<AdminActionResult>("/api/admin/bookmarks/clear-mine", { method: "POST" });
 }

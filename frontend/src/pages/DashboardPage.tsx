@@ -1,51 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchLeaderboard } from "../api";
+import { fetchExams, fetchLeaderboard, fetchPacks } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import CompactStatsStrip from "../components/CompactStatsStrip";
+import DashboardGuestView from "../components/DashboardGuestView";
+import DashboardPerformanceSnapshot from "../components/DashboardPerformanceSnapshot";
+import DashboardRecommendations from "../components/DashboardRecommendations";
 import { STITCH_ANALYTICS_HERO } from "../design/stitchAssets";
-import { buildDashboardStats } from "../utils/dashboardStats";
+import { buildDashboardStats, computeStreakDays } from "../utils/dashboardStats";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
+import { buildPlatformStats } from "../utils/platformStats";
 
 const QUICK_ACTIONS = [
-  {
-    to: "/practice",
-    icon: "bolt",
-    title: "Practice",
-    desc: "Marks tracked · NEET +4 / −1 · adaptive",
-    primary: true,
-  },
-  {
-    to: "/bank?exam=NEET",
-    icon: "menu_book",
-    title: "Question Bank",
-    desc: "Browse PYQs with solutions",
-    primary: false,
-  },
-  {
-    to: "/analytics",
-    icon: "insights",
-    title: "Analytics",
-    desc: "Trends, heatmap & session history",
-    primary: false,
-  },
-  {
-    to: "/leaderboard",
-    icon: "emoji_events",
-    title: "Leaderboard",
-    desc: "See how you rank by Practice marks",
-    primary: false,
-  },
-] as const;
-
-const SUBJECT_SHORTCUTS = [
-  { name: "Physics", icon: "architecture", to: "/bank?exam=NEET&subject=Physics" },
-  { name: "Chemistry", icon: "experiment", to: "/bank?exam=NEET&subject=Chemistry" },
-  { name: "Biology", icon: "biotech", to: "/bank?exam=NEET&subject=Biology" },
+  { to: "/practice", icon: "bolt", title: "Practice", desc: "Scored adaptive sessions", primary: true },
+  { to: "/bank?exam=NEET", icon: "menu_book", title: "Question Bank", desc: "PYQs with solutions" },
+  { to: "/analytics", icon: "insights", title: "Analytics", desc: "Trends & heatmaps" },
+  { to: "/leaderboard", icon: "emoji_events", title: "Leaderboard", desc: "Your rank vs peers" },
 ] as const;
 
 export default function DashboardPage() {
-  const { user, progress, refreshProgress } = useAuth();
+  const { settings } = usePlatformSettings();
+  const { user, progress, loading: authLoading, refreshProgress } = useAuth();
   const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchExams>>>([]);
+  const [packs, setPacks] = useState<Awaited<ReturnType<typeof fetchPacks>>>([]);
+
+  useEffect(() => {
+    Promise.allSettled([fetchExams(), fetchPacks()]).then(([e, p]) => {
+      if (e.status === "fulfilled") setCatalog(e.value);
+      if (p.status === "fulfilled") setPacks(p.value);
+    });
+  }, []);
 
   useEffect(() => {
     if (user) refreshProgress();
@@ -62,83 +46,87 @@ export default function DashboardPage() {
   }, [user?.id, progress?.totalAttempts]);
 
   const stats = useMemo(() => buildDashboardStats(progress), [progress]);
+  const platformStats = useMemo(
+    () => buildPlatformStats(catalog, packs, settings),
+    [catalog, packs, settings]
+  );
 
-  const name = user?.displayName?.split(" ")[0] || "Scholar";
-  const accuracy = progress?.accuracyPercent ?? null;
+  if (authLoading) {
+    return (
+      <main className="dashboard-page pt-4 lg:pt-8">
+        <p className="text-body text-on-surface-variant">Loading…</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="dashboard-page dashboard-page--guest pt-4 lg:pt-8">
+        <DashboardGuestView stats={platformStats} />
+      </main>
+    );
+  }
+
+  const name = user.displayName?.split(" ")[0] || "Scholar";
+  const accuracy = progress?.accuracyPercent ?? 0;
   const attempts = progress?.totalAttempts ?? 0;
-  const streak = user ? Math.min(14, Math.max(1, attempts || 1)) : 14;
+  const streak = computeStreakDays(stats.sessions);
   const rankLabel =
     leaderboardRank != null ? `#${leaderboardRank}` : attempts > 0 ? "Unranked" : "—";
-  const topTier = accuracy != null && accuracy >= 80;
+  const topTier = accuracy >= 80;
 
   const practiceCta = stats.activeSession?.currentQuestionId
     ? `/practice/${stats.activeSession.id}/${stats.activeSession.currentQuestionId}`
     : "/practice";
-  const practiceLabel = stats.activeSession ? "Resume NEET Practice" : "Start NEET Practice";
+  const practiceLabel = stats.activeSession ? "Resume practice" : "Start practice";
 
   return (
-    <main className="dashboard-page pb-28 lg:pb-10 pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
-      <p className="page-eyebrow">Home</p>
-
+    <main className="dashboard-page pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
       <section className="dashboard-hero glass-card">
         <div className="dashboard-hero__body">
-          <span className="dashboard-badge">Your command center</span>
+          <span className="dashboard-badge">Welcome back</span>
           <h1 className="dashboard-hero__title">
-            Hello, {name}!{" "}
             {topTier ? (
-              <>You&apos;re in the <span className="text-primary">top 5%</span> today.</>
+              <>
+                {name}, you&apos;re on fire — <span className="text-primary">top tier</span> accuracy.
+              </>
             ) : (
-              <>Ready to study?</>
+              <>Hi {name}, let&apos;s sharpen your edge today.</>
             )}
           </h1>
           <p className="dashboard-hero__lead">
-            Use Practice for tracked marks, Question Bank to study freely, or Analytics for trends.
+            Your marks, streak, and rank live here. Pick up a session or drill weak chapters.
           </p>
-          <div className="dashboard-hero__pills">
-            <div className="dashboard-pill">
-              <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                local_fire_department
-              </span>
-              <span>{streak} Day Flame</span>
-            </div>
-            <Link to="/leaderboard" className="dashboard-pill dashboard-pill--link">
-              <span className="material-symbols-outlined text-primary">emoji_events</span>
-              <span>{user ? `Rank ${rankLabel} · Leaderboard` : "Leaderboard"}</span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="dashboard-hero__visual">
-          <div className="dashboard-hero__image-wrap">
-            <img alt="" className="dashboard-hero__image" src={STITCH_ANALYTICS_HERO} />
-            <div className="dashboard-hero__image-fade" aria-hidden />
-          </div>
-          <Link to={user ? practiceCta : "/login?next=/practice"} className="dashboard-hero__cta electric-glow-bg">
-            {user ? practiceLabel : "Sign in to practice"}
+          <Link to={practiceCta} className="btn primary dashboard-hero__cta-inline">
+            <span className="material-symbols-outlined">bolt</span>
+            {practiceLabel}
           </Link>
+        </div>
+        <div className="dashboard-hero__visual dashboard-hero__visual--compact">
+          <img alt="" className="dashboard-hero__image" src={STITCH_ANALYTICS_HERO} />
         </div>
       </section>
 
-      {stats.activeSession && (
-        <Link
-          to={practiceCta}
-          className="dashboard-resume-banner glass-card"
-        >
-          <span className="material-symbols-outlined text-secondary">play_circle</span>
-          <span>
-            <strong>Session in progress</strong> — {stats.activeSession.packId.replace("NEET_", "NEET ")} · tap to
-            resume
-          </span>
-          <span className="material-symbols-outlined">chevron_right</span>
-        </Link>
-      )}
+      <DashboardPerformanceSnapshot
+        accuracy={accuracy}
+        questionsSolved={attempts}
+        streakDays={streak}
+        rankLabel={rankLabel}
+        progress={progress}
+      />
+
+      <DashboardRecommendations
+        activeSession={stats.activeSession}
+        practiceCta={practiceCta}
+        progress={progress}
+      />
 
       <section className="dashboard-quick-actions" aria-label="Quick actions">
         {QUICK_ACTIONS.map((action) => (
           <Link
             key={action.to}
             to={action.to}
-            className={`dashboard-action-card glass-card ${action.primary ? "dashboard-action-card--primary" : ""}`}
+            className={`dashboard-action-card glass-card ${"primary" in action && action.primary ? "dashboard-action-card--primary" : ""}`}
           >
             <span className="material-symbols-outlined dashboard-action-card__icon">{action.icon}</span>
             <strong>{action.title}</strong>
@@ -147,36 +135,31 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      {user && progress && <CompactStatsStrip progress={progress} />}
-
-      {user && attempts > 0 && (
+      {attempts > 0 && (
         <Link to="/analytics" className="dashboard-teaser glass-card">
           <div className="dashboard-teaser__icon">
             <span className="material-symbols-outlined">trending_up</span>
           </div>
           <div className="dashboard-teaser__copy">
-            <strong>Accuracy trend {stats.trend >= 0 ? "+" : ""}{stats.trend}%</strong>
-            <span>Charts, weekly heatmap, and full session history live on Analytics.</span>
+            <strong>
+              Accuracy trend {stats.trend >= 0 ? "+" : ""}
+              {stats.trend}%
+            </strong>
+            <span>Open Analytics for heatmaps and session history.</span>
           </div>
           <span className="material-symbols-outlined dashboard-teaser__arrow">arrow_forward</span>
         </Link>
       )}
 
-      <section className="dashboard-subjects">
-        <div className="dashboard-subjects__head">
-          <h2 className="dashboard-card__title">Study by subject</h2>
-          <Link to="/bank?exam=NEET" className="text-primary text-label-md font-bold">
-            All chapters →
-          </Link>
+      <section className="dashboard-ai-nudge glass-card">
+        <span className="material-symbols-outlined text-primary">psychology</span>
+        <div>
+          <strong>AI Tutor is launching soon</strong>
+          <p className="muted">Get notified when step-by-step AI explanations land on your PYQs.</p>
         </div>
-        <div className="dashboard-subjects__grid">
-          {SUBJECT_SHORTCUTS.map((s) => (
-            <Link key={s.name} to={s.to} className="dashboard-subject-card glass-card">
-              <span className="material-symbols-outlined text-primary">{s.icon}</span>
-              <span>{s.name}</span>
-            </Link>
-          ))}
-        </div>
+        <Link to="/ai-tutor" className="btn">
+          Preview
+        </Link>
       </section>
     </main>
   );

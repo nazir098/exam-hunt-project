@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import AnalyticsGuestPreview from "../components/AnalyticsGuestPreview";
 import { useAuth } from "../auth/AuthContext";
 import InsightChartsPanel from "../components/InsightChartsPanel";
 import Scorecard from "../components/Scorecard";
@@ -35,35 +36,20 @@ export default function AnalyticsPage() {
     ];
   }, [progress, accuracy]);
 
+  if (!user) {
+    return <AnalyticsGuestPreview />;
+  }
+
   if (loading) {
     return (
-      <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8">
+      <main className="analytics-page pt-4 lg:pt-8">
         <p className="analytics-loading">Loading analytics…</p>
       </main>
     );
   }
 
-  if (!user) {
-    return (
-      <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8">
-        <p className="page-eyebrow">Progress lab</p>
-        <section className="analytics-guest glass-card">
-          <span className="dashboard-badge">Analytics</span>
-          <h1 className="analytics-page-title">Scores, trends &amp; history</h1>
-          <p className="analytics-hero-sub">
-            Unlike the home dashboard, this page shows full scorecards, accuracy charts, weekly heatmaps,
-            and every practice session you&apos;ve completed.
-          </p>
-          <Link to="/login?next=/analytics" className="electric-glow-bg analytics-guest__cta">
-            Sign in to view analytics
-          </Link>
-        </section>
-      </main>
-    );
-  }
-
   return (
-    <main className="analytics-page pb-28 lg:pb-10 pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
+    <main className="analytics-page pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
       <header className="analytics-page-header">
         <p className="page-eyebrow">Progress lab</p>
         <h1 className="analytics-page-title">Analytics &amp; scores</h1>

@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.regex.Pattern;
+
 @RestController
 @RequestMapping("/api/questions")
 public class QuestionController {
@@ -28,12 +30,15 @@ public class QuestionController {
             @RequestParam String packId,
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String chapter,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "24") int size
     ) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("questionNo"));
         Page<Question> result;
-        if (subject != null && !subject.isBlank() && chapter != null && !chapter.isBlank()) {
+        if (q != null && !q.isBlank()) {
+            result = questionRepository.searchInPack(packId, regexPattern(q), pageable);
+        } else if (subject != null && !subject.isBlank() && chapter != null && !chapter.isBlank()) {
             result = questionRepository.findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
                     packId, subject, chapter, pageable);
         } else if (subject != null && !subject.isBlank()) {
@@ -42,6 +47,31 @@ public class QuestionController {
             result = questionRepository.findByPackId(packId, pageable);
         }
         return result.map(QuestionPublic::from);
+    }
+
+    @GetMapping("/search")
+    public Page<QuestionPublic> search(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "NEET") String exam,
+            @RequestParam(required = false) String packId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size
+    ) {
+        if (q == null || q.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query q is required");
+        }
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("year").descending().and(Sort.by("questionNo")));
+        Page<Question> result;
+        if (packId != null && !packId.isBlank()) {
+            result = questionRepository.searchInPack(packId, regexPattern(q), pageable);
+        } else {
+            result = questionRepository.searchByExam(exam, regexPattern(q), pageable);
+        }
+        return result.map(QuestionPublic::from);
+    }
+
+    private static String regexPattern(String raw) {
+        return Pattern.quote(raw.trim());
     }
 
     @GetMapping("/{questionId}")

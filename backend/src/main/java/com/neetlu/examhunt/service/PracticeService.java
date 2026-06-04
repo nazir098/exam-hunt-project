@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class PracticeService {
@@ -160,11 +162,36 @@ public class PracticeService {
                 .limit(10)
                 .toList();
 
+        List<QuestionAttempt> userAttempts = attempts.findByUserIdOrderByAnsweredAtDesc(userId);
+
         Map<String, PackStats> byPack = new LinkedHashMap<>();
-        for (QuestionAttempt a : attempts.findByUserIdOrderByAnsweredAtDesc(userId)) {
+        Map<String, ChapterStats> byChapter = new LinkedHashMap<>();
+        Set<String> questionIds =
+                userAttempts.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
+        Map<String, Question> questionById = questions.findByQuestionIdIn(questionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+
+        for (QuestionAttempt a : userAttempts) {
             byPack.computeIfAbsent(a.getPackId(), k -> new PackStats())
                     .add(a.isCorrect(), a.getMarksAwarded());
+            Question q = questionById.get(a.getQuestionId());
+            if (q == null || q.getChapter() == null || q.getChapter().isBlank()) {
+                continue;
+            }
+            String chapterKey = q.getSubject() + "\u0000" + q.getChapter();
+            byChapter.computeIfAbsent(chapterKey, k -> new ChapterStats(q.getSubject(), q.getChapter()))
+                    .add(a.isCorrect(), a.getMarksAwarded());
         }
+
+        List<ChapterProgress> weakChapters = byChapter.values().stream()
+                .filter(c -> c.attempts >= 2)
+                .sorted(Comparator.comparingInt(ChapterStats::accuracyPercent)
+                        .thenComparingInt(c -> c.marks)
+                        .thenComparingInt(c -> -c.attempts))
+                .limit(8)
+                .map(c -> new ChapterProgress(
+                        c.subject, c.chapter, c.attempts, c.correct, c.marks, c.accuracyPercent()))
+                .toList();
 
         return new ProgressSummary(
                 total,
@@ -177,7 +204,8 @@ public class PracticeService {
                                 e.getValue().attempts,
                                 e.getValue().correct,
                                 e.getValue().marks))
-                        .toList());
+                        .toList(),
+                weakChapters);
     }
 
     public RatingView rateQuestion(String userId, String questionId, int score, String comment) {
@@ -355,9 +383,13 @@ public class PracticeService {
             long correctAttempts,
             int accuracyPercent,
             List<SessionView> recentSessions,
-            List<PackProgress> byPack) {}
+            List<PackProgress> byPack,
+            List<ChapterProgress> weakChapters) {}
 
     public record PackProgress(String packId, int attempts, int correct, int marks) {}
+
+    public record ChapterProgress(
+            String subject, String chapter, int attempts, int correct, int marks, int accuracyPercent) {}
 
     public record RatingView(int yourScore, int yourVotes, String comment, RatingAggregate aggregate) {}
 
@@ -372,6 +404,29 @@ public class PracticeService {
             attempts++;
             if (correct) this.correct++;
             this.marks += marks;
+        }
+    }
+
+    private static class ChapterStats {
+        final String subject;
+        final String chapter;
+        int attempts;
+        int correct;
+        int marks;
+
+        ChapterStats(String subject, String chapter) {
+            this.subject = subject;
+            this.chapter = chapter;
+        }
+
+        void add(boolean wasCorrect, int marksAwarded) {
+            attempts++;
+            if (wasCorrect) this.correct++;
+            this.marks += marksAwarded;
+        }
+
+        int accuracyPercent() {
+            return attempts > 0 ? (int) Math.round((correct * 100.0) / attempts) : 0;
         }
     }
 }

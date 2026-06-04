@@ -88,7 +88,7 @@ export default function SiteLayout() {
   if (hideMobileChrome) {
     return (
       <StitchViewport>
-        <div className="flex flex-col min-h-[100dvh] stitch-shell">
+        <div className="flex flex-col min-h-[100dvh] stitch-shell stitch-shell--no-mobile-chrome">
           <DesktopSiteHeader />
           <div className="flex-1 flex flex-col min-h-0">
             <div className="stitch-page-content flex-1">{outlet}</div>

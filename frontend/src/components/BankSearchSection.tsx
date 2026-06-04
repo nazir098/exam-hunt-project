@@ -2,14 +2,14 @@ import { FormEvent, useState } from "react";
 import HintTooltip from "./HintTooltip";
 import { BANK_MODE_HINT } from "../navigation/modeHints";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 
 type Props = {
   onOpenFilters: () => void;
 };
 
-const SUGGESTIONS = ["Rotational Dynamics", "Optics", "Organic Chemistry"];
-
 export default function BankSearchSection({ onOpenFilters }: Props) {
+  const { settings } = usePlatformSettings();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -65,7 +65,10 @@ export default function BankSearchSection({ onOpenFilters }: Props) {
           </form>
           <div className="flex flex-wrap gap-2 pt-2">
             <span className="text-caption text-outline">AI Suggestions:</span>
-            {SUGGESTIONS.map((s) => (
+            {(settings.bankSearchSuggestions?.length
+              ? settings.bankSearchSuggestions
+              : ["Rotational Dynamics", "Optics", "Organic Chemistry"]
+            ).map((s) => (
               <button
                 key={s}
                 type="button"

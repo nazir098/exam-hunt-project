@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  adminImportNeet,
   ExamCatalogEntry,
   fetchExams,
   fetchPack,
@@ -11,9 +12,14 @@ import {
   YearCatalogEntry,
 } from "../api";
 import BankSearchSection from "../components/BankSearchSection";
+import BankSubjectGrid from "../components/BankSubjectGrid";
+import { buildSubjectTiles } from "../utils/bankSubjects";
 import ComingSoon from "../components/ComingSoon";
 import FilterPanel, { activeFilterCount } from "../components/FilterPanel";
 import QuestionCard from "../components/QuestionCard";
+import { useAuth } from "../auth/AuthContext";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
+import { primaryWeakChapter } from "../utils/weakChapters";
 import { defaultExamId, findExam } from "../utils/exams";
 import { filterQuestionsForPractice } from "../utils/practice";
 
@@ -37,12 +43,20 @@ export default function BrowsePage() {
   const [pack, setPack] = useState<PackSummary | null>(null);
   const [questions, setQuestions] = useState<QuestionPublic[]>([]);
   const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const skipResultsScrollRef = useRef(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const { user, progress } = useAuth();
+  const { settings } = usePlatformSettings();
 
   const selectedExam = findExam(catalog, examFilter);
   const neetAvailable = packs.length > 0 || (findExam(catalog, "NEET")?.availableYears ?? 0) > 0;
+  const subjectTiles = useMemo(() => buildSubjectTiles(packs), [packs]);
   const showComingSoon = examFilter !== "NEET" && selectedExam?.status !== "available";
   const neetYears: YearCatalogEntry[] =
     findExam(catalog, "NEET")?.years ||
@@ -121,6 +135,9 @@ export default function BrowsePage() {
 
   useEffect(() => {
     if (!resolvedPackId || showComingSoon) {
+      setQuestions([]);
+      setTotalElements(0);
+      setTotalPages(0);
       setLoading(false);
       return;
     }
@@ -128,25 +145,35 @@ export default function BrowsePage() {
     fetchQuestions(resolvedPackId, {
       subject: subject || undefined,
       chapter: chapter || undefined,
+      q: qSearch || undefined,
       page,
       size: 60,
     })
       .then((res) => {
         setQuestions(res.content);
         setTotalElements(res.totalElements);
+        setTotalPages(res.totalPages);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [resolvedPackId, subject, chapter, page, showComingSoon]);
+  }, [resolvedPackId, subject, chapter, qSearch, page, showComingSoon]);
+
+  useEffect(() => {
+    if (loading || !resolvedPackId) return;
+    if (skipResultsScrollRef.current) {
+      skipResultsScrollRef.current = false;
+      return;
+    }
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [page, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
 
   const displayed = useMemo(
     () =>
       filterQuestionsForPractice(questions, {
         topic: topic || undefined,
         difficulty: difficulty || undefined,
-        q: qSearch || undefined,
       }),
-    [questions, topic, difficulty, qSearch]
+    [questions, topic, difficulty]
   );
 
   const subjects = pack?.facets?.subjects || [];
@@ -189,7 +216,11 @@ export default function BrowsePage() {
     navigate(`/bank?${next.toString()}`);
   }
 
-  const totalShown = qSearch || topic || difficulty ? displayed.length : totalElements;
+  const totalShown = topic || difficulty ? displayed.length : totalElements;
+  const pageCount = Math.max(1, totalPages);
+  const canGoNext = !loading && totalPages > 0 && page + 1 < totalPages;
+  const canGoPrev = page > 0;
+  const weak = primaryWeakChapter(progress?.weakChapters);
   const filterCount = activeFilterCount({
     exam: examFilter !== "NEET" ? examFilter : "",
     year: yearFilter,
@@ -215,6 +246,19 @@ export default function BrowsePage() {
     topics,
     onUpdateParam: updateParam,
     onPackChange: (id: string) => navigate(`/pack/${id}?${searchParams.toString()}`),
+    learningInsightText: settings.learningInsightText,
+    learningInsightHighlight: settings.learningInsightHighlight,
+    weakChapter: weak,
+    onApplyWeakChapter: weak
+      ? () => {
+          const next = new URLSearchParams(searchParams);
+          next.set("exam", "NEET");
+          next.set("subject", weak.subject);
+          next.set("chapter", weak.chapter);
+          next.delete("page");
+          setSearchParams(next);
+        }
+      : undefined,
   };
 
   const activeChips: { key: string; label: string }[] = [];
@@ -226,7 +270,7 @@ export default function BrowsePage() {
 
   if (showComingSoon) {
     return (
-      <main className="bank-page px-margin-mobile pb-8">
+      <main className="bank-page px-margin-mobile">
           <ComingSoon
             examName={selectedExam?.name || examFilter}
             description={
@@ -240,7 +284,7 @@ export default function BrowsePage() {
   }
 
   return (
-    <main className="bank-page px-margin-mobile pb-8">
+    <main className="bank-page px-margin-mobile">
       <div
         className={`fixed inset-0 z-[60] transition-transform duration-300 lg:hidden ${
           filtersOpen ? "" : "translate-x-full pointer-events-none"
@@ -258,8 +302,12 @@ export default function BrowsePage() {
 
       <BankSearchSection onOpenFilters={() => setFiltersOpen(true)} />
 
+      {neetAvailable && subjectTiles.length > 0 && !packIdParam && (
+        <BankSubjectGrid tiles={subjectTiles} exam={examFilter} />
+      )}
+
       <div className="lg:grid lg:grid-cols-[minmax(240px,280px)_1fr] lg:gap-gutter lg:items-start">
-        <aside className="hidden lg:block sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto custom-scrollbar">
+        <aside className="hidden lg:block sticky-below-header max-h-below-header overflow-y-auto custom-scrollbar">
           <FilterPanel {...filterProps} />
         </aside>
 
@@ -268,11 +316,46 @@ export default function BrowsePage() {
         {!neetAvailable && !loading && (
           <div className="neet-import-hint card">
             <h2>NEET data not loaded yet</h2>
-            <p className="muted">
-              Import published NEET manifests from pdf-qa-extractor:
-            </p>
-            <code>POST /api/admin/import/neet</code>
-            <p className="muted">or a single year: <code>POST /api/admin/import/folder/2016</code></p>
+            {user?.admin ? (
+              <>
+                <p className="muted">
+                  Import published NEET folders from your extractor ({importBusy ? "running…" : "ready"}).
+                </p>
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={importBusy}
+                  onClick={async () => {
+                    setImportBusy(true);
+                    setImportMsg("");
+                    try {
+                      const res = await adminImportNeet();
+                      setImportMsg(
+                        typeof res.message === "string"
+                          ? res.message
+                          : `Imported ${res.questionsImported ?? "?"} questions`
+                      );
+                      window.location.reload();
+                    } catch (e) {
+                      setImportMsg(e instanceof Error ? e.message : "Import failed");
+                    } finally {
+                      setImportBusy(false);
+                    }
+                  }}
+                >
+                  {importBusy ? "Importing…" : "Import all NEET data"}
+                </button>
+                <Link to="/admin" className="btn" style={{ marginTop: "0.5rem", display: "inline-block" }}>
+                  More admin tools
+                </Link>
+                {importMsg && <p className="muted">{importMsg}</p>}
+              </>
+            ) : (
+              <>
+                <p className="muted">An administrator must import published NEET manifests from pdf-qa-extractor.</p>
+                <p className="muted">Sign in with the admin account, then open Admin to sync data.</p>
+              </>
+            )}
           </div>
         )}
 
@@ -301,11 +384,15 @@ export default function BrowsePage() {
           </section>
         )}
 
-            <p className="bank-results-count">
-              <strong className="text-on-surface">{displayed.length}</strong> questions
+            <div
+              id="bank-results"
+              ref={resultsRef}
+              className="bank-results-anchor bank-results-count"
+            >
+              <strong className="text-on-surface">{totalShown.toLocaleString()}</strong> questions
               {pack ? ` · NEET ${pack.year}` : ""}
               {filterCount > 0 && <span className="text-primary"> · {filterCount} filters</span>}
-            </p>
+            </div>
 
         {activeChips.length > 0 && (
           <div className="flex flex-wrap gap-sm mb-md">
@@ -334,12 +421,6 @@ export default function BrowsePage() {
             {displayed.map((q) => (
               <QuestionCard key={q.questionId} question={q} packId={resolvedPackId} />
             ))}
-            {displayed.length > 0 && (
-              <div className="flex flex-col items-center justify-center py-xxl opacity-50">
-                <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
-                <span className="text-caption tracking-[0.2em] font-bold text-outline">LOADING MORE CHALLENGES</span>
-              </div>
-            )}
           </>
         )}
 
@@ -347,26 +428,34 @@ export default function BrowsePage() {
           <p className="muted state-msg">No questions match these filters.</p>
         )}
 
-        {resolvedPackId && (
-          <div className="flex items-center justify-center gap-md mt-xl">
+        {resolvedPackId && totalPages > 0 && (
+          <nav className="bank-pagination flex flex-wrap items-center justify-center gap-md mt-xl" aria-label="Question bank pages">
             <button
               type="button"
               className="glass-card px-md py-sm rounded-lg font-label"
-              disabled={page <= 0}
+              disabled={!canGoPrev}
               onClick={() => updateParam("page", String(page - 1))}
             >
               Previous
             </button>
-            <span className="muted">Page {page + 1}</span>
+            <span className="muted text-center">
+              Page {page + 1} of {pageCount}
+              {totalElements > 0 && (
+                <>
+                  <br />
+                  <span className="text-caption">{totalElements.toLocaleString()} questions total</span>
+                </>
+              )}
+            </span>
             <button
               type="button"
               className="glass-card px-md py-sm rounded-lg font-label"
-              disabled={displayed.length < 60}
+              disabled={!canGoNext}
               onClick={() => updateParam("page", String(page + 1))}
             >
               Next
             </button>
-          </div>
+          </nav>
         )}
         </div>
       </div>

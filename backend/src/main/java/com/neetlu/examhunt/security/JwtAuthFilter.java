@@ -1,7 +1,9 @@
 package com.neetlu.examhunt.security;
 
+import com.neetlu.examhunt.model.UserRole;
 import com.neetlu.examhunt.service.JwtService;
 import io.jsonwebtoken.JwtException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,7 +44,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 String userId = jwtService.userIdFromToken(token);
-                var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
+                UserRole role = jwtService.roleFromToken(token);
+                var authority = new SimpleGrantedAuthority("ROLE_" + role.name());
+                var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (JwtException ignored) {

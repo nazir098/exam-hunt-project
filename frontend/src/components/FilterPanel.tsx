@@ -1,3 +1,4 @@
+import type { ChapterProgress } from "../api";
 import { PackSummary, YearCatalogEntry } from "../api";
 
 const DIFFICULTIES = [
@@ -25,6 +26,10 @@ type Props = {
   onUpdateParam: (key: string, value: string) => void;
   onPackChange: (packId: string) => void;
   onClose?: () => void;
+  learningInsightText?: string;
+  learningInsightHighlight?: string;
+  weakChapter?: ChapterProgress | null;
+  onApplyWeakChapter?: () => void;
 };
 
 export default function FilterPanel({
@@ -43,6 +48,10 @@ export default function FilterPanel({
   onUpdateParam,
   onPackChange,
   onClose,
+  learningInsightText,
+  learningInsightHighlight,
+  weakChapter,
+  onApplyWeakChapter,
 }: Props) {
   function set(key: string, value: string) {
     onUpdateParam(key, value);
@@ -206,15 +215,24 @@ export default function FilterPanel({
             </div>
           </div>
 
-          <div>
-            <label className="text-caption text-outline mb-2 block">AI Recommended</label>
-            <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-primary/20">
-              <span className="text-body-sm text-primary">Target Weak Areas</span>
-              <div className="w-8 h-4 bg-primary-container rounded-full relative">
-                <div className="w-3 h-3 bg-white rounded-full absolute right-0.5 top-0.5" />
-              </div>
+          {weakChapter && onApplyWeakChapter && (
+            <div>
+              <label className="text-caption text-outline mb-2 block">AI Recommended</label>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-primary/20 hover:border-primary/50 transition-colors text-left"
+                onClick={() => {
+                  onApplyWeakChapter();
+                  if (onClose) onClose();
+                }}
+              >
+                <span className="text-body-sm text-primary">
+                  Target weak: {weakChapter.chapter}
+                </span>
+                <span className="material-symbols-outlined text-primary text-[18px]">arrow_forward</span>
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -224,8 +242,10 @@ export default function FilterPanel({
           <span className="text-label-md font-label-md">Learning Insights</span>
         </div>
         <p className="text-body-sm text-outline leading-relaxed">
-          Based on your last mock, you should focus on{" "}
-          <span className="text-secondary font-bold">Inorganic Chemistry</span> trends from 2018-2022.
+          {learningInsightText || "Focus on your weakest chapters from practice data."}{" "}
+          {learningInsightHighlight && (
+            <span className="text-secondary font-bold">{learningInsightHighlight}</span>
+          )}
         </p>
       </div>
 

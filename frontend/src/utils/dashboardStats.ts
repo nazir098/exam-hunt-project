@@ -45,6 +45,28 @@ export type DashboardStats = {
   activeSession: PracticeSessionView | null;
 };
 
+/** Consecutive calendar days with at least one practice session (up to today). */
+export function computeStreakDays(sessions: PracticeSessionView[]): number {
+  if (!sessions.length) return 0;
+  const dayKeys = new Set(
+    sessions.map((s) => new Date(s.startedAt).toISOString().slice(0, 10))
+  );
+  let streak = 0;
+  const cursor = new Date();
+  for (let i = 0; i < 45; i++) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (dayKeys.has(key)) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else if (i === 0) {
+      break;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
 export function buildDashboardStats(progress: ProgressSummary | null): DashboardStats {
   const sessions = meaningfulSessions(progress?.recentSessions ?? []);
   const completed = sessions.filter((s) => s.correctCount + s.wrongCount > 0);

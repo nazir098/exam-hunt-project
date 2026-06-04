@@ -17,6 +17,7 @@ public class UserAccount {
 
     private String displayName;
     private String passwordHash;
+    private UserRole role = UserRole.USER;
     private Instant createdAt = Instant.now();
 
     public String getId() {
@@ -49,6 +50,14 @@ public class UserAccount {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public UserRole getRole() {
+        return role == null ? UserRole.USER : role;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role == null ? UserRole.USER : role;
     }
 
     public Instant getCreatedAt() {

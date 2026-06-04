@@ -1,9 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
+import AiTutorBar from "./AiTutorBar";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
+import AiTutorNavButton from "./AiTutorNavButton";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
-import UserProgressPanel from "./UserProgressPanel";
 import {
   BRAND_NAME,
   STITCH_AVATAR_ANALYTICS,
@@ -35,6 +37,7 @@ export default function StitchShell({
 }: Props) {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const { settings } = usePlatformSettings();
   const avatar = avatarFor(pathname);
   const isDetail = pathname.startsWith("/question/");
   const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
@@ -43,16 +46,17 @@ export default function StitchShell({
   const isPractice =
     pathname === "/practice" || !!pathname.match(/^\/practice\/[^/]+\//);
   const isLeaderboard = pathname === "/leaderboard";
-  const profileTo = user ? "/analytics" : "/login";
+  const bankSearchTo = "/bank?exam=NEET";
 
   const mobileNavClass =
-    "lg:hidden bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile h-16 z-50 sticky top-0 shrink-0";
+    "lg:hidden bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile z-50 sticky top-0 shrink-0";
+  const mobileNavStyle = { height: "var(--app-header-h)", minHeight: "var(--app-header-h)" } as const;
 
   return (
     <div className="flex flex-col min-h-[100dvh] flex-1 stitch-shell">
       <DesktopSiteHeader />
 
-      <header className={mobileNavClass}>
+      <header className={mobileNavClass} style={mobileNavStyle}>
         {isDetail ? (
           <>
             <div className="flex items-center gap-sm min-w-0">
@@ -64,10 +68,10 @@ export default function StitchShell({
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
-              {user && <UserProgressPanel variant="inline" />}
-              <button type="button" className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/5" disabled>
-                <span className="material-symbols-outlined text-primary">smart_toy</span>
-              </button>
+              <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
+                <span className="material-symbols-outlined">search</span>
+              </Link>
+              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
             </div>
           </>
         ) : isAnalytics ? (
@@ -81,10 +85,10 @@ export default function StitchShell({
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
-              {user && <UserProgressPanel variant="inline" />}
-              <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 text-primary" disabled>
-                <span className="material-symbols-outlined">smart_toy</span>
-              </button>
+              <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
+                <span className="material-symbols-outlined">search</span>
+              </Link>
+              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
             </div>
           </>
         ) : (
@@ -93,13 +97,15 @@ export default function StitchShell({
               {BRAND_NAME}
             </Link>
             <div className="flex items-center gap-sm min-w-0">
-              {user && <UserProgressPanel variant="inline" />}
-              <span className="material-symbols-outlined text-primary shrink-0">smart_toy</span>
+              <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search question bank">
+                <span className="material-symbols-outlined">search</span>
+              </Link>
+              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
               <Link
-                to={profileTo}
+                to={user ? "/analytics" : "/login"}
                 className="block rounded-full overflow-hidden shrink-0"
                 style={{ border: "1px solid rgba(138,43,226,0.2)" }}
-                title={user?.displayName || "Profile"}
+                title={user?.displayName || "Account"}
               >
                 <img alt="" className="stitch-avatar" src={avatar} />
               </Link>
@@ -107,8 +113,6 @@ export default function StitchShell({
           </>
         )}
       </header>
-
-      {user && <UserProgressPanel variant="strip" />}
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="stitch-page-content flex-1">{children}</div>
@@ -145,23 +149,16 @@ export default function StitchShell({
               </Link>
             );
           })}
-          <Link
-            to={profileTo}
-            className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-2 py-1"
-          >
-            <span className="material-symbols-outlined text-[22px]">person</span>
-            <span className="text-[10px] font-label-md">Profile</span>
-          </Link>
         </nav>
       )}
 
-      {showFab && !showAiBar && (
-        <button
-          type="button"
-          className={`lg:hidden absolute z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform right-6 bottom-24 pointer-events-none opacity-90 ${
+      {showFab && !showAiBar && settings.aiTutorMockEnabled && (
+        <Link
+          to="/ai-tutor"
+          className={`lg:hidden absolute z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform right-6 bottom-24 ${
             fabIcon === "smart_toy" ? "electric-glow-bg shadow-primary-container/40" : "electric-glow"
           }`}
-          disabled
+          aria-label="AI Tutor"
         >
           <span
             className={`material-symbols-outlined ${fabIcon === "smart_toy" ? "text-white text-3xl" : "text-[28px]"}`}
@@ -169,26 +166,12 @@ export default function StitchShell({
           >
             {fabIcon}
           </span>
-        </button>
+        </Link>
       )}
 
-      {showAiBar && (
+      {showAiBar && settings.aiTutorMockEnabled && (
         <div className="mobile-bottom-bar mobile-bottom-bar--ai lg:hidden">
-          <div className="px-margin-mobile h-24 flex items-center justify-between gap-md">
-            <div className="flex items-center gap-sm flex-1">
-              <button type="button" className="flex-1 px-md py-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-on-surface" disabled>
-                <span className="material-symbols-outlined text-primary">lightbulb</span>
-                <span className="font-label-md">AI Hint</span>
-              </button>
-              <button type="button" className="flex-1 px-md py-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-on-surface" disabled>
-                <span className="material-symbols-outlined text-primary">psychology</span>
-                <span className="font-label-md">AI Explain</span>
-              </button>
-            </div>
-            <button type="button" className="w-14 h-14 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg ai-glow shrink-0" disabled>
-              <span className="material-symbols-outlined">chat</span>
-            </button>
-          </div>
+          <AiTutorBar />
         </div>
       )}
     </div>

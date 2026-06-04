@@ -45,6 +45,40 @@ public class ManifestImportService {
         return importManifestNode(manifest, folderName);
     }
 
+    /** Published extractor folders that have {@code output/<name>/published/manifest.json}. */
+    public List<ImportFolderEntry> listImportableFolders() throws IOException {
+        Path outputRoot = resolveOutputRoot();
+        if (!Files.isDirectory(outputRoot)) {
+            throw new IOException("Extractor output not found: " + outputRoot);
+        }
+        List<ImportFolderEntry> entries = new ArrayList<>();
+        try (Stream<Path> dirs = Files.list(outputRoot)) {
+            for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
+                Path manifestPath = dir.resolve("published").resolve("manifest.json");
+                if (!Files.isRegularFile(manifestPath)) {
+                    continue;
+                }
+                JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
+                String folderName = dir.getFileName().toString();
+                String packId = text(manifest, "pack_id");
+                if (packId.isBlank()) {
+                    packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
+                }
+                int questionCount = manifest.path("questions").size();
+                if (questionCount == 0 && manifest.path("stats").has("total_questions")) {
+                    questionCount = manifest.path("stats").path("total_questions").asInt(0);
+                }
+                entries.add(new ImportFolderEntry(
+                        folderName,
+                        packId,
+                        text(manifest, "exam"),
+                        manifest.path("year").asInt(0),
+                        questionCount));
+            }
+        }
+        return entries;
+    }
+
     /** Imports every published folder whose manifest {@code exam} is NEET. */
     public ImportResult importNeetFolders() throws IOException {
         Path outputRoot = resolveOutputRoot();
@@ -203,5 +237,13 @@ public class ManifestImportService {
             int questionsImported,
             int packsProcessed,
             List<ImportResult> details
+    ) {}
+
+    public record ImportFolderEntry(
+            String folderName,
+            String packId,
+            String exam,
+            int year,
+            int questionCount
     ) {}
 }

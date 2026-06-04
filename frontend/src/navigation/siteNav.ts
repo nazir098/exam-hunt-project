@@ -33,13 +33,6 @@ export const SITE_NAV: SiteNavItem[] = [
     icon: "emoji_events",
     match: (p) => p === "/leaderboard",
   },
-  {
-    to: "",
-    label: "AI Tutor",
-    icon: "psychology",
-    match: () => false,
-    disabled: true,
-  },
 ];
 
 export const MOBILE_BOTTOM_NAV = SITE_NAV.filter((item) => !item.disabled && item.to);

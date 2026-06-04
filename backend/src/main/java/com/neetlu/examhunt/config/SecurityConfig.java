@@ -1,5 +1,6 @@
 package com.neetlu.examhunt.config;
 
+import com.neetlu.examhunt.security.AdminKeyAuthFilter;
 import com.neetlu.examhunt.security.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +39,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter) throws Exception {
+    public SecurityFilterChain filterChain(
+            HttpSecurity http, AdminKeyAuthFilter adminKeyAuthFilter, JwtAuthFilter jwtAuthFilter)
+            throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .anonymous(AbstractHttpConfigurer::disable)
@@ -53,10 +56,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/packs", "/api/packs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/questions", "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/leaderboard", "/api/leaderboard/**").permitAll()
-                        .requestMatchers("/api/admin/**").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/practice/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/settings/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/auth/me", "/api/practice/**", "/api/bookmarks/**", "/api/ai-tutor/**")
+                        .authenticated()
                         .anyRequest().permitAll())
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(adminKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

@@ -1,72 +1,81 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import AiTutorNavButton from "./AiTutorNavButton";
+import GlobalSearch from "./GlobalSearch";
+import ProfileMenu from "./ProfileMenu";
 import { BRAND_NAME } from "../design/stitchAssets";
 import { SITE_NAV } from "../navigation/siteNav";
-import UserProgressPanel from "./UserProgressPanel";
 
 type Props = {
-  /** Hide main nav links (e.g. focused practice question). */
   minimal?: boolean;
 };
 
 export default function DesktopSiteHeader({ minimal = false }: Props) {
   const { pathname } = useLocation();
   const { user } = useAuth();
-  const profileTo = user ? "/analytics" : "/login";
 
   return (
     <header className="stitch-desktop-header hidden lg:flex" role="banner">
       <div className="stitch-desktop-header__inner">
-        <Link to="/" className="stitch-logo shrink-0">
-          {BRAND_NAME}
-        </Link>
+        <div className="stitch-desktop-header__top">
+          <div className="stitch-desktop-header__brand">
+            <Link to="/" className="stitch-logo" title={BRAND_NAME}>
+              {BRAND_NAME}
+            </Link>
+          </div>
+
+          <div className="stitch-desktop-header__search">
+            {!minimal && <GlobalSearch id="global-search-desktop" />}
+          </div>
+
+          <div className="stitch-desktop-header__actions">
+            {!minimal && <AiTutorNavButton variant="header" />}
+            {user ? (
+              <ProfileMenu />
+            ) : (
+              <>
+                <Link to="/login" className="stitch-desktop-sign-in stitch-desktop-sign-in--ghost">
+                  Sign in
+                </Link>
+                <Link to="/register" className="stitch-desktop-sign-in">
+                  Get started
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
 
         {!minimal && (
-          <nav className="stitch-desktop-nav" aria-label="Main">
+          <nav className="stitch-desktop-header__nav-row" aria-label="Main">
             {SITE_NAV.map((item) =>
               item.disabled ? (
-                <span key={item.label} className="stitch-desktop-nav__link stitch-desktop-nav__link--disabled">
-                  {item.label}
+                <span
+                  key={item.label}
+                  className="stitch-desktop-nav__link stitch-desktop-nav__link--disabled"
+                  title={item.label}
+                >
+                  <span className="material-symbols-outlined stitch-desktop-nav__icon">{item.icon}</span>
+                  <span className="stitch-desktop-nav__label">{item.label}</span>
                 </span>
               ) : (
                 <Link
                   key={item.to}
                   to={item.to}
                   data-tooltip={item.hint || undefined}
+                  title={item.label}
                   className={
                     (item.match(pathname)
                       ? "stitch-desktop-nav__link stitch-desktop-nav__link--active"
                       : "stitch-desktop-nav__link") + (item.hint ? " nav-tip" : "")
                   }
                 >
-                  <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                  {item.label}
+                  <span className="material-symbols-outlined stitch-desktop-nav__icon">{item.icon}</span>
+                  <span className="stitch-desktop-nav__label">{item.label}</span>
                 </Link>
               )
             )}
           </nav>
         )}
-
-        <div className="stitch-desktop-header__actions">
-          {user && <UserProgressPanel variant="inline" />}
-          <button
-            type="button"
-            className="stitch-desktop-icon-btn"
-            title="AI assistant (coming soon)"
-            disabled
-          >
-            <span className="material-symbols-outlined">smart_toy</span>
-          </button>
-          {user ? (
-            <Link to={profileTo} className="stitch-desktop-avatar" title={user.displayName || user.email}>
-              {(user.displayName || user.email).charAt(0).toUpperCase()}
-            </Link>
-          ) : (
-            <Link to="/login" className="stitch-desktop-sign-in">
-              Sign in
-            </Link>
-          )}
-        </div>
       </div>
     </header>
   );

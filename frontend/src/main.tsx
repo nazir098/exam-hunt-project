@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { PlatformSettingsProvider } from "./settings/PlatformSettingsContext";
 import { initTheme } from "./utils/theme";
 import "./styles/stitch.css";
 import "./styles/analytics.css";
@@ -15,9 +16,11 @@ initTheme();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <PlatformSettingsProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </PlatformSettingsProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

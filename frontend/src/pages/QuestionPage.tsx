@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
+import BookmarkButton from "../components/BookmarkButton";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 
 const OPTIONS = [
@@ -134,7 +135,7 @@ export default function QuestionPage() {
   const diff = difficultyLabel(q.difficulty);
 
   return (
-    <main className="px-margin-mobile lg:px-0 pb-28 lg:pb-8 lg:pt-4">
+    <main className="px-margin-mobile lg:px-0 lg:pt-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
         <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
           <Link to={backHref()} className="hover:text-primary cursor-pointer transition-colors">
@@ -215,14 +216,10 @@ export default function QuestionPage() {
               )}
               {revealed ? (correct ? "Correct Answer" : "View result") : "Check Answer"}
             </button>
-            <button
-              type="button"
+            <BookmarkButton
+              questionId={questionId}
               className="px-8 py-4 rounded-xl border border-white/10 glass-card text-on-surface hover:bg-white/5 transition-all active:scale-95 flex items-center gap-2"
-              disabled
-            >
-              <span className="material-symbols-outlined">bookmark</span>
-              Save for Revision
-            </button>
+            />
           </div>
         </div>
 
@@ -264,14 +261,10 @@ export default function QuestionPage() {
             >
               Check Answer
             </button>
-            <button
-              type="button"
+            <BookmarkButton
+              questionId={questionId}
               className="w-full py-4 rounded-xl border border-white/10 glass-card text-on-surface active:scale-95 flex justify-center items-center gap-2"
-              disabled
-            >
-              <span className="material-symbols-outlined">bookmark</span>
-              Save for Revision
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -310,7 +303,7 @@ export default function QuestionPage() {
             </div>
           </div>
           <div className="lg:col-span-4">
-            <div className="glass-card rounded-xl p-lg sticky top-24">
+            <div className="glass-card rounded-xl p-lg sticky-below-header">
               <div className="flex items-center justify-between mb-lg">
                 <h3 className="text-headline-md font-headline-md">Similar Problems</h3>
                 <span className="text-primary material-symbols-outlined">arrow_forward</span>

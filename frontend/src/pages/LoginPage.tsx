@@ -17,9 +17,15 @@ export default function LoginPage() {
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     try {
-      await login(fd.get("email") as string, fd.get("password") as string);
-      const next = searchParams.get("next") || "/practice";
-      navigate(next);
+      const profile = await login(fd.get("email") as string, fd.get("password") as string);
+      const next = searchParams.get("next");
+      if (next) {
+        navigate(next);
+      } else if (profile.admin) {
+        navigate("/admin");
+      } else {
+        navigate("/practice");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

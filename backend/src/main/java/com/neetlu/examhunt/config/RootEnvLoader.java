@@ -51,6 +51,12 @@ public final class RootEnvLoader {
                     if ("ADMIN_IMPORT_KEY".equals(key)) {
                         defaults.put("app.admin-import-key", value);
                     }
+                    if ("ADMIN_EMAIL".equals(key)) {
+                        defaults.put("app.admin-email", value);
+                    }
+                    if ("ADMIN_PASSWORD".equals(key)) {
+                        defaults.put("app.admin-bootstrap-password", value);
+                    }
                     if ("JWT_SECRET".equals(key)) {
                         defaults.put("app.jwt-secret", value);
                     }

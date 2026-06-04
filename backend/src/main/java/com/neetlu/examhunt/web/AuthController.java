@@ -32,8 +32,7 @@ public class AuthController {
 
     @GetMapping("/me")
     public AuthService.UserProfile me(@AuthenticationPrincipal String userId) {
-        var user = authService.requireUser(userId);
-        return new AuthService.UserProfile(user.getId(), user.getEmail(), user.getDisplayName());
+        return authService.profileFor(authService.requireUser(userId));
     }
 
     public record RegisterRequest(

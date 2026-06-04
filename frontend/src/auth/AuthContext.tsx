@@ -22,7 +22,7 @@ type AuthContextValue = {
   user: UserProfile | null;
   progress: ProgressSummary | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserProfile>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -117,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(res.user);
       touchSessionActivity();
       await refreshProgress();
+      return res.user;
     },
     [refreshProgress]
   );

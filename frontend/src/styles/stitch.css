@@ -2,6 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* App chrome — header / bottom nav heights for sticky offsets and page padding */
+:root {
+  --app-header-h: 4rem;
+  --app-bottom-h: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --app-header-h: 7rem;
+    --app-bottom-h: 2.5rem;
+  }
+}
+
+.stitch-shell--no-mobile-chrome {
+  --app-bottom-h: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .stitch-shell--no-mobile-chrome {
+    --app-bottom-h: 2.5rem;
+  }
+}
+
+.sticky-below-header {
+  position: sticky;
+  top: var(--app-header-h);
+}
+
+.max-h-below-header {
+  max-height: calc(100dvh - var(--app-header-h) - 1rem);
+}
+
+.bank-results-anchor {
+  scroll-margin-top: calc(var(--app-header-h) + 0.5rem);
+}
+
 /* Base — plain CSS only (no @apply) so partial PostCSS failure still works */
 html.dark,
 html.dark body,
@@ -171,7 +207,14 @@ html.dark body {
     animation: spin-slow 8s linear infinite reverse;
   }
 
-  /* Desktop website chrome */
+  /* Desktop website chrome — lg+ only (mobile uses StitchShell header) */
+  @media (max-width: 1023px) {
+    .stitch-desktop-header {
+      display: none !important;
+      position: static;
+    }
+  }
+
   .stitch-desktop-header {
     position: sticky;
     top: 0;
@@ -186,30 +229,72 @@ html.dark body {
 
   .stitch-desktop-header__inner {
     display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    max-width: 1280px;
+    flex-direction: column;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 0 2.5rem;
-    height: 4rem;
+    padding: 0.5rem 1.25rem 0;
+    width: 100%;
+    box-sizing: border-box;
+    gap: 0;
+  }
+
+  .stitch-desktop-header__top {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.75rem;
+    min-height: 3rem;
     width: 100%;
   }
 
-  .stitch-desktop-nav {
+  .stitch-desktop-header__brand {
+    flex-shrink: 0;
+    min-width: 0;
+    max-width: 11rem;
+  }
+
+  .stitch-desktop-header__brand .stitch-logo {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  .stitch-desktop-header__nav-row {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    flex: 1;
+    gap: 0.15rem;
+    width: 100%;
     min-width: 0;
-    justify-content: center;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 0.4rem 0 0.55rem;
+    margin-top: 0.15rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .stitch-desktop-header__nav-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .stitch-desktop-nav {
+    display: contents;
+  }
+
+  .stitch-desktop-nav__icon {
+    font-size: 1.125rem;
+    flex-shrink: 0;
   }
 
   .stitch-desktop-nav__link {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.5rem 0.85rem;
+    gap: 0.3rem;
+    padding: 0.45rem 0.65rem;
     border-radius: 10px;
     font-size: 0.8125rem;
     font-weight: 600;
@@ -217,6 +302,7 @@ html.dark body {
     color: #9aa4b2;
     text-decoration: none;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: background 0.15s, color 0.15s;
   }
 
@@ -235,12 +321,108 @@ html.dark body {
     color: #6b7280;
   }
 
+  .stitch-desktop-header__search {
+    min-width: 0;
+    display: flex;
+    justify-content: stretch;
+    width: 100%;
+    max-width: 22rem;
+    margin: 0 auto;
+  }
+
+  .stitch-desktop-header__search .global-search {
+    max-width: none;
+    width: 100%;
+  }
+
   .stitch-desktop-header__actions {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
-    margin-left: auto;
+    justify-content: flex-end;
+    gap: 0.4rem;
     flex-shrink: 0;
+    flex-wrap: nowrap;
+  }
+
+  .stitch-desktop-sign-in--ghost {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #c4b5fd;
+  }
+
+  .stitch-mobile-icon-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.65rem;
+    color: #b8c0cc;
+    text-decoration: none;
+  }
+
+  .stitch-mobile-icon-link:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #eed9ff;
+  }
+
+  .stitch-mobile-ai-btn.ai-tutor-btn--header {
+    padding: 0.35rem 0.5rem;
+    min-height: 2.25rem;
+  }
+
+  .stitch-mobile-ai-btn .stitch-desktop-nav__label,
+  .stitch-mobile-ai-btn .ai-tutor-btn__badge {
+    display: none;
+  }
+
+  .user-progress-inline {
+    min-width: 0;
+  }
+
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    .stitch-desktop-header__brand {
+      max-width: 8.5rem;
+    }
+
+    .stitch-desktop-header__brand .stitch-logo {
+      font-size: 1rem;
+    }
+
+    .stitch-desktop-sign-in {
+      padding: 0.4rem 0.65rem;
+      font-size: 0.75rem;
+    }
+
+    .stitch-desktop-sign-in--ghost {
+      display: none;
+    }
+
+    .ai-tutor-btn--header .stitch-desktop-nav__label {
+      display: none;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .stitch-desktop-header__inner {
+      padding: 0.5rem 2rem 0;
+    }
+
+    .stitch-desktop-header__brand {
+      max-width: 13rem;
+    }
+
+    .stitch-desktop-header__brand .stitch-logo {
+      font-size: 1.3rem;
+    }
+
+    .stitch-desktop-nav__link {
+      padding: 0.5rem 0.75rem;
+    }
+
+    .stitch-desktop-sign-in--ghost {
+      display: inline-flex;
+    }
   }
 
   .stitch-desktop-icon-btn {
@@ -270,6 +452,37 @@ html.dark body {
     font-weight: 700;
     text-decoration: none;
     font-size: 0.95rem;
+  }
+
+  .stitch-desktop-admin-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #dcb8ff;
+    border: 1px solid rgba(138, 43, 226, 0.45);
+    background: rgba(138, 43, 226, 0.12);
+  }
+
+  .stitch-desktop-admin-link:hover {
+    background: rgba(138, 43, 226, 0.22);
+    color: #eed9ff;
+  }
+
+  .stitch-mobile-admin-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.65rem;
+    color: #dcb8ff;
+    text-decoration: none;
+    background: rgba(138, 43, 226, 0.15);
   }
 
   .stitch-desktop-sign-in {
@@ -359,6 +572,9 @@ html.dark body {
   }
 
   .user-progress-logout-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
     font-size: 0.68rem;
     font-weight: 700;
     padding: 0.3rem 0.55rem;
@@ -367,11 +583,32 @@ html.dark body {
     background: transparent;
     color: #9aa4b2;
     cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .user-progress-logout-btn__icon {
+    font-size: 1rem;
   }
 
   .user-progress-logout-btn:hover {
     border-color: rgba(255, 100, 100, 0.4);
     color: #ffb4ab;
+  }
+
+  .user-progress-pill__suffix {
+    margin-left: 0.15rem;
+  }
+
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    .user-progress-pill__suffix,
+    .user-progress-pill--attempts,
+    .user-progress-logout-btn__label {
+      display: none;
+    }
+
+    .user-progress-logout-btn {
+      padding: 0.35rem;
+    }
   }
 
   .user-progress-stat-cell {
@@ -405,9 +642,15 @@ html.dark body {
     margin-top: 0.1rem;
   }
 
-  /* Dashboard — Figma scholar home */
-  .dashboard-page {
+  /* App pages — fill stitch-page-content (1280px) like Dashboard */
+  .dashboard-page,
+  .practice-page,
+  .analytics-page,
+  .leaderboard-page {
     width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .dashboard-hero {
@@ -924,8 +1167,8 @@ html.dark body {
   /* Mobile-only fixed bottom chrome */
   .mobile-bottom-nav {
     display: none;
-    justify-content: space-around;
-    align-items: center;
+    justify-content: space-between;
+    align-items: stretch;
     position: fixed;
     bottom: 0;
     left: 50%;
@@ -933,14 +1176,26 @@ html.dark body {
     z-index: 50;
     width: 100%;
     max-width: 430px;
-    height: 5rem;
-    padding: 0 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    height: 4.25rem;
+    padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    gap: 0.1rem;
     background: rgba(30, 30, 50, 0.92);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
     border-radius: 1rem 1rem 0 0;
+  }
+
+  .mobile-bottom-nav > a {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 5.5rem;
+  }
+
+  .mobile-bottom-nav > a span:last-child {
+    font-size: 0.625rem;
+    max-width: 4.25rem;
   }
 
   .mobile-bottom-bar {
@@ -976,7 +1231,15 @@ html.dark body {
     .stitch-shell .stitch-page-content > main,
     .stitch-shell .stitch-page-content > .bank-page,
     .stitch-shell .stitch-page-content > .practice-run-page {
-      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: var(--app-bottom-h);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .stitch-shell .stitch-page-content > main,
+    .stitch-shell .stitch-page-content > .bank-page,
+    .stitch-shell .stitch-page-content > .practice-run-page {
+      padding-bottom: var(--app-bottom-h);
     }
   }
 }

@@ -115,7 +115,7 @@ export default function PracticeQuestionPage() {
 
   if (!user || !q || !session) {
     return (
-      <main className="practice-run-page px-margin-mobile lg:px-0 pb-28 pt-6">
+      <main className="practice-run-page px-margin-mobile lg:px-0 pt-6">
         <p className="text-on-surface-variant">{error || "Loading practice…"}</p>
       </main>
     );
@@ -127,7 +127,7 @@ export default function PracticeQuestionPage() {
   const canSubmit = !!selected && !result && !busy;
 
   return (
-    <main className="practice-run-page px-margin-mobile lg:px-0 pb-32 lg:pb-10 pt-4 lg:pt-6">
+    <main className="practice-run-page px-margin-mobile lg:px-0 pt-4 lg:pt-6">
       <div className="practice-run-progress" aria-hidden>
         <div className="practice-run-progress__fill" style={{ width: `${progressPct}%` }} />
       </div>

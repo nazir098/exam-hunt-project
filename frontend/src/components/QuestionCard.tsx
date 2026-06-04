@@ -1,15 +1,21 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { QuestionPublic } from "../api";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import { subjectIcon } from "../utils/subjectIcon";
+import BookmarkButton from "./BookmarkButton";
 
 type Props = {
   question: QuestionPublic;
   packId: string;
 };
 
+type OutletCtx = { startPracticeFromBank?: () => void; practiceBusy?: boolean };
+
 export default function QuestionCard({ question: q, packId }: Props) {
   const [searchParams] = useSearchParams();
+  const { settings } = usePlatformSettings();
+  const outlet = useOutletContext<OutletCtx | undefined>();
   const diff = difficultyLabel(q.difficulty);
   const isJee = q.exam?.toUpperCase().includes("JEE");
   const practiceQs = (() => {
@@ -60,24 +66,27 @@ export default function QuestionCard({ question: q, packId }: Props) {
             {marksLabel(q.difficulty, q.questionNo)}
           </span>
         </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2"
-            disabled
-            title="Soon"
-          >
-            <span className="material-symbols-outlined">bookmark</span>
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-lg text-on-surface hover:bg-surface-container-highest transition-all border border-white/5"
-            disabled
-            title="Coming soon"
-          >
-            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-            <span className="text-label-md">AI Suggest</span>
-          </button>
+        <div className="flex gap-3 flex-wrap justify-end">
+          <BookmarkButton questionId={q.questionId} variant="icon" className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2" />
+          {settings.aiSuggestEnabled && settings.aiTutorMockEnabled && (
+            <Link
+              to={`/ai-tutor?questionId=${encodeURIComponent(q.questionId)}`}
+              className="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-lg text-on-surface hover:bg-surface-container-highest transition-all border border-white/5"
+            >
+              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span className="text-label-md">AI Suggest</span>
+            </Link>
+          )}
+          {outlet?.startPracticeFromBank && (
+            <button
+              type="button"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 text-primary"
+              disabled={outlet.practiceBusy}
+              onClick={outlet.startPracticeFromBank}
+            >
+              Practice
+            </button>
+          )}
           <Link
             to={questionHref}
             className="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold ai-glow hover:scale-[1.02] active:scale-95 transition-all"

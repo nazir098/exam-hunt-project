@@ -8,6 +8,8 @@ public record AppProperties(
         String extractorRoot,
         String extractorManifestBaseUrl,
         String adminImportKey,
+        String adminEmail,
+        String adminBootstrapPassword,
         String jwtSecret,
         long jwtExpirationHours,
         boolean leaderboardDemoSeed
