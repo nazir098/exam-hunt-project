@@ -5,13 +5,15 @@ import { primaryWeakChapter } from "./weakChapters";
 export const DAILY_GOAL_QUESTIONS = 20;
 
 export function pickDefaultPack(packs: PackSummary[]): PackSummary | null {
-  if (!packs.length) return null;
-  const y2025 = packs.find((p) => p.year === 2025);
-  return y2025 ?? [...packs].sort((a, b) => b.year - a.year)[0];
+  const eligible = bankDisplayPacks(packs);
+  if (!eligible.length) return null;
+  const y2025 = eligible.find((p) => p.year === 2025);
+  return y2025 ?? [...eligible].sort((a, b) => b.year - a.year)[0];
 }
 
 export function pickPackByYear(packs: PackSummary[], year: number): PackSummary | null {
-  return packs.find((p) => p.year === year) ?? pickDefaultPack(packs);
+  const eligible = bankDisplayPacks(packs);
+  return eligible.find((p) => p.year === year) ?? pickDefaultPack(eligible);
 }
 
 export function activeSession(progress: ProgressSummary | null): PracticeSessionView | null {
@@ -28,6 +30,35 @@ export function sessionResumeUrl(s: PracticeSessionView): string | null {
 
 export function formatPackLabel(packId: string): string {
   return packId.replace("NEET_", "NEET ");
+}
+
+/** Hide legacy demo placeholder packs from the question bank picker. */
+export function bankDisplayPacks(packs: PackSummary[]): PackSummary[] {
+  return packs.filter((p) => !p.packId.startsWith("DEMO_"));
+}
+
+function sourceFolderIsDistinct(folder: string, pack: Pick<PackSummary, "packId" | "year">): boolean {
+  const f = folder.trim();
+  if (!f) return false;
+  if (f.startsWith("DEMO")) return false;
+  const compactFolder = f.replace(/\s+/g, "").toLowerCase();
+  if (compactFolder === String(pack.year)) return false;
+  if (compactFolder === pack.packId.replace(/_/g, "").toLowerCase()) return false;
+  if (f.toLowerCase() === pack.packId.toLowerCase()) return false;
+  return true;
+}
+
+/** Paper / pack dropdown label — shows extractor folder when it is not just the year slug. */
+export function formatPackOptionLabel(
+  pack: Pick<PackSummary, "packId" | "year" | "questionCount" | "sourceFolder">
+): string {
+  const yearPart = `NEET ${pack.year}`;
+  const count = `(${pack.questionCount} questions)`;
+  const folder = pack.sourceFolder?.trim() ?? "";
+  if (sourceFolderIsDistinct(folder, pack)) {
+    return `${folder} — ${yearPart} ${count}`;
+  }
+  return `${yearPart} ${count}`;
 }
 
 /** Match facet subject name (e.g. PHYSICS vs Physics). */

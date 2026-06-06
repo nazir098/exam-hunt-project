@@ -47,19 +47,36 @@ export default function PracticeQuestionPage() {
     setRating(0);
     setShowSolution(false);
     setSubmitAnim(false);
-    const [s, question] = await Promise.all([
-      fetchPracticeSession(sessionId),
-      fetchPracticeQuestion(questionId),
-    ]);
+    const s = await fetchPracticeSession(sessionId);
     setSession(s);
-    setQ(question);
+    if (s.status === "completed" || !s.currentQuestionId) {
+      setError("This practice session has ended. Start a new session from Practice.");
+      return;
+    }
+    const targetId =
+      s.currentQuestionId && s.currentQuestionId !== questionId ? s.currentQuestionId : questionId;
+    if (targetId !== questionId) {
+      navigate(`/practice/${sessionId}/${encodeURIComponent(targetId)}`, { replace: true });
+      return;
+    }
+    try {
+      const question = await fetchPracticeQuestion(questionId);
+      setQ(question);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load question";
+      if (msg.toLowerCase().includes("not found") && s.currentQuestionId) {
+        navigate(`/practice/${sessionId}/${encodeURIComponent(s.currentQuestionId)}`, { replace: true });
+        return;
+      }
+      throw e;
+    }
     try {
       const r = await fetchQuestionRating(questionId);
       if (r.yourScore > 0) setRating(r.yourScore);
     } catch {
       /* optional */
     }
-  }, [sessionId, questionId]);
+  }, [sessionId, questionId, navigate]);
 
   useEffect(() => {
     if (authLoading) return;

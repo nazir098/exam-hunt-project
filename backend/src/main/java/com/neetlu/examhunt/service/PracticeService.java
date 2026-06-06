@@ -78,13 +78,44 @@ public class PracticeService {
     }
 
     public PracticeSession requireSession(String userId, String sessionId) {
-        return sessions.findByIdAndUserId(sessionId, userId)
+        PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        return reconcileSessionProgress(session);
     }
 
     public Question requireQuestion(String questionId) {
         return questions.findByQuestionId(questionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
+    }
+
+    /**
+     * Skip stale question ids (e.g. after a pack re-import) so resume links stay valid.
+     */
+    private PracticeSession reconcileSessionProgress(PracticeSession session) {
+        if (!"active".equals(session.getStatus())) {
+            return session;
+        }
+        List<String> ids = session.getQuestionIds();
+        if (ids == null || ids.isEmpty()) {
+            session.setStatus("completed");
+            session.setCompletedAt(Instant.now());
+            return sessions.save(session);
+        }
+        int idx = Math.max(0, Math.min(session.getCurrentIndex(), ids.size()));
+        while (idx < ids.size()) {
+            if (questions.findByQuestionId(ids.get(idx)).isPresent()) {
+                if (idx != session.getCurrentIndex()) {
+                    session.setCurrentIndex(idx);
+                    return sessions.save(session);
+                }
+                return session;
+            }
+            idx++;
+        }
+        session.setStatus("completed");
+        session.setCompletedAt(Instant.now());
+        session.setCurrentIndex(ids.size());
+        return sessions.save(session);
     }
 
     public SubmitResult submitAnswer(String userId, SubmitRequest req) {

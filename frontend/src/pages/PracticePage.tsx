@@ -15,6 +15,7 @@ import PracticeGuestLanding from "../components/PracticeGuestLanding";
 import {
   activeSession,
   buildRecommendedPractice,
+  bankDisplayPacks,
   DAILY_GOAL_QUESTIONS,
   formatPackLabel,
   pickDefaultPack,
@@ -46,7 +47,7 @@ export default function PracticePage() {
         setPacks(p);
         setCatalog(e);
         const fromUrl = searchParams.get("packId");
-        const match = fromUrl && p.some((x) => x.packId === fromUrl) ? fromUrl : pickDefaultPack(p)?.packId || "";
+        const match = fromUrl && p.some((x) => x.packId === fromUrl) ? fromUrl : pickDefaultPack(bankDisplayPacks(p))?.packId || "";
         if (match) setPackId(match);
       })
       .catch((e) => setError(e.message));
@@ -73,7 +74,8 @@ export default function PracticePage() {
       .catch(() => setLeaderboardRank(null));
   }, [user?.id, progress?.totalAttempts]);
 
-  const selectedPack = packs.find((p) => p.packId === packId);
+  const practicePacks = useMemo(() => bankDisplayPacks(packs), [packs]);
+  const selectedPack = practicePacks.find((p) => p.packId === packId);
   const showGuestLanding = !user && !authLoading;
 
   const sessions = useMemo(
@@ -82,8 +84,8 @@ export default function PracticePage() {
   );
   const resume = useMemo(() => activeSession(progress), [progress]);
   const recommended = useMemo(
-    () => buildRecommendedPractice(packs, progress),
-    [packs, progress]
+    () => buildRecommendedPractice(practicePacks, progress),
+    [practicePacks, progress]
   );
   const todayDone = useMemo(() => todayQuestionsAnswered(sessions), [sessions]);
   const goalPct = Math.min(100, Math.round((todayDone / DAILY_GOAL_QUESTIONS) * 100));
@@ -103,7 +105,7 @@ export default function PracticePage() {
         navigate(`/login?next=${encodeURIComponent("/practice")}`);
         return;
       }
-      const pid = opts.packId || packId || pickDefaultPack(packs)?.packId;
+      const pid = opts.packId || packId || pickDefaultPack(practicePacks)?.packId;
       if (!pid) {
         setError("Import NEET packs first (Admin) or check your connection.");
         return;
@@ -127,15 +129,15 @@ export default function PracticePage() {
         setBusy(false);
       }
     },
-    [user, navigate, packId, packs]
+    [user, navigate, packId, practicePacks]
   );
 
   async function startSession() {
     await startQuick({ packId, subject: subject || undefined, chapter: chapter || undefined, adaptive });
   }
 
-  const defaultPack = pickDefaultPack(packs);
-  const pack2025 = pickPackByYear(packs, 2025);
+  const defaultPack = pickDefaultPack(practicePacks);
+  const pack2025 = pickPackByYear(practicePacks, 2025);
 
   const quickCards = useMemo(
     () => [
@@ -188,7 +190,7 @@ export default function PracticePage() {
     return (
       <main className="dashboard-page practice-page practice-page--landing pt-4 lg:pt-6">
         <PracticeGuestLanding
-          packs={packs}
+          packs={practicePacks}
           catalog={catalog}
           packId={packId}
           subject={subject}
@@ -378,7 +380,7 @@ export default function PracticePage() {
         subject={subject}
         chapter={chapter}
         adaptive={adaptive}
-        packs={packs}
+        packs={practicePacks}
         catalog={catalog}
         selectedPack={selectedPack}
         busy={busy}

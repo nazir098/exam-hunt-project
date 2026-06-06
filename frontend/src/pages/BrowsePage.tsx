@@ -11,6 +11,7 @@ import {
   QuestionPublic,
   YearCatalogEntry,
 } from "../api";
+import BankPagination from "../components/BankPagination";
 import BankSearchSection from "../components/BankSearchSection";
 import BankSubjectGrid from "../components/BankSubjectGrid";
 import { buildSubjectTiles } from "../utils/bankSubjects";
@@ -21,7 +22,7 @@ import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { primaryWeakChapter } from "../utils/weakChapters";
 import { defaultExamId, findExam } from "../utils/exams";
-import { filterQuestionsForPractice } from "../utils/practice";
+import { bankDisplayPacks } from "../utils/practiceHub";
 
 export default function BrowsePage() {
   const { pathname } = useLocation();
@@ -37,6 +38,7 @@ export default function BrowsePage() {
   const difficulty = searchParams.get("difficulty") || "";
   const qSearch = (searchParams.get("q") || "").toLowerCase();
   const page = Number(searchParams.get("page") || "0");
+  const pageSize = Math.min(100, Math.max(12, Number(searchParams.get("size") || "24") || 24));
 
   const [catalog, setCatalog] = useState<ExamCatalogEntry[]>([]);
   const [packs, setPacks] = useState<PackSummary[]>([]);
@@ -56,7 +58,8 @@ export default function BrowsePage() {
 
   const selectedExam = findExam(catalog, examFilter);
   const neetAvailable = packs.length > 0 || (findExam(catalog, "NEET")?.availableYears ?? 0) > 0;
-  const subjectTiles = useMemo(() => buildSubjectTiles(packs), [packs]);
+  const bankPacks = useMemo(() => bankDisplayPacks(packs), [packs]);
+  const subjectTiles = useMemo(() => buildSubjectTiles(bankPacks), [bankPacks]);
   const showComingSoon = examFilter !== "NEET" && selectedExam?.status !== "available";
   const neetYears: YearCatalogEntry[] =
     findExam(catalog, "NEET")?.years ||
@@ -145,9 +148,11 @@ export default function BrowsePage() {
     fetchQuestions(resolvedPackId, {
       subject: subject || undefined,
       chapter: chapter || undefined,
+      topic: topic || undefined,
+      difficulty: difficulty || undefined,
       q: qSearch || undefined,
       page,
-      size: 60,
+      size: pageSize,
     })
       .then((res) => {
         setQuestions(res.content);
@@ -156,7 +161,7 @@ export default function BrowsePage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [resolvedPackId, subject, chapter, qSearch, page, showComingSoon]);
+  }, [resolvedPackId, subject, chapter, topic, difficulty, qSearch, page, pageSize, showComingSoon]);
 
   useEffect(() => {
     if (loading || !resolvedPackId) return;
@@ -165,16 +170,31 @@ export default function BrowsePage() {
       return;
     }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [page, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
+  }, [page, pageSize, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
 
-  const displayed = useMemo(
-    () =>
-      filterQuestionsForPractice(questions, {
-        topic: topic || undefined,
-        difficulty: difficulty || undefined,
-      }),
-    [questions, topic, difficulty]
-  );
+  function goToPage(nextPage: number) {
+    updateParam("page", String(Math.max(0, nextPage)));
+  }
+
+  function changePageSize(nextSize: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("size", String(nextSize));
+    next.set("page", "0");
+    setSearchParams(next);
+  }
+
+  const pagination =
+    resolvedPackId && totalPages > 0 ? (
+      <BankPagination
+        page={page}
+        totalPages={totalPages}
+        totalElements={totalElements}
+        pageSize={pageSize}
+        loading={loading}
+        onPageChange={goToPage}
+        onPageSizeChange={changePageSize}
+      />
+    ) : null;
 
   const subjects = pack?.facets?.subjects || [];
   const chapters = (pack?.facets?.chapters || []).filter(
@@ -216,10 +236,7 @@ export default function BrowsePage() {
     navigate(`/bank?${next.toString()}`);
   }
 
-  const totalShown = topic || difficulty ? displayed.length : totalElements;
-  const pageCount = Math.max(1, totalPages);
-  const canGoNext = !loading && totalPages > 0 && page + 1 < totalPages;
-  const canGoPrev = page > 0;
+  const totalShown = totalElements;
   const weak = primaryWeakChapter(progress?.weakChapters);
   const filterCount = activeFilterCount({
     exam: examFilter !== "NEET" ? examFilter : "",
@@ -239,7 +256,7 @@ export default function BrowsePage() {
     chapter,
     topic,
     difficulty,
-    filteredPacks: packs,
+    filteredPacks: bankPacks,
     neetYears,
     subjects,
     chapters,
@@ -418,44 +435,16 @@ export default function BrowsePage() {
 
         {!loading && neetAvailable && resolvedPackId && (
           <>
-            {displayed.map((q) => (
+            {pagination}
+            {questions.map((q) => (
               <QuestionCard key={q.questionId} question={q} packId={resolvedPackId} />
             ))}
+            {pagination}
           </>
         )}
 
-        {!loading && displayed.length === 0 && resolvedPackId && neetAvailable && (
+        {!loading && questions.length === 0 && resolvedPackId && neetAvailable && (
           <p className="muted state-msg">No questions match these filters.</p>
-        )}
-
-        {resolvedPackId && totalPages > 0 && (
-          <nav className="bank-pagination flex flex-wrap items-center justify-center gap-md mt-xl" aria-label="Question bank pages">
-            <button
-              type="button"
-              className="glass-card px-md py-sm rounded-lg font-label"
-              disabled={!canGoPrev}
-              onClick={() => updateParam("page", String(page - 1))}
-            >
-              Previous
-            </button>
-            <span className="muted text-center">
-              Page {page + 1} of {pageCount}
-              {totalElements > 0 && (
-                <>
-                  <br />
-                  <span className="text-caption">{totalElements.toLocaleString()} questions total</span>
-                </>
-              )}
-            </span>
-            <button
-              type="button"
-              className="glass-card px-md py-sm rounded-lg font-label"
-              disabled={!canGoNext}
-              onClick={() => updateParam("page", String(page + 1))}
-            >
-              Next
-            </button>
-          </nav>
         )}
         </div>
       </div>

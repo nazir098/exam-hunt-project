@@ -3,6 +3,7 @@ package com.neetlu.examhunt.web;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import com.neetlu.examhunt.service.FormulaEligibility;
+import com.neetlu.examhunt.service.QuestionBrowseService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,9 +22,14 @@ import java.util.regex.Pattern;
 public class QuestionController {
 
     private final QuestionRepository questionRepository;
+    private final QuestionBrowseService questionBrowseService;
 
-    public QuestionController(QuestionRepository questionRepository) {
+    public QuestionController(
+            QuestionRepository questionRepository,
+            QuestionBrowseService questionBrowseService
+    ) {
         this.questionRepository = questionRepository;
+        this.questionBrowseService = questionBrowseService;
     }
 
     @GetMapping
@@ -31,22 +37,15 @@ public class QuestionController {
             @RequestParam String packId,
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String chapter,
+            @RequestParam(required = false) String topic,
+            @RequestParam(required = false) String difficulty,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "24") int size
     ) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("questionNo"));
-        Page<Question> result;
-        if (q != null && !q.isBlank()) {
-            result = questionRepository.searchInPack(packId, regexPattern(q), pageable);
-        } else if (subject != null && !subject.isBlank() && chapter != null && !chapter.isBlank()) {
-            result = questionRepository.findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
-                    packId, subject, chapter, pageable);
-        } else if (subject != null && !subject.isBlank()) {
-            result = questionRepository.findByPackIdAndSubjectIgnoreCase(packId, subject, pageable);
-        } else {
-            result = questionRepository.findByPackId(packId, pageable);
-        }
+        Page<Question> result = questionBrowseService.browse(
+                packId, subject, chapter, topic, difficulty, q, pageable);
         return result.map(QuestionPublic::from);
     }
 

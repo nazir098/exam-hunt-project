@@ -1,5 +1,6 @@
 import type { ChapterProgress } from "../api";
 import { PackSummary, YearCatalogEntry } from "../api";
+import { formatPackOptionLabel } from "../utils/practiceHub";
 
 const DIFFICULTIES = [
   { label: "Conceptual (Easy)", value: "Easy" },
@@ -99,7 +100,7 @@ export default function FilterPanel({
             >
               {filteredPacks.map((p) => (
                 <option key={p.packId} value={p.packId}>
-                  NEET {p.year} ({p.questionCount})
+                  {formatPackOptionLabel(p)}
                 </option>
               ))}
             </select>
