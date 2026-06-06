@@ -15,8 +15,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -28,6 +31,14 @@ public class PracticeAiService {
             You are a NEET UG coach embedded in a practice app. Be concise (under 180 words unless asked for notes).
             Use clear bullets when helpful. Never invent facts not supported by the question context.
             Do not reveal the correct option letter/number when the student has not submitted yet and the mode is HINT.
+            Never echo prompt labels such as "Mode:", task names, or metadata headers in your reply.
+            """;
+
+    private static final String SYSTEM_REVISION =
+            """
+            You are a NEET UG coach. Write compact revision notes for the student.
+            Start immediately with ### Key facts — no preamble, no "Mode:" line, no repeated question metadata.
+            Use markdown sections and inline LaTeX as $...$ only.
             """;
 
     private static final String SYSTEM_HINT_JSON =
@@ -201,7 +212,7 @@ public class PracticeAiService {
                 """
                         .formatted(questionBlock(q), q.getAnswer(), req.selectedAnswer());
 
-        String text = llm.complete(SYSTEM_NEET, prompt, 0.35, 450);
+        String text = AiTextNormalizer.normalize(llm.complete(SYSTEM_NEET, prompt, 0.35, 450));
         return new AssistResponse("why_wrong", text, true, List.of(), null);
     }
 
@@ -212,16 +223,20 @@ public class PracticeAiService {
     private AssistResponse hint(AssistRequest req) {
         Question q = requireQuestion(req.questionId());
         if (hasPrebakedHints(q)) {
-            List<String> steps = prebakedHintSteps(q);
+            List<String> steps = sanitizeHintSteps(prebakedHintSteps(q));
             return new AssistResponse("hint", steps.get(0), false, List.of(), null, steps);
         }
         requireLlmAvailable();
-        List<String> steps = fetchHintSteps(q);
+        List<String> steps = sanitizeHintSteps(fetchHintSteps(q));
         if (!hintsAreUsable(steps)) {
-            steps = buildFallbackHints(q);
+            steps = sanitizeHintSteps(buildFallbackHints(q));
         }
         String first = steps.get(0);
         return new AssistResponse("hint", first, true, List.of(), null, steps);
+    }
+
+    private static List<String> sanitizeHintSteps(List<String> steps) {
+        return steps.stream().map(AiTextNormalizer::sanitizeEnrichmentText).toList();
     }
 
     private List<String> fetchHintSteps(Question q) {
@@ -552,17 +567,13 @@ public class PracticeAiService {
     }
 
     private static String stripMathDelimiters(String latex) {
-        String t = latex.strip();
-        if (t.startsWith("$") && t.endsWith("$") && t.length() > 2) {
-            return t.substring(1, t.length() - 1).strip();
-        }
-        return t;
+        return AiTextNormalizer.stripMathDelimiters(latex);
     }
 
     private AssistResponse explainBasics(AssistRequest req) {
         Question q = requireQuestion(req.questionId());
         if (hasPrebakedBasics(q)) {
-            return new AssistResponse("explain_basics", buildBasicsFromPrebaked(q), false, List.of(), null);
+            return new AssistResponse("explain_basics", AiTextNormalizer.normalize(buildBasicsFromPrebaked(q)), false, List.of(), null);
         }
         requireLlmAvailable();
         boolean afterSubmit = hasSubmittedAnswer(req);
@@ -607,7 +618,7 @@ public class PracticeAiService {
                                 BASICS_MAX_WORDS);
 
         String text = fetchBasicsText(prompt);
-        return new AssistResponse("explain_basics", text, true, List.of(), null);
+        return new AssistResponse("explain_basics", AiTextNormalizer.normalize(text), true, List.of(), null);
     }
 
     private String fetchBasicsText(String prompt) {
@@ -841,23 +852,33 @@ public class PracticeAiService {
         if (q != null) {
             prompt =
                     """
-                    Mode: REVISION NOTES for one PYQ
+                    Question context:
                     %s
-                    Correct answer: %s
 
-                    Write compact revision notes: key facts, traps, and one memory hook. Use short bullets.
+                    Correct answer key: %s
+
+                    Write revision notes with exactly these sections:
+
+                    ### Key facts
+                    - bullets; inline math as $I=\\frac{1}{2}MR^2$
+
+                    ### Common mistakes
+                    - bullets
+
+                    ### Memory hook
+                    One short memorable line.
                     """
                             .formatted(questionBlock(q), q.getAnswer());
         } else {
             prompt =
                     """
-                    Mode: REVISION NOTES (general)
-                    Student is revising bookmarked NEET PYQs. Give a checklist for effective same-day revision
-                    (active recall, error log, timed re-attempt) in under 120 words.
+                    The student is revising bookmarked NEET PYQs.
+                    Give a checklist for effective same-day revision (active recall, error log, timed re-attempt)
+                    in under 120 words. Use short bullets only — no preamble.
                     """;
         }
 
-        String text = llm.complete(SYSTEM_NEET, prompt, 0.3, 420);
+        String text = AiTextNormalizer.normalize(llm.complete(SYSTEM_REVISION, prompt, 0.3, 420));
         return new AssistResponse("revision_notes", text, true, List.of(), null);
     }
 
@@ -883,67 +904,126 @@ public class PracticeAiService {
     private AssistResponse similarQuestions(AssistRequest req) {
         Question q = requireQuestion(req.questionId());
         List<SimilarQuestionRef> similar = findSimilar(q, 4);
-        if (similar.isEmpty()) {
-            return new AssistResponse(
-                    "similar_questions",
-                    "No close matches in the bank yet — try the same chapter filter in Question Bank.",
-                    false,
-                    List.of(),
-                    bankUrl(q));
+        String text = resolveSimilarIntroText(q, similar.size());
+        return new AssistResponse("similar_questions", text, false, similar, bankUrl(q));
+    }
+
+    private String resolveSimilarIntroText(Question q, int similarCount) {
+        Optional<String> pattern = lookupPracticePattern(q);
+        if (pattern.isPresent()) {
+            return pattern.get();
         }
-
-        String prompt =
-                """
-                Mode: SIMILAR QUESTIONS
-                Anchor question: %s · %s · topic: %s
-
-                We found %d related PYQs in the bank. In 2–3 sentences, explain what pattern to practice across them.
-                """
-                        .formatted(q.getSubject(), q.getChapter(), nullToEmpty(q.getTopic()), similar.size());
-
-        String text;
-        boolean usedLlm;
-        if (llm.isEnabled()) {
-            text = llm.complete(SYSTEM_NEET, prompt, 0.35, 220);
-            usedLlm = true;
-        } else {
-            text =
-                    """
-                    Practice these related PYQs from the same chapter — look for the same underlying concept and solution pattern.
-                    """
-                            .strip();
-            usedLlm = false;
+        if (similarCount == 0) {
+            return syllabusScopeLabel(q)
+                    + " — no other PYQs matched in the bank yet. Try the chapter filter in Question Bank.";
         }
-        return new AssistResponse("similar_questions", text, usedLlm, similar, bankUrl(q));
+        String scope = syllabusScopeLabel(q);
+        return """
+                Practice these %d related PYQs (%s) — look for the recurring concept and solution pattern before comparing options.
+                """
+                .formatted(similarCount, scope)
+                .strip();
+    }
+
+    private Optional<String> lookupPracticePattern(Question q) {
+        String pattern = nullToEmpty(q.getPracticePattern()).strip();
+        return pattern.isBlank() ? Optional.empty() : Optional.of(pattern);
+    }
+
+    private static String syllabusScopeLabel(Question q) {
+        List<String> parts = new ArrayList<>();
+        addLabelPart(parts, q.getSubject());
+        addLabelPart(parts, q.getChapter());
+        addLabelPart(parts, q.getTopic());
+        addLabelPart(parts, q.getSubtopic());
+        return parts.isEmpty() ? "same syllabus area" : String.join(" · ", parts);
+    }
+
+    private static void addLabelPart(List<String> parts, String value) {
+        String label = label(value);
+        if (!label.isBlank()) {
+            parts.add(label);
+        }
     }
 
     private List<SimilarQuestionRef> findSimilar(Question anchor, int limit) {
-        PageRequest page = PageRequest.of(0, limit + 1);
-        List<Question> pool;
-        if (anchor.getChapter() != null && !anchor.getChapter().isBlank()) {
-            pool = questions.findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCaseAndQuestionIdNot(
-                    anchor.getPackId(), anchor.getSubject(), anchor.getChapter(), anchor.getQuestionId(), page);
-        } else {
-            pool = questions.findByPackIdAndSubjectIgnoreCaseAndQuestionIdNot(
-                    anchor.getPackId(), anchor.getSubject(), anchor.getQuestionId(), page);
+        String exam = label(anchor.getExam());
+        if (exam.isBlank()) {
+            exam = "NEET";
         }
+        String subject = label(anchor.getSubject());
+        String chapter = label(anchor.getChapter());
+        String topic = label(anchor.getTopic());
+        String subtopic = label(anchor.getSubtopic());
+        String excludeId = anchor.getQuestionId();
+
+        Set<String> seen = new LinkedHashSet<>();
+        seen.add(excludeId);
         List<SimilarQuestionRef> out = new ArrayList<>();
-        for (Question q : pool) {
-            if (q.getQuestionId().equals(anchor.getQuestionId())) {
-                continue;
-            }
-            out.add(new SimilarQuestionRef(
-                    q.getQuestionId(),
-                    q.getQuestionNo(),
-                    q.getSubject(),
-                    q.getChapter(),
-                    q.getTopic(),
-                    q.getQuestionTextPreview()));
-            if (out.size() >= limit) {
-                break;
-            }
+        PageRequest page = PageRequest.of(0, limit + 1);
+
+        if (!subject.isBlank() && !chapter.isBlank() && !topic.isBlank() && !subtopic.isBlank()) {
+            collectSimilar(
+                    out,
+                    seen,
+                    questions
+                            .findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndTopicIgnoreCaseAndSubtopicIgnoreCaseAndQuestionIdNot(
+                                    exam, subject, chapter, topic, subtopic, excludeId, page),
+                    limit);
+        }
+        if (out.size() < limit && !subject.isBlank() && !chapter.isBlank() && !topic.isBlank()) {
+            collectSimilar(
+                    out,
+                    seen,
+                    questions.findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndTopicIgnoreCaseAndQuestionIdNot(
+                            exam, subject, chapter, topic, excludeId, page),
+                    limit);
+        }
+        if (out.size() < limit && !subject.isBlank() && !chapter.isBlank()) {
+            collectSimilar(
+                    out,
+                    seen,
+                    questions.findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndQuestionIdNot(
+                            exam, subject, chapter, excludeId, page),
+                    limit);
+        }
+        if (out.size() < limit && !subject.isBlank()) {
+            collectSimilar(
+                    out,
+                    seen,
+                    questions.findByExamIgnoreCaseAndSubjectIgnoreCaseAndQuestionIdNot(
+                            exam, subject, excludeId, page),
+                    limit);
         }
         return out;
+    }
+
+    private static void collectSimilar(
+            List<SimilarQuestionRef> out, Set<String> seen, List<Question> pool, int limit) {
+        for (Question q : pool) {
+            if (!seen.add(q.getQuestionId())) {
+                continue;
+            }
+            out.add(toSimilarRef(q));
+            if (out.size() >= limit) {
+                return;
+            }
+        }
+    }
+
+    private static SimilarQuestionRef toSimilarRef(Question q) {
+        return new SimilarQuestionRef(
+                q.getQuestionId(),
+                q.getQuestionNo(),
+                q.getSubject(),
+                q.getChapter(),
+                q.getTopic(),
+                q.getSubtopic(),
+                q.getQuestionTextPreview());
+    }
+
+    private static String label(String value) {
+        return nullToEmpty(value).strip();
     }
 
     private static String bankUrl(Question q) {
@@ -1020,6 +1100,7 @@ public class PracticeAiService {
             if (equation.isBlank()) {
                 continue;
             }
+            equation = AiTextNormalizer.normalizeFormulaLatex(equation);
             out.add(new FormulaEntry(name, equation, whenToUse));
         }
         return out.size() > 2 ? out.subList(0, 2) : out;
@@ -1027,7 +1108,9 @@ public class PracticeAiService {
 
     private String buildBasicsFromPrebaked(Question q) {
         StringBuilder sb = new StringBuilder();
-        sb.append("### Concept\n\n").append(q.getConceptExplanation().strip()).append("\n\n");
+        sb.append("### Concept\n\n")
+                .append(AiTextNormalizer.sanitizeEnrichmentText(q.getConceptExplanation().strip()))
+                .append("\n\n");
 
         sb.append("### Key Formula(s)\n\n");
         List<FormulaEntry> formulas = prebakedFormulaEntries(q);
@@ -1146,6 +1229,7 @@ public class PracticeAiService {
             String subject,
             String chapter,
             String topic,
+            String subtopic,
             String questionTextPreview) {}
 
     public record AssistResponse(

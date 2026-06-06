@@ -260,11 +260,21 @@ export function fetchPack(packId: string) {
 
 export function fetchQuestions(
   packId: string,
-  params: { subject?: string; chapter?: string; q?: string; page?: number; size?: number }
+  params: {
+    subject?: string;
+    chapter?: string;
+    topic?: string;
+    difficulty?: string;
+    q?: string;
+    page?: number;
+    size?: number;
+  }
 ) {
   const q = new URLSearchParams({ packId });
   if (params.subject) q.set("subject", params.subject);
   if (params.chapter) q.set("chapter", params.chapter);
+  if (params.topic) q.set("topic", params.topic);
+  if (params.difficulty) q.set("difficulty", params.difficulty);
   if (params.q) q.set("q", params.q);
   if (params.page != null) q.set("page", String(params.page));
   if (params.size != null) q.set("size", String(params.size));
@@ -433,6 +443,7 @@ export type PracticeAiSimilarQuestion = {
   subject: string;
   chapter: string;
   topic: string;
+  subtopic: string;
   questionTextPreview: string;
 };
 

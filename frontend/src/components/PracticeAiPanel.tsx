@@ -9,6 +9,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { PRACTICE_AI_FEATURES } from "../utils/practiceAiFeatures";
+import AiMarkdown from "./AiMarkdown";
 
 type Props = {
   questionId?: string;
@@ -152,7 +153,9 @@ export default function PracticeAiPanel({
           <p className="practice-ai-panel__result-label">
             {PRACTICE_AI_FEATURES.find((x) => x.id === result.feature)?.label || result.feature}
           </p>
-          <div className="practice-ai-panel__result-text">{result.text}</div>
+          <div className="practice-ai-panel__result-text">
+            <AiMarkdown text={result.text} />
+          </div>
 
           {result.similarQuestions.length > 0 && (
             <ul className="practice-ai-similar-list">

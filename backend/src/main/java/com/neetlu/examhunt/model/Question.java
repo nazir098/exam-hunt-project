@@ -43,6 +43,7 @@ public class Question {
     private List<FormulaCard> formulaCards;
     private String conceptExplanation;
     private List<String> commonMistakes;
+    private String practicePattern;
 
     public String getId() {
         return id;
@@ -242,5 +243,13 @@ public class Question {
 
     public void setCommonMistakes(List<String> commonMistakes) {
         this.commonMistakes = commonMistakes;
+    }
+
+    public String getPracticePattern() {
+        return practicePattern;
+    }
+
+    public void setPracticePattern(String practicePattern) {
+        this.practicePattern = practicePattern;
     }
 }

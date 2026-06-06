@@ -377,11 +377,13 @@ export default function PracticeStudyAssistant({
                 )}
 
                 <div className="study-assistant__text study-assistant__text--reveal">
-                  {isHintTab ? (
-                    displayedHint
-                  ) : (
-                    <AiMarkdown text={activeResult.text} />
-                  )}
+                  <AiMarkdown
+                    text={
+                      isHintTab && displayedHint
+                        ? displayedHint
+                        : activeResult.text
+                    }
+                  />
                 </div>
 
                 {canShowNextHint && (

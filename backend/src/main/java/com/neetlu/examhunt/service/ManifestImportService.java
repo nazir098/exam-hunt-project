@@ -213,9 +213,14 @@ public class ManifestImportService {
         doc.setSolutionTextPreview(text(q, "solution_text_preview"));
         doc.setHints(readStringList(q.path("hints")));
         doc.setFormulaCards(readFormulaCards(q.path("formula_cards")));
-        doc.setConceptExplanation(text(q, "concept_explanation"));
+        doc.setConceptExplanation(sanitize(text(q, "concept_explanation")));
         doc.setCommonMistakes(readStringList(q.path("common_mistakes")));
+        doc.setPracticePattern(text(q, "practice_pattern"));
         return doc;
+    }
+
+    private static String sanitize(String value) {
+        return AiTextNormalizer.sanitizeEnrichmentText(value);
     }
 
     private static List<String> readStringList(JsonNode arr) {
@@ -226,7 +231,7 @@ public class ManifestImportService {
         arr.forEach(node -> {
             String value = node.asText("").strip();
             if (!value.isBlank()) {
-                out.add(value);
+                out.add(sanitize(value));
             }
         });
         return out;
@@ -253,6 +258,8 @@ public class ManifestImportService {
             if (name.isBlank() && formula.isBlank()) {
                 continue;
             }
+            formula = AiTextNormalizer.normalizeFormulaLatex(formula);
+            description = AiTextNormalizer.sanitizeEnrichmentText(description);
             FormulaCard card = new FormulaCard();
             card.setName(name);
             card.setFormula(formula);

@@ -54,4 +54,35 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
 
     List<Question> findByPackIdAndSubjectIgnoreCaseAndQuestionIdNot(
             String packId, String subject, String questionId, Pageable pageable);
+
+    List<Question>
+            findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndTopicIgnoreCaseAndSubtopicIgnoreCaseAndQuestionIdNot(
+                    String exam,
+                    String subject,
+                    String chapter,
+                    String topic,
+                    String subtopic,
+                    String questionId,
+                    Pageable pageable);
+
+    List<Question> findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndTopicIgnoreCaseAndQuestionIdNot(
+            String exam, String subject, String chapter, String topic, String questionId, Pageable pageable);
+
+    List<Question> findByExamIgnoreCaseAndSubjectIgnoreCaseAndChapterIgnoreCaseAndQuestionIdNot(
+            String exam, String subject, String chapter, String questionId, Pageable pageable);
+
+    List<Question> findByExamIgnoreCaseAndSubjectIgnoreCaseAndQuestionIdNot(
+            String exam, String subject, String questionId, Pageable pageable);
+
+    @Query(
+            """
+            { 'exam': ?0,
+              'subject': { $regex: '^?1$', $options: 'i' },
+              'chapter': { $regex: '^?2$', $options: 'i' },
+              'topic': { $regex: '^?3$', $options: 'i' },
+              'practicePattern': { $exists: true, $nin: [null, ''] }
+            }
+            """)
+    Optional<Question> findFirstWithPracticePatternForTopic(
+            String exam, String subject, String chapter, String topic);
 }
