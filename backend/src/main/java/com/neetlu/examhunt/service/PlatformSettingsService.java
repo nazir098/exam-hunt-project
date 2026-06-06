@@ -26,7 +26,7 @@ public class PlatformSettingsService {
         return repository.save(s);
     }
 
-    public PublicSettingsView toPublicView(PlatformSettings s) {
+    public PublicSettingsView toPublicView(PlatformSettings s, boolean aiLlmConfigured) {
         return new PublicSettingsView(
                 s.getMarketingPyqFloor(),
                 s.getDisplayTotalQuestions(),
@@ -37,7 +37,13 @@ public class PlatformSettingsService {
                 s.isAiTutorMockEnabled(),
                 s.getAiTutorWelcome(),
                 s.isBookmarksEnabled(),
-                s.isAiSuggestEnabled());
+                s.isAiSuggestEnabled(),
+                aiLlmConfigured);
+    }
+
+    /** @deprecated use {@link #toPublicView(PlatformSettings, boolean)} */
+    public PublicSettingsView toPublicView(PlatformSettings s) {
+        return toPublicView(s, false);
     }
 
     public AdminSettingsView toAdminView(PlatformSettings s) {
@@ -98,7 +104,8 @@ public class PlatformSettingsService {
             boolean aiTutorMockEnabled,
             String aiTutorWelcome,
             boolean bookmarksEnabled,
-            boolean aiSuggestEnabled) {}
+            boolean aiSuggestEnabled,
+            boolean aiLlmConfigured) {}
 
     public record AdminSettingsView(PublicSettingsView publicSettings, List<String> aiTutorFallbackReplies, Map<String, String> aiTutorKeywordReplies) {}
 

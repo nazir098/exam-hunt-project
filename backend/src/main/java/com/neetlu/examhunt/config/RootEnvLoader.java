@@ -63,6 +63,18 @@ public final class RootEnvLoader {
                     if (PUBLIC_FILES_BASE_URL.equals(key) || R2_PUBLIC_BASE_URL.equals(key)) {
                         defaults.put("app.public-files-base-url", value);
                     }
+                    if ("OPENAI_API_KEY".equals(key)) {
+                        defaults.put("app.llm-api-key", value);
+                    }
+                    if ("OPENAI_BASE_URL".equals(key)) {
+                        defaults.put("app.llm-base-url", value);
+                    }
+                    if ("OPENAI_CHAT_MODEL".equals(key)) {
+                        defaults.put("app.llm-model", value);
+                    }
+                    if ("AI_PRACTICE_ENABLED".equals(key)) {
+                        defaults.put("app.ai-practice-enabled", Boolean.parseBoolean(value));
+                    }
                 }
             } catch (IOException ignored) {
                 // Fall back to application.yml defaults

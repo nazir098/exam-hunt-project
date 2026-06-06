@@ -20,10 +20,8 @@ export default function SiteLayout() {
   const { user } = useAuth();
 
   const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
-  const isQuestionDetail = pathname.startsWith("/question/");
-  const showAiBar = isQuestionDetail;
 
-  async function startPracticeFromBank() {
+  async function startPracticeFromBank(startQuestionId?: string, packIdOverride?: string) {
     if (practiceBusy) return;
     if (!user) {
       navigate(`/login?next=${encodeURIComponent(pathname + "?" + searchParams.toString())}`);
@@ -32,7 +30,7 @@ export default function SiteLayout() {
     setPracticeBusy(true);
     try {
       const packMatch = pathname.match(/^\/pack\/([^/]+)/);
-      let packId = packMatch?.[1] || searchParams.get("packId") || "";
+      let packId = packIdOverride || packMatch?.[1] || searchParams.get("packId") || "";
       if (!packId) {
         const packs = await fetchPacks();
         const year = searchParams.get("year");
@@ -66,8 +64,9 @@ export default function SiteLayout() {
         topic: searchParams.get("topic") || undefined,
         difficulty: searchParams.get("difficulty") || undefined,
         adaptive: true,
+        startQuestionId: startQuestionId || undefined,
       });
-      const qId = session.currentQuestionId;
+      const qId = startQuestionId || session.currentQuestionId;
       if (!qId) throw new Error("No questions");
       navigate(`/practice/${session.id}/${qId}`);
     } catch {
@@ -77,7 +76,6 @@ export default function SiteLayout() {
     }
   }
 
-  const isAnalytics = pathname === "/analytics";
   const hideMobileChrome =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
@@ -101,13 +99,7 @@ export default function SiteLayout() {
 
   return (
     <StitchViewport>
-      <StitchShell
-        showAiBar={showAiBar}
-        showFab={!isQuestionDetail}
-        fabIcon={isAnalytics ? "smart_toy" : "chat_bubble"}
-      >
-        {outlet}
-      </StitchShell>
+      <StitchShell>{outlet}</StitchShell>
     </StitchViewport>
   );
 }

@@ -225,7 +225,7 @@ export default function AdminPlatformSettingsPanel() {
         <div className="flex flex-wrap gap-md">
           <label className="flex items-center gap-2 text-body-sm">
             <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} />
-            AI tutor mock enabled
+            Legacy AI tutor mock (deprecated)
           </label>
           <label className="flex items-center gap-2 text-body-sm">
             <input
@@ -241,7 +241,7 @@ export default function AdminPlatformSettingsPanel() {
               checked={aiSuggestEnabled}
               onChange={(e) => setAiSuggestEnabled(e.target.checked)}
             />
-            AI Suggest on cards
+            AI practice coach enabled (requires OPENAI_API_KEY + FreeLLMAPI)
           </label>
         </div>
         <button type="submit" className="btn primary" disabled={saving}>

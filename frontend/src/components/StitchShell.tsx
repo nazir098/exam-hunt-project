@@ -1,9 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
-import AiTutorBar from "./AiTutorBar";
-import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
-import AiTutorNavButton from "./AiTutorNavButton";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
 import {
@@ -17,9 +14,6 @@ import { MOBILE_BOTTOM_NAV } from "../navigation/siteNav";
 
 type Props = {
   children: ReactNode;
-  showAiBar?: boolean;
-  showFab?: boolean;
-  fabIcon?: "chat_bubble" | "smart_toy";
 };
 
 function avatarFor(pathname: string): string {
@@ -29,15 +23,9 @@ function avatarFor(pathname: string): string {
   return STITCH_AVATAR_HOME;
 }
 
-export default function StitchShell({
-  children,
-  showAiBar = false,
-  showFab = true,
-  fabIcon = "chat_bubble",
-}: Props) {
+export default function StitchShell({ children }: Props) {
   const { pathname } = useLocation();
   const { user } = useAuth();
-  const { settings } = usePlatformSettings();
   const avatar = avatarFor(pathname);
   const isDetail = pathname.startsWith("/question/");
   const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
@@ -71,7 +59,6 @@ export default function StitchShell({
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
-              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
             </div>
           </>
         ) : isAnalytics ? (
@@ -88,7 +75,6 @@ export default function StitchShell({
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
-              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
             </div>
           </>
         ) : (
@@ -100,7 +86,6 @@ export default function StitchShell({
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search question bank">
                 <span className="material-symbols-outlined">search</span>
               </Link>
-              <AiTutorNavButton variant="header" className="stitch-mobile-ai-btn" />
               <Link
                 to={user ? "/analytics" : "/login"}
                 className="block rounded-full overflow-hidden shrink-0"
@@ -119,61 +104,36 @@ export default function StitchShell({
         <DesktopSiteFooter />
       </div>
 
-      {!showAiBar && (
-        <nav className="mobile-bottom-nav lg:hidden" aria-label="Mobile">
-          {MOBILE_BOTTOM_NAV.map((tab) => {
-            const active = tab.match(pathname);
-            const cls = active
-              ? "flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-2 py-1 scale-90 transition-all duration-200 min-w-0"
-              : "flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-2 py-1 min-w-0";
-            return (
-                <Link
-                  key={tab.to}
-                  to={tab.to}
-                  data-tooltip={tab.hint || undefined}
-                  className={`${cls}${tab.hint ? " nav-tip nav-tip--below" : ""}`}
-                >
-                <span
-                  className="material-symbols-outlined text-[22px]"
-                  style={
-                    active && (isHome || isBank || isAnalytics || isPractice || isLeaderboard)
-                      ? { fontVariationSettings: "'FILL' 1" }
-                      : undefined
-                  }
-                >
-                  {tab.icon}
-                </span>
-                <span className="text-[10px] font-label-md leading-tight text-center truncate max-w-[4.5rem]">
-                  {tab.label === "Question Bank" ? "Bank" : tab.label}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-      )}
-
-      {showFab && !showAiBar && settings.aiTutorMockEnabled && (
-        <Link
-          to="/ai-tutor"
-          className={`lg:hidden absolute z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform right-6 bottom-24 ${
-            fabIcon === "smart_toy" ? "electric-glow-bg shadow-primary-container/40" : "electric-glow"
-          }`}
-          aria-label="AI Tutor"
-        >
-          <span
-            className={`material-symbols-outlined ${fabIcon === "smart_toy" ? "text-white text-3xl" : "text-[28px]"}`}
-            style={fabIcon === "chat_bubble" ? { fontVariationSettings: "'FILL' 1" } : undefined}
-          >
-            {fabIcon}
-          </span>
-        </Link>
-      )}
-
-      {showAiBar && settings.aiTutorMockEnabled && (
-        <div className="mobile-bottom-bar mobile-bottom-bar--ai lg:hidden">
-          <AiTutorBar />
-        </div>
-      )}
+      <nav className="mobile-bottom-nav lg:hidden" aria-label="Mobile">
+        {MOBILE_BOTTOM_NAV.map((tab) => {
+          const active = tab.match(pathname);
+          const cls = active
+            ? "flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-2 py-1 scale-90 transition-all duration-200 min-w-0"
+            : "flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all px-2 py-1 min-w-0";
+          return (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              data-tooltip={tab.hint || undefined}
+              className={`${cls}${tab.hint ? " nav-tip nav-tip--below" : ""}`}
+            >
+              <span
+                className="material-symbols-outlined text-[22px]"
+                style={
+                  active && (isHome || isBank || isAnalytics || isPractice || isLeaderboard)
+                    ? { fontVariationSettings: "'FILL' 1" }
+                    : undefined
+                }
+              >
+                {tab.icon}
+              </span>
+              <span className="text-[10px] font-label-md leading-tight text-center truncate max-w-[4.5rem]">
+                {tab.label === "Question Bank" ? "Bank" : tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

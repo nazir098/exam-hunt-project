@@ -47,6 +47,7 @@ export type QuestionDetail = QuestionPublic & {
   concepts: string[];
   hasDiagram: boolean;
   hasEquation: boolean;
+  formulaRelevant: boolean;
   solutionTextPreview: string;
 };
 
@@ -118,6 +119,7 @@ export type PracticeQuestion = {
   topic: string;
   difficulty: number;
   hasSolution: boolean;
+  formulaRelevant: boolean;
   questionImageUrl: string;
   questionTextPreview: string;
 };
@@ -346,6 +348,8 @@ export function createPracticeSession(body: {
   topic?: string;
   difficulty?: string;
   adaptive: boolean;
+  /** When set, practice session begins on this PYQ (e.g. from question bank). */
+  startQuestionId?: string;
 }) {
   return request<PracticeSessionView>("/api/practice/sessions", {
     method: "POST",
@@ -409,6 +413,44 @@ export type PublicPlatformSettings = {
   aiTutorWelcome: string;
   bookmarksEnabled: boolean;
   aiSuggestEnabled: boolean;
+  aiLlmConfigured: boolean;
+};
+
+export type PracticeAiFeature =
+  | "why_wrong"
+  | "hint"
+  | "formula"
+  | "explain_basics"
+  | "weak_chapter_analysis"
+  | "practice_from_weak"
+  | "revision_notes"
+  | "mentor"
+  | "similar_questions";
+
+export type PracticeAiSimilarQuestion = {
+  questionId: string;
+  questionNo: number;
+  subject: string;
+  chapter: string;
+  topic: string;
+  questionTextPreview: string;
+};
+
+export type PracticeAiAssistResponse = {
+  feature: PracticeAiFeature;
+  text: string;
+  llm: boolean;
+  similarQuestions: PracticeAiSimilarQuestion[];
+  actionUrl: string | null;
+  /** Three progressive hints (hint feature only) */
+  hintSteps?: string[];
+};
+
+export type PracticeAiStatus = {
+  available: boolean;
+  llmConfigured: boolean;
+  platformEnabled: boolean;
+  serverEnabled: boolean;
 };
 
 export type AdminPlatformSettings = {
@@ -491,6 +533,22 @@ export function searchQuestions(params: {
   return getJson<PageResponse<QuestionPublic>>(`/api/questions/search?${qs}`);
 }
 
+export function fetchPracticeAiStatus() {
+  return getJson<PracticeAiStatus>("/api/practice-ai/status");
+}
+
+export function practiceAiAssist(body: {
+  feature: PracticeAiFeature;
+  questionId?: string;
+  selectedAnswer?: string;
+}) {
+  return request<PracticeAiAssistResponse>("/api/practice-ai/assist", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** @deprecated Use practiceAiAssist — AI tutor chat removed */
 export function aiTutorChat(body: { message: string; questionId?: string; context?: string }) {
   return request<{ reply: string; source: string; mock: boolean }>("/api/ai-tutor/chat", {
     method: "POST",
@@ -498,6 +556,7 @@ export function aiTutorChat(body: { message: string; questionId?: string; contex
   });
 }
 
+/** @deprecated Use practiceAiAssist with feature hint | explain_basics */
 export function aiTutorHint(body: { mode: string; questionId?: string }) {
   return request<{ text: string; mode: string }>("/api/ai-tutor/hint", {
     method: "POST",

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "../components/BookmarkButton";
+import PracticeAiPanel from "../components/PracticeAiPanel";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 
 const OPTIONS = [
@@ -268,6 +269,18 @@ export default function QuestionPage() {
           </div>
         </div>
       </div>
+
+      {q && (
+        <div className="mt-lg">
+          <PracticeAiPanel
+            questionId={questionId}
+            selectedAnswer={selected}
+            submitted={revealed}
+            correct={revealed ? selected === q.answer : null}
+            formulaRelevant={q.formulaRelevant}
+          />
+        </div>
+      )}
 
       <div
         className={`mt-xxl transition-all duration-700 ${

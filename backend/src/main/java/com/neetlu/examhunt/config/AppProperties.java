@@ -12,5 +12,9 @@ public record AppProperties(
         String adminBootstrapPassword,
         String jwtSecret,
         long jwtExpirationHours,
-        boolean leaderboardDemoSeed
+        boolean leaderboardDemoSeed,
+        String llmApiKey,
+        String llmBaseUrl,
+        String llmModel,
+        boolean aiPracticeEnabled
 ) {}

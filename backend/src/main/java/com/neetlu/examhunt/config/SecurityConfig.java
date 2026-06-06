@@ -56,9 +56,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/packs", "/api/packs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/questions", "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/leaderboard", "/api/leaderboard/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/settings/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/settings/**", "/api/practice-ai/status")
+                        .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/auth/me", "/api/practice/**", "/api/bookmarks/**", "/api/ai-tutor/**")
+                        .requestMatchers(
+                                        "/api/auth/me",
+                                        "/api/practice/**",
+                                        "/api/practice-ai/**",
+                                        "/api/bookmarks/**")
                         .authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

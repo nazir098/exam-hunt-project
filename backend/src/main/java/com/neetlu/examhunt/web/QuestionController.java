@@ -2,6 +2,7 @@ package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.QuestionRepository;
+import com.neetlu.examhunt.service.FormulaEligibility;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -134,6 +135,7 @@ public class QuestionController {
             java.util.List<String> concepts,
             boolean hasDiagram,
             boolean hasEquation,
+            boolean formulaRelevant,
             boolean hasSolution,
             boolean answerOnly,
             String questionImageUrl,
@@ -157,6 +159,7 @@ public class QuestionController {
                     q.getConcepts(),
                     q.isHasDiagram(),
                     q.isHasEquation(),
+                    FormulaEligibility.questionNeedsFormula(q),
                     q.isHasSolution(),
                     q.isAnswerOnly(),
                     q.getQuestionImageUrl(),

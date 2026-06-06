@@ -6,6 +6,7 @@ import InsightChartsPanel from "../components/InsightChartsPanel";
 import Scorecard from "../components/Scorecard";
 import SessionHistoryList from "../components/SessionHistoryList";
 import WeeklyActivityPanel from "../components/WeeklyActivityPanel";
+import PracticeAiPanel from "../components/PracticeAiPanel";
 import {
   buildDashboardStats,
   meaningfulSessions,
@@ -63,6 +64,16 @@ export default function AnalyticsPage() {
       </header>
 
       <Scorecard progress={progress} summaryOnly showSessionNote={false} />
+
+      <PracticeAiPanel
+        featureIds={[
+          "weak_chapter_analysis",
+          "practice_from_weak",
+          "mentor",
+          "revision_notes",
+        ]}
+        title="AI practice coach"
+      />
 
       <div className="analytics-grid">
         <div className="analytics-main">

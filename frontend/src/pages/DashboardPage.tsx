@@ -154,11 +154,13 @@ export default function DashboardPage() {
       <section className="dashboard-ai-nudge glass-card">
         <span className="material-symbols-outlined text-primary">psychology</span>
         <div>
-          <strong>AI Tutor is launching soon</strong>
-          <p className="muted">Get notified when step-by-step AI explanations land on your PYQs.</p>
+          <strong>AI practice coach</strong>
+          <p className="muted">
+            Hints, wrong-answer breakdowns, weak-chapter analysis, and revision notes — on Practice &amp; Analytics.
+          </p>
         </div>
-        <Link to="/ai-tutor" className="btn">
-          Preview
+        <Link to="/analytics" className="btn">
+          Open AI tools
         </Link>
       </section>
     </main>

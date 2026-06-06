@@ -2,6 +2,7 @@ package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.model.PracticeSession;
 import com.neetlu.examhunt.model.Question;
+import com.neetlu.examhunt.service.FormulaEligibility;
 import com.neetlu.examhunt.service.PracticeService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -37,7 +38,8 @@ public class PracticeController {
                         body.chapter(),
                         body.topic(),
                         body.difficulty(),
-                        body.adaptive()));
+                        body.adaptive(),
+                        body.startQuestionId()));
         return practiceService.toView(session);
     }
 
@@ -88,7 +90,8 @@ public class PracticeController {
             String chapter,
             String topic,
             String difficulty,
-            boolean adaptive) {}
+            boolean adaptive,
+            String startQuestionId) {}
 
     public record SubmitBody(
             @NotBlank String sessionId, @NotBlank String questionId, @NotBlank String selectedAnswer) {}
@@ -106,6 +109,7 @@ public class PracticeController {
             String topic,
             int difficulty,
             boolean hasSolution,
+            boolean formulaRelevant,
             String questionImageUrl,
             String questionTextPreview) {
         static QuestionPracticeView from(Question q) {
@@ -120,6 +124,7 @@ public class PracticeController {
                     q.getTopic(),
                     q.getDifficulty(),
                     q.isHasSolution(),
+                    FormulaEligibility.questionNeedsFormula(q),
                     q.getQuestionImageUrl(),
                     q.getQuestionTextPreview());
         }

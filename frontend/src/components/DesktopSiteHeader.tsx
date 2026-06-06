@@ -1,6 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import AiTutorNavButton from "./AiTutorNavButton";
 import GlobalSearch from "./GlobalSearch";
 import ProfileMenu from "./ProfileMenu";
 import { BRAND_NAME } from "../design/stitchAssets";
@@ -29,7 +28,6 @@ export default function DesktopSiteHeader({ minimal = false }: Props) {
           </div>
 
           <div className="stitch-desktop-header__actions">
-            {!minimal && <AiTutorNavButton variant="header" />}
             {user ? (
               <ProfileMenu />
             ) : (

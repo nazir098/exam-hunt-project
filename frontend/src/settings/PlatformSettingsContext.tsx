@@ -22,6 +22,7 @@ const DEFAULTS: PublicPlatformSettings = {
     "Hi! I'm your AI Tutor (demo mode). Ask about any NEET topic or PYQ concept.",
   bookmarksEnabled: true,
   aiSuggestEnabled: true,
+  aiLlmConfigured: false,
 };
 
 type Value = {

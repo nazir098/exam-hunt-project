@@ -64,10 +64,7 @@ public class PracticeService {
                         .toList()
                 : list;
 
-        List<String> questionIds = ordered.stream()
-                .limit(SESSION_SIZE)
-                .map(Question::getQuestionId)
-                .toList();
+        List<String> questionIds = buildQuestionIds(ordered, list, req);
 
         PracticeSession session = new PracticeSession();
         session.setUserId(userId);
@@ -244,6 +241,37 @@ public class PracticeService {
         return new RatingAggregate(all.size(), Math.round(avg * 10.0) / 10.0);
     }
 
+    private List<String> buildQuestionIds(
+            List<Question> ordered, List<Question> filteredPool, CreateSessionRequest req) {
+        String rawStartId = req.startQuestionId();
+        if (rawStartId == null || rawStartId.isBlank()) {
+            return ordered.stream().limit(SESSION_SIZE).map(Question::getQuestionId).toList();
+        }
+
+        final String startId = rawStartId.trim();
+        Question startQ = requireQuestion(startId);
+        if (!req.packId().equals(startQ.getPackId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question is not in this pack");
+        }
+        boolean inPool = filteredPool.stream().anyMatch(q -> q.getQuestionId().equals(startId));
+        if (!inPool) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Question does not match session filters");
+        }
+
+        List<String> ids = new ArrayList<>();
+        ids.add(startId);
+        for (Question q : ordered) {
+            if (ids.size() >= SESSION_SIZE) {
+                break;
+            }
+            if (!q.getQuestionId().equals(startId)) {
+                ids.add(q.getQuestionId());
+            }
+        }
+        return ids;
+    }
+
     private List<Question> loadPool(CreateSessionRequest req) {
         PageRequest pageable = PageRequest.of(0, 300, Sort.by("questionNo"));
         if (req.subject() != null && !req.subject().isBlank()
@@ -344,7 +372,8 @@ public class PracticeService {
             String chapter,
             String topic,
             String difficulty,
-            boolean adaptive) {}
+            boolean adaptive,
+            String startQuestionId) {}
 
     public record SubmitRequest(String sessionId, String questionId, String selectedAnswer) {}
 

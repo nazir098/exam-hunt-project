@@ -48,4 +48,10 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
             ]}
             """)
     Page<Question> searchByExam(String exam, String pattern, Pageable pageable);
+
+    List<Question> findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCaseAndQuestionIdNot(
+            String packId, String subject, String chapter, String questionId, Pageable pageable);
+
+    List<Question> findByPackIdAndSubjectIgnoreCaseAndQuestionIdNot(
+            String packId, String subject, String questionId, Pageable pageable);
 }

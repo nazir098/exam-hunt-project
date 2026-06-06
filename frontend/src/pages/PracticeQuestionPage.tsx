@@ -11,8 +11,7 @@ import {
   submitPracticeAnswer,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import HintTooltip from "../components/HintTooltip";
-import { PRACTICE_MODE_HINT } from "../navigation/modeHints";
+import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import { difficultyLabel, examDisplayName } from "../utils/labels";
 
 const OPTIONS = [
@@ -38,12 +37,16 @@ export default function PracticeQuestionPage() {
   const [rating, setRating] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showSolution, setShowSolution] = useState(false);
+  const [submitAnim, setSubmitAnim] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     setResult(null);
     setSelected("");
     setRating(0);
+    setShowSolution(false);
+    setSubmitAnim(false);
     const [s, question] = await Promise.all([
       fetchPracticeSession(sessionId),
       fetchPracticeQuestion(questionId),
@@ -78,6 +81,7 @@ export default function PracticeQuestionPage() {
         selectedAnswer: selected,
       });
       setResult(res);
+      setSubmitAnim(true);
       refreshProgress();
       setSession((prev) =>
         prev
@@ -115,202 +119,227 @@ export default function PracticeQuestionPage() {
 
   if (!user || !q || !session) {
     return (
-      <main className="practice-run-page px-margin-mobile lg:px-0 pt-6">
-        <p className="text-on-surface-variant">{error || "Loading practice…"}</p>
+      <main className="practice-run-page">
+        <p className="practice-run-loading">{error || "Loading practice…"}</p>
       </main>
     );
   }
 
   const diff = difficultyLabel(q.difficulty);
   const answered = session.correctCount + session.wrongCount;
+  const currentQ = answered + (result ? 0 : 1);
   const progressPct = Math.round((answered / session.questionCount) * 100);
   const canSubmit = !!selected && !result && !busy;
 
   return (
-    <main className="practice-run-page px-margin-mobile lg:px-0 pt-4 lg:pt-6">
-      <div className="practice-run-progress" aria-hidden>
-        <div className="practice-run-progress__fill" style={{ width: `${progressPct}%` }} />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-md mb-lg">
-        <Link to="/practice" className="text-on-surface-variant text-body-sm hover:text-primary font-bold">
-          ← Practice session
-        </Link>
-        <div className="text-body-sm text-on-surface-variant">
-          <strong className="text-primary text-headline-md">{session.totalMarks}</strong>
-          <span> / {session.maxMarks} marks</span>
-          <span className="mx-1">·</span>
-          <span>
-            {session.correctCount}✓ {session.wrongCount}✗
-          </span>
-          <span className="mx-1">·</span>
-          <span>
-            Q{answered + (result ? 0 : 1)}/{session.questionCount}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-sm mb-lg">
-        <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-secondary">
-          {examDisplayName(q.exam, q.year)} {q.year}
-        </span>
-        <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption">
-          {diff}
-        </span>
-        <span className="px-3 py-1 rounded-full bg-primary-container/20 border border-primary/30 text-caption text-primary">
-          Adaptive level {session.adaptiveLevel}/3
-        </span>
-      </div>
-
-      <div className="glass-card rounded-xl p-lg mb-lg">
-        <h1 className="text-headline-md font-headline-md text-on-surface mb-lg">
-          Question {q.questionNo}
-          {q.chapter ? ` · ${q.chapter}` : ""}
-        </h1>
-        <div className="aspect-video w-full rounded-lg bg-surface-deep/50 border border-white/5 overflow-hidden mb-md">
-          {q.questionImageUrl ? (
-            <img
-              className="w-full h-full object-contain bg-white"
-              src={imageSrc(q.questionImageUrl)}
-              alt={`Question ${q.questionNo}`}
-            />
-          ) : (
-            <p className="p-lg text-outline text-center">{q.questionTextPreview || "No image"}</p>
-          )}
-        </div>
-      </div>
-
-      {!result ? (
-        <>
-          <p className="text-label-md text-on-surface-variant uppercase tracking-widest mb-sm flex items-center gap-2">
-            Select one option
-            <HintTooltip text={PRACTICE_MODE_HINT} />
-          </p>
-          <div className="space-y-sm mb-lg">
-            {OPTIONS.map((opt) => {
-              const active = selected === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setSelected(opt.value)}
-                  className={`glass-card p-lg rounded-xl flex items-center gap-md w-full text-left transition-all border ${
-                    active ? "bg-primary/10 border-primary" : "border-transparent hover:bg-white/5"
-                  }`}
-                >
-                  <div
-                    className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold shrink-0 ${
-                      active
-                        ? "bg-primary text-on-primary border-primary"
-                        : "border-white/20 text-on-surface-variant"
-                    }`}
-                  >
-                    {opt.label}
-                  </div>
-                  <span className="text-body-md text-on-surface">Option {opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-          <button
-            type="button"
-            className="practice-submit-btn practice-submit-btn--inline w-full py-4 rounded-xl font-bold text-body-md disabled:opacity-50 disabled:cursor-not-allowed hidden lg:flex items-center justify-center gap-2"
-            disabled={!canSubmit}
-            onClick={submit}
-          >
-            <span className="material-symbols-outlined">send</span>
-            {busy ? "Submitting…" : "Submit answer"}
-          </button>
-        </>
-      ) : (
-        <section
-          className={`glass-card rounded-xl p-lg mb-lg border-l-4 ${
-            result.correct ? "border-secondary" : "border-error"
-          }`}
-        >
-          <div className="flex items-center gap-sm mb-md">
-            <span
-              className={`material-symbols-outlined text-headline-md ${
-                result.correct ? "text-secondary" : "text-error"
-              }`}
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              {result.correct ? "check_circle" : "cancel"}
+    <main className="practice-run-page">
+      <header className="practice-run-header sticky-below-header">
+        <div className="practice-run-header__top">
+          <Link to="/practice" className="practice-run-header__back">
+            <span className="material-symbols-outlined">arrow_back</span>
+            Practice
+          </Link>
+          <div className="practice-run-header__stats">
+            <span className="practice-run-stat">
+              <span className="practice-run-stat__label">Q</span>
+              <strong>
+                {currentQ}/{session.questionCount}
+              </strong>
             </span>
-            <h2 className="text-headline-md font-headline-md">
-              {result.correct ? "Correct! +4 marks" : "Incorrect · −1 mark"}
-            </h2>
+            <span className="practice-run-stat practice-run-stat--score">
+              <span className="practice-run-stat__label">Score</span>
+              <strong>{session.totalMarks}</strong>
+              <span className="practice-run-stat__sub">/{session.maxMarks}</span>
+            </span>
+            <span className="practice-run-stat practice-run-stat--ok">
+              <span className="material-symbols-outlined">check_circle</span>
+              {session.correctCount}
+            </span>
+            <span className="practice-run-stat practice-run-stat--bad">
+              <span className="material-symbols-outlined">cancel</span>
+              {session.wrongCount}
+            </span>
           </div>
-          <p className="text-body-md text-on-surface-variant mb-md">
-            Correct answer: <strong className="text-on-surface">{result.correctAnswer}</strong>
-            {!result.correct && (
-              <>
-                {" "}
-                · You chose <strong className="text-on-surface">{selected}</strong>
-              </>
-            )}
-          </p>
-          <p className="text-caption text-on-surface-variant mb-lg">
-            Next question difficulty targets level {result.adaptiveLevel}/3 based on your result.
-          </p>
-          {result.hasSolution && result.solutionImageUrl && (
-            <div className="aspect-video w-full rounded-lg overflow-hidden border border-white/5 bg-white mb-lg">
-              <img
-                src={imageSrc(result.solutionImageUrl)}
-                alt="Solution"
-                className="w-full h-full object-contain"
-              />
-            </div>
-          )}
-          <div className="mb-lg">
-            <p className="text-caption font-bold uppercase tracking-wider text-on-surface-variant mb-sm">
-              Rate this question
-            </p>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`w-10 h-10 rounded-lg border text-lg ${
-                    rating >= n
-                      ? "bg-primary/20 border-primary text-primary"
-                      : "border-white/10 text-on-surface-variant"
-                  }`}
-                  onClick={() => saveRating(n)}
-                  aria-label={`${n} stars`}
-                >
-                  ★
-                </button>
-              ))}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={goNext}
-            className="practice-submit-btn w-full py-4 rounded-xl font-bold"
-          >
-            {result.nextQuestionId ? "Next question →" : "Finish session"}
-          </button>
-        </section>
-      )}
-
-      {!result && (
-        <div className="practice-submit-bar lg:hidden">
-          <button
-            type="button"
-            className="practice-submit-btn w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2"
-            disabled={!canSubmit}
-            onClick={submit}
-          >
-            <span className="material-symbols-outlined">send</span>
-            {busy ? "Submitting…" : selected ? "Submit answer" : "Select an option to submit"}
-          </button>
         </div>
-      )}
+        <div className="practice-run-progress" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="practice-run-progress__fill" style={{ width: `${progressPct}%` }} />
+        </div>
+      </header>
+
+      <div className={`practice-run-layout${result ? " practice-run-layout--result" : ""}`}>
+        <div className="practice-run-main">
+          <div className="practice-run-meta">
+            <span className="practice-run-chip">{examDisplayName(q.exam, q.year)} {q.year}</span>
+            <span className="practice-run-chip">{diff}</span>
+            {q.chapter && <span className="practice-run-chip practice-run-chip--muted">{q.chapter}</span>}
+            <span className="practice-run-chip practice-run-chip--accent">Level {session.adaptiveLevel}/3</span>
+          </div>
+
+          {!result ? (
+            <>
+              <section className="practice-run-question glass-card">
+                <h1 className="practice-run-question__title">Question {q.questionNo}</h1>
+                <div className="practice-run-question__media">
+                  {q.questionImageUrl ? (
+                    <img
+                      src={imageSrc(q.questionImageUrl)}
+                      alt={`Question ${q.questionNo}`}
+                    />
+                  ) : (
+                    <p className="practice-run-question__fallback">{q.questionTextPreview || "No image"}</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="practice-run-options" aria-label="Answer options">
+                <p className="practice-run-options__label">Select one option</p>
+                <div className="practice-run-options__list">
+                  {OPTIONS.map((opt) => {
+                    const active = selected === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setSelected(opt.value)}
+                        className={`practice-run-option${active ? " is-selected" : ""}`}
+                      >
+                        <span className="practice-run-option__badge">{opt.label}</span>
+                        <span className="practice-run-option__text">Option {opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {error && <p className="practice-run-error">{error}</p>}
+
+              <button
+                type="button"
+                className="practice-submit-btn practice-run-submit"
+                disabled={!canSubmit}
+                onClick={submit}
+              >
+                <span className="material-symbols-outlined">send</span>
+                {busy ? "Submitting…" : selected ? "Submit answer" : "Select an option to submit"}
+              </button>
+
+              <div className="practice-run-ai-inline lg:hidden">
+                <PracticeStudyAssistant
+                  questionId={questionId}
+                  selectedAnswer={selected}
+                  formulaRelevant={q.formulaRelevant}
+                  layout="inline"
+                />
+              </div>
+            </>
+          ) : (
+            <section
+              className={`practice-run-result glass-card${submitAnim ? " is-revealed" : ""}${
+                result.correct ? " practice-run-result--correct" : " practice-run-result--wrong"
+              }`}
+            >
+              <div className="practice-run-result__banner">
+                <span
+                  className="material-symbols-outlined practice-run-result__icon"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {result.correct ? "check_circle" : "cancel"}
+                </span>
+                <div>
+                  <h2 className="practice-run-result__title">
+                    {result.correct ? "Correct!" : "Incorrect"}
+                  </h2>
+                  <p className="practice-run-result__marks">
+                    {result.correct ? "+4 marks" : "−1 mark"}
+                    <span className="practice-run-result__marks-total">
+                      · Session {result.sessionTotalMarks}/{result.sessionMaxMarks}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <dl className="practice-run-result__facts">
+                <div>
+                  <dt>Correct answer</dt>
+                  <dd>{result.correctAnswer}</dd>
+                </div>
+                {!result.correct && (
+                  <div>
+                    <dt>Your answer</dt>
+                    <dd>{selected}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {result.hasSolution && result.solutionImageUrl && (
+                <div className="practice-run-solution">
+                  <button
+                    type="button"
+                    className="practice-run-solution__toggle"
+                    onClick={() => setShowSolution((v) => !v)}
+                    aria-expanded={showSolution}
+                  >
+                    <span className="material-symbols-outlined">
+                      {showSolution ? "visibility_off" : "visibility"}
+                    </span>
+                    {showSolution ? "Hide solution" : "View solution"}
+                  </button>
+                  <div className={`practice-run-solution__panel${showSolution ? " is-open" : ""}`}>
+                    <img src={imageSrc(result.solutionImageUrl)} alt="Solution" />
+                  </div>
+                </div>
+              )}
+
+              <div className="practice-run-ai-inline lg:hidden">
+                <PracticeStudyAssistant
+                  questionId={questionId}
+                  selectedAnswer={selected}
+                  submitted
+                  correct={result.correct}
+                  prominent
+                  formulaRelevant={q.formulaRelevant}
+                  layout="inline"
+                />
+              </div>
+
+              <div className="practice-run-rating">
+                <p className="practice-run-rating__label">Rate this question</p>
+                <div className="practice-run-rating__stars">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`practice-run-rating__star${rating >= n ? " is-on" : ""}`}
+                      onClick={() => saveRating(n)}
+                      aria-label={`${n} stars`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button type="button" onClick={goNext} className="practice-submit-btn practice-run-next">
+                {result.nextQuestionId ? "Next question" : "Finish session"}
+                <span className="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </section>
+          )}
+        </div>
+
+        <aside className="practice-run-aside hidden lg:block">
+          <PracticeStudyAssistant
+            questionId={questionId}
+            selectedAnswer={selected}
+            submitted={!!result}
+            correct={result?.correct ?? null}
+            prominent={!!result}
+            formulaRelevant={q.formulaRelevant}
+            layout="sidebar"
+          />
+        </aside>
+      </div>
     </main>
   );
 }

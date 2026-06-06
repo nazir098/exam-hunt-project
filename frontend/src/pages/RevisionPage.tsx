@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { fetchBookmarks, type BookmarkItem } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import PracticeAiPanel from "../components/PracticeAiPanel";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { examDisplayName } from "../utils/labels";
 
@@ -65,6 +66,11 @@ export default function RevisionPage() {
           </Link>
         </div>
       )}
+
+      <PracticeAiPanel
+        featureIds={["revision_notes", "weak_chapter_analysis", "practice_from_weak"]}
+        title="AI revision help"
+      />
 
       <ul className="revision-list space-y-md">
         {items.map((b) => (
