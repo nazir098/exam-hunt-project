@@ -1,131 +1,372 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { fetchQuestion, QuestionDetail } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
+import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
+import BookmarkButton from "../components/BookmarkButton";
+import PracticeAiPanel from "../components/PracticeAiPanel";
+import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 
-type Mode = "study" | "practice";
+const OPTIONS = [
+  { label: "A", value: "1" },
+  { label: "B", value: "2" },
+  { label: "C", value: "3" },
+  { label: "D", value: "4" },
+];
 
 export default function QuestionPage() {
   const { questionId = "" } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [q, setQ] = useState<QuestionDetail | null>(null);
+  const [siblings, setSiblings] = useState<QuestionPublic[]>([]);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<Mode>("study");
+  const [selected, setSelected] = useState("");
   const [revealed, setRevealed] = useState(false);
-  const [practiceChoice, setPracticeChoice] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const returnQs = searchParams.toString();
 
   useEffect(() => {
+    setQ(null);
+    setError("");
     setRevealed(false);
-    setSubmitted(false);
-    setPracticeChoice("");
+    setSelected("");
+    if (!questionId) return;
+    let cancelled = false;
     fetchQuestion(questionId)
-      .then(setQ)
-      .catch((e) => setError(e.message));
+      .then((data) => {
+        if (!cancelled) setQ(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [questionId]);
 
-  function onPracticeSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitted(true);
+  useEffect(() => {
+    if (!q?.packId) return;
+    let cancelled = false;
+    fetchQuestions(q.packId, {
+      subject: searchParams.get("subject") || undefined,
+      chapter: searchParams.get("chapter") || undefined,
+      size: 300,
+    })
+      .then((res) => {
+        if (!cancelled) {
+          setSiblings(
+            filterQuestionsForPractice(res.content, {
+              topic: searchParams.get("topic") || undefined,
+              difficulty: searchParams.get("difficulty") || undefined,
+              q: searchParams.get("q") || undefined,
+            })
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSiblings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [q?.packId, returnQs]);
+
+  const goToQuestion = useCallback(
+    (id: string) => {
+      navigate(`/question/${id}?${new URLSearchParams(searchParams).toString()}`);
+    },
+    [navigate, searchParams]
+  );
+
+  const nav = useMemo(() => {
+    const idx = siblings.findIndex((p) => p.questionId === questionId);
+    return {
+      idx,
+      prev: idx > 0 ? siblings[idx - 1] : null,
+      next: idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null,
+      total: siblings.length,
+    };
+  }, [siblings, questionId]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft" && nav.prev) goToQuestion(nav.prev.questionId);
+      if (e.key === "ArrowRight" && nav.next) goToQuestion(nav.next.questionId);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [nav, goToQuestion]);
+
+  function imageSrc(url: string) {
+    if (!url) return "";
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}v=${encodeURIComponent(questionId)}`;
   }
 
-  const showAnswer = mode === "study" ? revealed : submitted;
-  const correct =
-    submitted && q?.answer && practiceChoice.trim().toLowerCase() === q.answer.trim().toLowerCase();
+  function backHref() {
+    if (q) return browsePathFromPack(q.packId, returnQs);
+    return "/bank?exam=NEET";
+  }
 
-  if (error) return <p className="error-text">{error}</p>;
-  if (!q) return <p className="muted">Loading…</p>;
+  function checkAnswer() {
+    setRevealed(true);
+  }
+
+  const correct = revealed && q?.answer && selected === q.answer.trim();
+  const similar = siblings.filter((s) => s.questionId !== questionId).slice(0, 2);
+
+  if (error) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-24 pb-32">
+        <p className="text-error">{error}</p>
+        <Link to={backHref()} className="glass-card inline-block px-md py-sm rounded-xl mt-md">
+          ← Back
+        </Link>
+      </main>
+    );
+  }
+
+  if (!q) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-24 pb-32">
+        <p className="text-outline">Loading question…</p>
+      </main>
+    );
+  }
+
+  const diff = difficultyLabel(q.difficulty);
 
   return (
-    <div className="question-detail">
-      <p>
-        <Link to={`/pack/${q.packId}`}>← Back to {q.exam} {q.year}</Link>
-      </p>
-      <h1>
-        Q{q.questionNo} — {q.subject}
-      </h1>
-      {q.chapter && <p className="muted">{q.chapter}</p>}
-
-      <div className="mode-tabs">
-        <button
-          type="button"
-          className={mode === "study" ? "tab active" : "tab"}
-          onClick={() => {
-            setMode("study");
-            setSubmitted(false);
-          }}
-        >
-          Study
-        </button>
-        <button
-          type="button"
-          className={mode === "practice" ? "tab active" : "tab"}
-          onClick={() => {
-            setMode("practice");
-            setRevealed(false);
-          }}
-        >
-          Practice
-        </button>
+    <main className="px-margin-mobile lg:px-0 lg:pt-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
+        <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
+          <Link to={backHref()} className="hover:text-primary cursor-pointer transition-colors">
+            {q.subject}
+          </Link>
+          {q.chapter && (
+            <>
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+              <span className="hover:text-primary cursor-pointer transition-colors">{q.chapter}</span>
+            </>
+          )}
+          {q.topic && (
+            <>
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+              <span className="text-primary font-bold">{q.topic}</span>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-sm">
+          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-secondary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+              history_edu
+            </span>
+            {examDisplayName(q.exam, q.year)} {q.year}
+          </span>
+          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-error flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">trending_up</span>
+            {diff}
+          </span>
+          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-on-surface-variant flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">analytics</span>
+            {marksLabel(q.difficulty, q.questionNo)}
+          </span>
+        </div>
       </div>
 
-      <div className="viewer">
-        <figure>
-          <figcaption>Question</figcaption>
-          {q.questionImageUrl ? (
-            <img src={q.questionImageUrl} alt="Question" className="viewer-img" />
-          ) : (
-            <p className="muted">No question image</p>
-          )}
-        </figure>
-        {q.hasSolution && q.solutionImageUrl && (
-          <figure>
-            <figcaption>Solution</figcaption>
-            <img
-              src={q.solutionImageUrl}
-              alt="Solution"
-              className={`viewer-img ${!showAnswer ? "blurred" : ""}`}
+      <div className="flex flex-col gap-gutter">
+        <div className="space-y-lg">
+          <div className="glass-card rounded-xl p-lg">
+            <h1 className="text-headline-md font-headline-md text-on-surface mb-lg">
+              Question {q.questionNo}
+              {q.topic ? ` · ${q.topic}` : ""}
+            </h1>
+            <div className="aspect-video w-full rounded-lg bg-surface-deep/50 border border-white/5 flex items-center justify-center overflow-hidden mb-lg">
+              {q.questionImageUrl ? (
+                <img
+                  className="w-full h-full object-contain bg-white"
+                  src={imageSrc(q.questionImageUrl)}
+                  alt={`Question ${q.questionNo}`}
+                />
+              ) : (
+                <p className="text-outline">No question image</p>
+              )}
+            </div>
+            <div className="flex items-center gap-md p-md bg-primary-container/10 border-l-4 border-primary rounded-r-lg">
+              <span className="material-symbols-outlined text-primary">info</span>
+              <p className="text-body-sm text-on-surface-variant">
+                Published exam images from your verified catalog.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-md">
+            <button
+              type="button"
+              onClick={checkAnswer}
+              disabled={revealed && !!correct}
+              className={`flex-1 py-4 rounded-xl text-white font-headline-md hover:shadow-[0_0_20px_rgba(138,43,226,0.4)] transition-all active:scale-95 ${
+                revealed
+                  ? correct
+                    ? "success-glow-bg flex items-center justify-center gap-2"
+                    : "bg-surface-container-high"
+                  : "bg-[linear-gradient(135deg,#8A2BE2_0%,#4B0082_100%)]"
+              }`}
+            >
+              {revealed && correct && (
+                <span className="material-symbols-outlined mr-2">check_circle</span>
+              )}
+              {revealed ? (correct ? "Correct Answer" : "View result") : "Check Answer"}
+            </button>
+            <BookmarkButton
+              questionId={questionId}
+              className="px-8 py-4 rounded-xl border border-white/10 glass-card text-on-surface hover:bg-white/5 transition-all active:scale-95 flex items-center gap-2"
             />
-          </figure>
-        )}
+          </div>
+        </div>
+
+        <div className="space-y-md">
+          <div className="text-label-md text-on-surface-variant uppercase tracking-widest mb-sm">Select One Option</div>
+          <div className="space-y-sm">
+            {OPTIONS.map((opt) => {
+              const active = selected === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSelected(opt.value)}
+                  className={`glass-card p-lg rounded-xl flex items-center gap-md w-full text-left transition-all border ${
+                    active
+                      ? "bg-primary/10 border-primary"
+                      : "border-transparent hover:bg-white/5"
+                  }`}
+                >
+                  <div
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold ${
+                      active
+                        ? "bg-primary text-on-primary border-primary"
+                        : "border-white/20 text-on-surface-variant"
+                    }`}
+                  >
+                    {opt.label}
+                  </div>
+                  <span className="text-body-md text-on-surface">Option {opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex lg:hidden flex-col gap-sm mt-lg">
+            <button
+              type="button"
+              onClick={checkAnswer}
+              className="w-full py-4 rounded-xl bg-[linear-gradient(135deg,#8A2BE2_0%,#4B0082_100%)] text-white font-headline-md active:scale-95 transition-transform"
+            >
+              Check Answer
+            </button>
+            <BookmarkButton
+              questionId={questionId}
+              className="w-full py-4 rounded-xl border border-white/10 glass-card text-on-surface active:scale-95 flex justify-center items-center gap-2"
+            />
+          </div>
+        </div>
       </div>
 
-      {mode === "study" && (
-        <button type="button" className="btn primary" onClick={() => setRevealed(true)} disabled={revealed}>
-          {revealed ? "Answer revealed" : "Reveal answer"}
-        </button>
-      )}
-
-      {mode === "practice" && !submitted && (
-        <form className="practice-form" onSubmit={onPracticeSubmit}>
-          <label>
-            Your answer (e.g. 1, 2, a, b)
-            <input
-              value={practiceChoice}
-              onChange={(e) => setPracticeChoice(e.target.value)}
-              placeholder="Type option"
-              required
-            />
-          </label>
-          <button type="submit" className="btn primary">
-            Submit
-          </button>
-        </form>
-      )}
-
-      {showAnswer && (
-        <div className={`answer-box ${mode === "practice" ? (correct ? "ok" : "bad") : ""}`}>
-          <strong>Correct answer:</strong> {q.answer || "—"}
-          {mode === "practice" && submitted && (
-            <p>{correct ? "Correct!" : `You chose: ${practiceChoice}`}</p>
-          )}
+      {q && (
+        <div className="mt-lg">
+          <PracticeAiPanel
+            questionId={questionId}
+            selectedAnswer={selected}
+            submitted={revealed}
+            correct={revealed ? selected === q.answer : null}
+            formulaRelevant={q.formulaRelevant}
+          />
         </div>
       )}
 
-      {q.questionTextPreview && (
-        <details className="text-preview">
-          <summary>Text preview</summary>
-          <p>{q.questionTextPreview}</p>
-        </details>
-      )}
-    </div>
+      <div
+        className={`mt-xxl transition-all duration-700 ${
+          revealed ? "opacity-100 translate-y-0" : "hidden opacity-0 translate-y-4"
+        }`}
+      >
+        <div className="mb-lg flex items-center gap-md">
+          <div className="h-px flex-1 bg-white/10" />
+          <h2 className="text-headline-md font-headline-md text-secondary">Step-by-Step Solution</h2>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          <div className="lg:col-span-8 space-y-md">
+            <div className="glass-card p-lg rounded-xl space-y-lg">
+              <p className="text-body-md">
+                <strong>Correct option:</strong> {OPTIONS.find((o) => o.value === q.answer)?.label || q.answer || "—"}
+                {selected && (
+                  <>
+                    {" "}
+                    · You chose <strong>{OPTIONS.find((o) => o.value === selected)?.label || selected}</strong>
+                  </>
+                )}
+              </p>
+              {q.hasSolution && q.solutionImageUrl && (
+                <div className="aspect-video w-full rounded-lg overflow-hidden border border-white/5 bg-white">
+                  <img
+                    className="w-full h-full object-contain"
+                    src={imageSrc(q.solutionImageUrl)}
+                    alt={`Solution ${q.questionNo}`}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="lg:col-span-4">
+            <div className="glass-card rounded-xl p-lg sticky-below-header">
+              <div className="flex items-center justify-between mb-lg">
+                <h3 className="text-headline-md font-headline-md">Similar Problems</h3>
+                <span className="text-primary material-symbols-outlined">arrow_forward</span>
+              </div>
+              <div className="space-y-md overflow-x-auto hide-scrollbar">
+                {similar.length === 0 ? (
+                  <p className="text-caption text-outline">No similar questions in this filter.</p>
+                ) : (
+                  similar.map((s) => (
+                    <Link
+                      key={s.questionId}
+                      to={`/question/${s.questionId}?${returnQs}`}
+                      className="p-md rounded-lg bg-surface-deep/50 border border-white/5 hover:border-primary/20 transition-all cursor-pointer block"
+                    >
+                      <div className="text-caption text-secondary mb-2">
+                        {examDisplayName(s.exam, s.year)} {s.year}
+                      </div>
+                      <p className="text-body-sm line-clamp-2">
+                        Q{s.questionNo} — {s.chapter || s.subject}
+                      </p>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer className="flex items-center justify-between mt-xxl pt-lg border-t border-white/5">
+        <button
+          type="button"
+          className="px-md py-sm rounded-xl border border-white/10 glass-card text-on-surface disabled:opacity-40"
+          disabled={!nav.prev}
+          onClick={() => nav.prev && goToQuestion(nav.prev.questionId)}
+        >
+          ← Previous
+        </button>
+        <span className="text-caption text-outline">
+          {nav.idx >= 0 ? nav.idx + 1 : q.questionNo} / {nav.total || "—"}
+        </span>
+        <button
+          type="button"
+          className="px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold disabled:opacity-40"
+          disabled={!nav.next}
+          onClick={() => nav.next && goToQuestion(nav.next.questionId)}
+        >
+          Next →
+        </button>
+      </footer>
+    </main>
   );
 }

@@ -2,6 +2,8 @@ package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.QuestionRepository;
+import com.neetlu.examhunt.service.FormulaEligibility;
+import com.neetlu.examhunt.service.QuestionBrowseService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -13,14 +15,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.regex.Pattern;
+
 @RestController
 @RequestMapping("/api/questions")
 public class QuestionController {
 
     private final QuestionRepository questionRepository;
+    private final QuestionBrowseService questionBrowseService;
 
-    public QuestionController(QuestionRepository questionRepository) {
+    public QuestionController(
+            QuestionRepository questionRepository,
+            QuestionBrowseService questionBrowseService
+    ) {
         this.questionRepository = questionRepository;
+        this.questionBrowseService = questionBrowseService;
     }
 
     @GetMapping
@@ -28,20 +37,41 @@ public class QuestionController {
             @RequestParam String packId,
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String chapter,
+            @RequestParam(required = false) String topic,
+            @RequestParam(required = false) String difficulty,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "24") int size
     ) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("questionNo"));
+        Page<Question> result = questionBrowseService.browse(
+                packId, subject, chapter, topic, difficulty, q, pageable);
+        return result.map(QuestionPublic::from);
+    }
+
+    @GetMapping("/search")
+    public Page<QuestionPublic> search(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "NEET") String exam,
+            @RequestParam(required = false) String packId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size
+    ) {
+        if (q == null || q.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query q is required");
+        }
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("year").descending().and(Sort.by("questionNo")));
         Page<Question> result;
-        if (subject != null && !subject.isBlank() && chapter != null && !chapter.isBlank()) {
-            result = questionRepository.findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
-                    packId, subject, chapter, pageable);
-        } else if (subject != null && !subject.isBlank()) {
-            result = questionRepository.findByPackIdAndSubjectIgnoreCase(packId, subject, pageable);
+        if (packId != null && !packId.isBlank()) {
+            result = questionRepository.searchInPack(packId, regexPattern(q), pageable);
         } else {
-            result = questionRepository.findByPackId(packId, pageable);
+            result = questionRepository.searchByExam(exam, regexPattern(q), pageable);
         }
         return result.map(QuestionPublic::from);
+    }
+
+    private static String regexPattern(String raw) {
+        return Pattern.quote(raw.trim());
     }
 
     @GetMapping("/{questionId}")
@@ -104,6 +134,7 @@ public class QuestionController {
             java.util.List<String> concepts,
             boolean hasDiagram,
             boolean hasEquation,
+            boolean formulaRelevant,
             boolean hasSolution,
             boolean answerOnly,
             String questionImageUrl,
@@ -127,6 +158,7 @@ public class QuestionController {
                     q.getConcepts(),
                     q.isHasDiagram(),
                     q.isHasEquation(),
+                    FormulaEligibility.questionNeedsFormula(q),
                     q.isHasSolution(),
                     q.isAnswerOnly(),
                     q.getQuestionImageUrl(),

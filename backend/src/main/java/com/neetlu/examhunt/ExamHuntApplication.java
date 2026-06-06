@@ -1,5 +1,6 @@
 package com.neetlu.examhunt;
 
+import com.neetlu.examhunt.config.RootEnvLoader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -7,6 +8,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class ExamHuntApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(ExamHuntApplication.class, args);
+        SpringApplication app = new SpringApplication(ExamHuntApplication.class);
+        app.setDefaultProperties(RootEnvLoader.loadDefaults());
+        app.run(args);
     }
 }

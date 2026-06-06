@@ -1,15 +1,15 @@
 package com.neetlu.examhunt.web;
 
-import com.neetlu.examhunt.config.AppProperties;
+import com.neetlu.examhunt.security.AdminAuthorization;
 import com.neetlu.examhunt.service.ManifestImportService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.Map;
@@ -19,46 +19,64 @@ import java.util.Map;
 public class AdminImportController {
 
     private final ManifestImportService importService;
-    private final AppProperties appProperties;
+    private final AdminAuthorization adminAuthorization;
 
-    public AdminImportController(ManifestImportService importService, AppProperties appProperties) {
+    public AdminImportController(ManifestImportService importService, AdminAuthorization adminAuthorization) {
         this.importService = importService;
-        this.appProperties = appProperties;
+        this.adminAuthorization = adminAuthorization;
+    }
+
+    @GetMapping("/folders")
+    public ResponseEntity<?> listFolders(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
+            throws IOException {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        var folders = importService.listImportableFolders();
+        return ResponseEntity.ok(Map.of("folders", folders, "count", folders.size()));
     }
 
     @PostMapping("/folder/{folderName}")
     public ResponseEntity<?> importFolder(
             @PathVariable String folderName,
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
-    ) throws IOException {
-        checkAdminKey(adminKey);
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
+            throws IOException {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
         var result = importService.importFromFolder(folderName);
         return ResponseEntity.ok(Map.of(
                 "packId", result.packId(),
                 "questionsImported", result.questionsImported(),
-                "message", "Imported " + result.questionsImported() + " questions from " + folderName
-        ));
+                "message", "Imported " + result.questionsImported() + " questions from " + folderName));
+    }
+
+    @PostMapping("/neet")
+    public ResponseEntity<?> importNeet(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
+            throws IOException {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        var result = importService.importNeetFolders();
+        return ResponseEntity.ok(Map.of(
+                "packsProcessed", result.packsProcessed(),
+                "questionsImported", result.questionsImported(),
+                "packIds",
+                result.details().stream().map(ManifestImportService.ImportResult::packId).toList(),
+                "message",
+                "Imported " + result.questionsImported() + " NEET questions across "
+                        + result.packsProcessed() + " pack(s)"));
     }
 
     @PostMapping("/all")
     public ResponseEntity<?> importAll(
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
-    ) throws IOException {
-        checkAdminKey(adminKey);
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
+            throws IOException {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
         var result = importService.importAllPublishedFolders();
         return ResponseEntity.ok(Map.of(
                 "packsProcessed", result.packsProcessed(),
                 "questionsImported", result.questionsImported(),
-                "details", result.details()
-        ));
-    }
-
-    private void checkAdminKey(String provided) {
-        String expected = appProperties.adminImportKey();
-        if (expected != null && !expected.isBlank()) {
-            if (provided == null || !expected.equals(provided)) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid admin key");
-            }
-        }
+                "details", result.details()));
     }
 }

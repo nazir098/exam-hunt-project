@@ -1,25 +1,36 @@
-import { Link, Route, Routes } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import PackPage from "./pages/PackPage";
+import { Navigate, Route, Routes } from "react-router-dom";
+import SiteLayout from "./components/SiteLayout";
+import BrowsePage from "./pages/BrowsePage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
+import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
+import PracticePage from "./pages/PracticePage";
+import PracticeQuestionPage from "./pages/PracticeQuestionPage";
 import QuestionPage from "./pages/QuestionPage";
+import RegisterPage from "./pages/RegisterPage";
+import AdminPage from "./pages/AdminPage";
+import RevisionPage from "./pages/RevisionPage";
 
 export default function App() {
   return (
-    <div className="app-shell">
-      <header className="site-header">
-        <Link to="/" className="brand">
-          <span className="brand-mark">N</span>
-          <span>Neetlu</span>
-        </Link>
-        <p className="tagline">Previous year questions — browse &amp; practice</p>
-      </header>
-      <main className="site-main">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/pack/:packId" element={<PackPage />} />
-          <Route path="/question/:questionId" element={<QuestionPage />} />
-        </Routes>
-      </main>
-    </div>
+    <Routes>
+      <Route element={<SiteLayout />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/revision" element={<RevisionPage />} />
+        <Route path="/bank" element={<BrowsePage />} />
+        <Route path="/pack/:packId" element={<BrowsePage />} />
+        <Route path="/question/:questionId" element={<QuestionPage />} />
+        <Route path="/practice" element={<PracticePage />} />
+        <Route path="/practice/:sessionId/:questionId" element={<PracticeQuestionPage />} />
+        <Route path="/ai-tutor" element={<Navigate to="/analytics" replace />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }

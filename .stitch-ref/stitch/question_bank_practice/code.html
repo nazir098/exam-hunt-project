@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduMaster AI - Question Bank</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(30, 30, 50, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(220, 184, 255, 0.3);
+            background: rgba(40, 40, 70, 0.7);
+        }
+        .ai-glow {
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4c4354;
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#111125",
+                        "on-primary-fixed-variant": "#6700b5",
+                        "surface-dim": "#111125",
+                        "surface-container-high": "#28283d",
+                        "on-secondary-container": "#00311f",
+                        "surface-tint": "#dcb8ff",
+                        "tertiary-container": "#935400",
+                        "surface-container-highest": "#333348",
+                        "electric-glow": "linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%)",
+                        "tertiary": "#ffb873",
+                        "surface-container-low": "#1a1a2e",
+                        "on-background": "#e2e0fc",
+                        "inverse-on-surface": "#2f2e43",
+                        "outline": "#988ca0",
+                        "on-error-container": "#ffdad6",
+                        "on-primary-fixed": "#2c0051",
+                        "surface-container-lowest": "#0c0c1f",
+                        "on-secondary-fixed": "#002113",
+                        "secondary-container": "#00a572",
+                        "surface": "#111125",
+                        "surface-deep": "#0F0F1E",
+                        "on-tertiary-container": "#ffdaba",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-primary": "#480081",
+                        "on-error": "#690005",
+                        "outline-variant": "#4c4354",
+                        "on-surface": "#e2e0fc",
+                        "on-surface-variant": "#cfc2d7",
+                        "secondary-fixed": "#6ffbbe",
+                        "surface-container": "#1e1e32",
+                        "inverse-surface": "#e2e0fc",
+                        "primary-fixed": "#efdbff",
+                        "slate-muted": "#94A3B8",
+                        "surface-glass": "rgba(26, 26, 46, 0.7)",
+                        "success-glow": "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                        "inverse-primary": "#8422dc",
+                        "secondary": "#4edea3",
+                        "primary": "#dcb8ff",
+                        "on-tertiary": "#4b2800",
+                        "on-tertiary-fixed": "#2d1600",
+                        "on-primary-container": "#eed9ff",
+                        "primary-fixed-dim": "#dcb8ff",
+                        "surface-bright": "#37374d",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed": "#ffdcbf",
+                        "surface-variant": "#333348",
+                        "error-container": "#93000a",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-tertiary-fixed-variant": "#6a3b00",
+                        "on-secondary": "#003824",
+                        "primary-container": "#8a2be2",
+                        "tertiary-fixed-dim": "#ffb873"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "unit": "4px",
+                        "gutter": "24px",
+                        "xl": "32px",
+                        "xxl": "48px",
+                        "xs": "4px",
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Sora"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Sora"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Sora"],
+                        "caption": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "display-lg-mobile": ["Sora"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "caption": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container min-h-screen overflow-x-hidden">
+<!-- Top Navigation Bar -->
+<header class="bg-surface-glass dark:bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 z-50 fixed top-0 sticky">
+<div class="flex items-center gap-2">
+<span class="text-headline-md font-headline-md font-bold bg-clip-text text-transparent bg-gradient-to-br from-[#8A2BE2] to-[#4B0082]">EduMaster AI</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-primary hover:bg-white/5 transition-colors p-2 rounded-full" data-icon="smart_toy">smart_toy</button>
+<div class="w-10 h-10 rounded-full border-2 border-primary/30 overflow-hidden">
+<img alt="Student Profile Image" class="w-full h-full object-cover" data-alt="A clean, high-resolution portrait of a focused student in a modern educational setting, wearing professional yet casual attire. The background is a soft, blurred study space with warm, amber lighting that contrasts with cool blue tech accents. The overall aesthetic is professional, aspirational, and high-quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfpBWDYep1ZQTGRlJxg-A6ocWLXuUlnSe4uOUAeB_x8hToSbem1AN6Ea_qRBqnGiLnYTKvcuu70NwVxSprXeA5KYgBUJwZlq7ubeU_ZJeBZwi3DcAkP5Brmmu4GoQT4Y9d7vDtCatiRwGaaoCtvHq20Fk1-fuywCIFpy47ZUZegZcq0dQplnIYsVhXna8ppM0w_SUQHKx55GBcQJVJpnW20_7GqbRSxsS4sEervESTDL1CpB3MEHnE2zp3lySwTFR_F4Pn8W-AMOKh"/>
+</div>
+</div>
+</header>
+<main class="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-8 pb-32">
+<!-- Search & Filter Area -->
+<section class="mb-xl">
+<div class="flex flex-col md:flex-row gap-4 items-end">
+<div class="w-full flex-1 space-y-2">
+<div class="flex items-center gap-2 px-2 text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-label-md font-label-md uppercase tracking-widest">AI Intelligent Search</span>
+</div>
+<div class="relative group">
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-12 py-4 text-on-surface focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all outline-none" placeholder="Search topics, questions, or 'Problems like JEE 2023 Physics'..." type="text"/>
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">
+<span class="bg-surface-container-highest text-caption px-2 py-1 rounded text-outline">⌘ K</span>
+</div>
+</div>
+<div class="flex flex-wrap gap-2 pt-2">
+<span class="text-caption text-outline">AI Suggestions:</span>
+<button class="text-caption bg-surface-container/50 border border-white/5 hover:border-primary/50 px-3 py-1 rounded-full transition-all text-on-surface-variant">Rotational Dynamics</button>
+<button class="text-caption bg-surface-container/50 border border-white/5 hover:border-primary/50 px-3 py-1 rounded-full transition-all text-on-surface-variant">Optics</button>
+<button class="text-caption bg-surface-container/50 border border-white/5 hover:border-primary/50 px-3 py-1 rounded-full transition-all text-on-surface-variant">Organic Chemistry</button>
+</div>
+</div>
+<button class="flex items-center gap-2 bg-surface-container-high px-6 py-4 rounded-xl border border-white/10 hover:bg-surface-container-highest transition-all text-on-surface" onclick="document.getElementById('filter-drawer').classList.toggle('translate-x-full')">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+<span class="font-label-md">Filter</span>
+</button>
+</div>
+</section>
+<!-- Main Content Area -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Filters Sidebar (Desktop) -->
+<aside class="hidden lg:block lg:col-span-3 space-y-gutter">
+<div class="glass-card p-lg rounded-xl">
+<h3 class="text-label-md font-label-md text-primary mb-md flex items-center justify-between">
+                        DEEP FILTERING
+                        <span class="material-symbols-outlined text-[16px]" data-icon="filter_list">filter_list</span>
+</h3>
+<div class="space-y-md">
+<div>
+<label class="text-caption text-outline mb-2 block">Exam Category</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="bg-primary-container text-on-primary-container text-caption py-2 rounded-lg font-bold">NEET</button>
+<button class="bg-surface-container text-on-surface-variant text-caption py-2 rounded-lg hover:bg-surface-container-high">JEE</button>
+</div>
+</div>
+<div>
+<label class="text-caption text-outline mb-2 block">Difficulty Level</label>
+<div class="flex flex-col gap-1">
+<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
+<input class="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0" type="checkbox"/>
+<span class="text-body-sm">Conceptual (Easy)</span>
+</label>
+<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
+<input checked="" class="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0" type="checkbox"/>
+<span class="text-body-sm">Application (Medium)</span>
+</label>
+<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
+<input class="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0" type="checkbox"/>
+<span class="text-body-sm">Critical Thinking (Hard)</span>
+</label>
+</div>
+</div>
+<div>
+<label class="text-caption text-outline mb-2 block">AI Recommended</label>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-primary/20">
+<span class="text-body-sm text-primary">Target Weak Areas</span>
+<div class="w-8 h-4 bg-primary-container rounded-full relative">
+<div class="w-3 h-3 bg-white rounded-full absolute right-0.5 top-0.5"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="glass-card p-lg rounded-xl border-dashed border-primary/20">
+<div class="flex items-center gap-3 mb-2">
+<span class="material-symbols-outlined text-primary" data-icon="psychology">psychology</span>
+<span class="text-label-md font-label-md">Learning Insights</span>
+</div>
+<p class="text-body-sm text-outline leading-relaxed">Based on your last mock, you should focus on <span class="text-secondary font-bold">Inorganic Chemistry</span> trends from 2018-2022.</p>
+</div>
+</aside>
+<!-- Question Grid -->
+<div class="lg:col-span-9 space-y-gutter">
+<!-- Question Card 1 -->
+<div class="glass-card p-lg rounded-xl relative group overflow-hidden">
+<div class="absolute top-0 right-0 p-4">
+<span class="text-caption px-3 py-1 bg-primary-container/20 text-primary border border-primary/30 rounded-full font-bold">NEET 2022</span>
+</div>
+<div class="flex items-start gap-4 mb-md">
+<div class="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="architecture">architecture</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="text-label-md text-secondary">Physics</span>
+<span class="text-outline text-[12px]">•</span>
+<span class="text-label-md text-on-surface-variant">Rotational Dynamics</span>
+</div>
+<h2 class="text-body-lg font-semibold leading-snug pr-24">A wheel is at rest. Its angular velocity increases uniformly and becomes 80 rad/s in 10s. The total angular displacement is?</h2>
+</div>
+</div>
+<div class="flex flex-wrap gap-4 items-center justify-between mt-xl pt-md border-t border-white/5">
+<div class="flex gap-2">
+<span class="flex items-center gap-1 text-caption text-outline"><span class="material-symbols-outlined text-[14px]" data-icon="bar_chart">bar_chart</span> Medium</span>
+<span class="flex items-center gap-1 text-caption text-outline"><span class="material-symbols-outlined text-[14px]" data-icon="query_stats">query_stats</span> 84% Mastery</span>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-lg text-on-surface hover:bg-surface-container-highest transition-all border border-white/5">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-label-md">AI Suggest</span>
+</button>
+<button class="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold ai-glow hover:scale-[1.02] active:scale-95 transition-all">
+<span class="text-label-md">Solve</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Question Card 2 -->
+<div class="glass-card p-lg rounded-xl relative group overflow-hidden">
+<div class="absolute top-0 right-0 p-4">
+<span class="text-caption px-3 py-1 bg-secondary-container/20 text-secondary border border-secondary/30 rounded-full font-bold">JEE 2021</span>
+</div>
+<div class="flex items-start gap-4 mb-md">
+<div class="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary" data-icon="biotech">biotech</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="text-label-md text-secondary">Biology</span>
+<span class="text-outline text-[12px]">•</span>
+<span class="text-label-md text-on-surface-variant">Photosynthesis</span>
+</div>
+<h2 class="text-body-lg font-semibold leading-snug pr-24">Identify the incorrect statement regarding the process of photosynthesis in higher plants.</h2>
+</div>
+</div>
+<div class="flex flex-wrap gap-4 items-center justify-between mt-xl pt-md border-t border-white/5">
+<div class="flex gap-2">
+<span class="flex items-center gap-1 text-caption text-outline"><span class="material-symbols-outlined text-[14px]" data-icon="bar_chart">bar_chart</span> Easy</span>
+<span class="flex items-center gap-1 text-caption text-outline"><span class="material-symbols-outlined text-[14px]" data-icon="query_stats">query_stats</span> 92% Mastery</span>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-lg text-on-surface hover:bg-surface-container-highest transition-all border border-white/5">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-label-md">AI Suggest</span>
+</button>
+<button class="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold ai-glow hover:scale-[1.02] active:scale-95 transition-all">
+<span class="text-label-md">Solve</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Infinite Scroll Indicator -->
+<div class="flex flex-col items-center justify-center py-xxl opacity-50">
+<div class="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
+<span class="text-caption tracking-[0.2em] font-bold text-outline">LOADING MORE CHALLENGES</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Filter Drawer (Mobile) -->
+<div class="fixed inset-0 z-[60] translate-x-full transition-transform duration-300 lg:hidden" id="filter-drawer">
+<div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="this.parentElement.classList.add('translate-x-full')"></div>
+<div class="absolute right-0 top-0 bottom-0 w-80 bg-surface-container-high p-lg flex flex-col">
+<div class="flex items-center justify-between mb-xl">
+<span class="text-headline-md">Filters</span>
+<button class="material-symbols-outlined" onclick="document.getElementById('filter-drawer').classList.add('translate-x-full')">close</button>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar space-y-lg">
+<section>
+<h4 class="text-label-md text-primary mb-md">SUBJECT</h4>
+<div class="space-y-2">
+<label class="flex items-center justify-between p-3 bg-background rounded-lg">
+<span>Physics</span>
+<input checked="" class="text-primary-container" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between p-3 bg-background rounded-lg">
+<span>Chemistry</span>
+<input class="text-primary-container" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between p-3 bg-background rounded-lg">
+<span>Biology</span>
+<input class="text-primary-container" type="checkbox"/>
+</label>
+</div>
+</section>
+<section>
+<h4 class="text-label-md text-primary mb-md">CHAPTER FOCUS</h4>
+<div class="p-4 border border-white/5 rounded-lg text-body-sm text-outline">
+                        Select a subject first to unlock deep chapter-level filtering.
+                    </div>
+</section>
+<section>
+<h4 class="text-label-md text-primary mb-md">CONTENT TYPE</h4>
+<div class="flex flex-wrap gap-2">
+<button class="px-3 py-1 bg-surface-container-highest border border-primary/40 rounded-full text-caption">Diagram-based</button>
+<button class="px-3 py-1 bg-background border border-white/5 rounded-full text-caption">Numerical</button>
+<button class="px-3 py-1 bg-background border border-white/5 rounded-full text-caption">Theory</button>
+</div>
+</section>
+</div>
+<button class="w-full py-4 bg-primary text-on-primary font-bold rounded-xl mt-xl">Apply Filters</button>
+</div>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-2 h-20 bg-surface-container-high/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] md:hidden">
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-3 py-1 scale-90 duration-200">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="text-label-md font-label-md">Practice</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="text-label-md font-label-md">AI Tutor</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span class="text-label-md font-label-md">Analytics</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-label-md font-label-md">Profile</span>
+</div>
+</nav>
+<script>
+        // Simple micro-interaction for the search bar highlight
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ai-glow');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ai-glow');
+        });
+
+        // Toggle FAB or active state based on scroll
+        let lastScrollTop = 0;
+        window.addEventListener("scroll", function() {
+            let st = window.pageYOffset || document.documentElement.scrollTop;
+            if (st > lastScrollTop) {
+                // Downscroll code if needed
+            } else {
+                // Upscroll code
+            }
+            lastScrollTop = st <= 0 ? 0 : st;
+        }, false);
+    </script>
+</body></html>

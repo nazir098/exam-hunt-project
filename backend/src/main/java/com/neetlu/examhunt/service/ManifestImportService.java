@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neetlu.examhunt.config.AppProperties;
 import com.neetlu.examhunt.model.ContentPack;
+import com.neetlu.examhunt.model.FormulaCard;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
@@ -43,6 +44,68 @@ public class ManifestImportService {
     public ImportResult importFromFolder(String folderName) throws IOException {
         JsonNode manifest = loadManifestFromDisk(folderName);
         return importManifestNode(manifest, folderName);
+    }
+
+    /** Published extractor folders that have {@code output/<name>/published/manifest.json}. */
+    public List<ImportFolderEntry> listImportableFolders() throws IOException {
+        Path outputRoot = resolveOutputRoot();
+        if (!Files.isDirectory(outputRoot)) {
+            throw new IOException("Extractor output not found: " + outputRoot);
+        }
+        List<ImportFolderEntry> entries = new ArrayList<>();
+        try (Stream<Path> dirs = Files.list(outputRoot)) {
+            for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
+                Path manifestPath = dir.resolve("published").resolve("manifest.json");
+                if (!Files.isRegularFile(manifestPath)) {
+                    continue;
+                }
+                JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
+                String folderName = dir.getFileName().toString();
+                String packId = text(manifest, "pack_id");
+                if (packId.isBlank()) {
+                    packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
+                }
+                int questionCount = manifest.path("questions").size();
+                if (questionCount == 0 && manifest.path("stats").has("total_questions")) {
+                    questionCount = manifest.path("stats").path("total_questions").asInt(0);
+                }
+                entries.add(new ImportFolderEntry(
+                        folderName,
+                        packId,
+                        text(manifest, "exam"),
+                        manifest.path("year").asInt(0),
+                        questionCount));
+            }
+        }
+        return entries;
+    }
+
+    /** Imports every published folder whose manifest {@code exam} is NEET. */
+    public ImportResult importNeetFolders() throws IOException {
+        Path outputRoot = resolveOutputRoot();
+        if (!Files.isDirectory(outputRoot)) {
+            throw new IOException("Extractor output not found: " + outputRoot);
+        }
+        List<ImportResult> results = new ArrayList<>();
+        try (Stream<Path> dirs = Files.list(outputRoot)) {
+            for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
+                Path manifestPath = dir.resolve("published").resolve("manifest.json");
+                if (!Files.isRegularFile(manifestPath)) {
+                    continue;
+                }
+                JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
+                if (!"NEET".equalsIgnoreCase(text(manifest, "exam"))) {
+                    continue;
+                }
+                results.add(importManifestNode(manifest, dir.getFileName().toString()));
+            }
+        }
+        if (results.isEmpty()) {
+            throw new IOException(
+                    "No NEET manifests under " + outputRoot + " — publish years in pdf-qa-extractor first.");
+        }
+        int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
+        return new ImportResult("NEET", questions, results.size(), results);
     }
 
     public ImportResult importAllPublishedFolders() throws IOException {
@@ -148,7 +211,62 @@ public class ManifestImportService {
         doc.setSolutionImageUrl(text(q, "solution_image_url"));
         doc.setQuestionTextPreview(text(q, "question_text_preview"));
         doc.setSolutionTextPreview(text(q, "solution_text_preview"));
+        doc.setHints(readStringList(q.path("hints")));
+        doc.setFormulaCards(readFormulaCards(q.path("formula_cards")));
+        doc.setConceptExplanation(sanitize(text(q, "concept_explanation")));
+        doc.setCommonMistakes(readStringList(q.path("common_mistakes")));
+        doc.setPracticePattern(text(q, "practice_pattern"));
         return doc;
+    }
+
+    private static String sanitize(String value) {
+        return AiTextNormalizer.sanitizeEnrichmentText(value);
+    }
+
+    private static List<String> readStringList(JsonNode arr) {
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        arr.forEach(node -> {
+            String value = node.asText("").strip();
+            if (!value.isBlank()) {
+                out.add(sanitize(value));
+            }
+        });
+        return out;
+    }
+
+    private static List<FormulaCard> readFormulaCards(JsonNode arr) {
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<FormulaCard> out = new ArrayList<>();
+        for (JsonNode node : arr) {
+            String name = text(node, "name");
+            String formula = text(node, "formula");
+            if (formula.isBlank()) {
+                formula = text(node, "equation");
+            }
+            String description = text(node, "description");
+            if (description.isBlank()) {
+                description = text(node, "when_to_use");
+            }
+            if (description.isBlank()) {
+                description = text(node, "whenToUse");
+            }
+            if (name.isBlank() && formula.isBlank()) {
+                continue;
+            }
+            formula = AiTextNormalizer.normalizeFormulaLatex(formula);
+            description = AiTextNormalizer.sanitizeEnrichmentText(description);
+            FormulaCard card = new FormulaCard();
+            card.setName(name);
+            card.setFormula(formula);
+            card.setDescription(description);
+            out.add(card);
+        }
+        return out;
     }
 
     private static String text(JsonNode node, String field) {
@@ -175,5 +293,13 @@ public class ManifestImportService {
             int questionsImported,
             int packsProcessed,
             List<ImportResult> details
+    ) {}
+
+    public record ImportFolderEntry(
+            String folderName,
+            String packId,
+            String exam,
+            int year,
+            int questionCount
     ) {}
 }

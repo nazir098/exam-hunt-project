@@ -39,6 +39,11 @@ public class Question {
     private String solutionImageUrl;
     private String questionTextPreview;
     private String solutionTextPreview;
+    private List<String> hints;
+    private List<FormulaCard> formulaCards;
+    private String conceptExplanation;
+    private List<String> commonMistakes;
+    private String practicePattern;
 
     public String getId() {
         return id;
@@ -206,5 +211,45 @@ public class Question {
 
     public void setSolutionTextPreview(String solutionTextPreview) {
         this.solutionTextPreview = solutionTextPreview;
+    }
+
+    public List<String> getHints() {
+        return hints;
+    }
+
+    public void setHints(List<String> hints) {
+        this.hints = hints;
+    }
+
+    public List<FormulaCard> getFormulaCards() {
+        return formulaCards;
+    }
+
+    public void setFormulaCards(List<FormulaCard> formulaCards) {
+        this.formulaCards = formulaCards;
+    }
+
+    public String getConceptExplanation() {
+        return conceptExplanation;
+    }
+
+    public void setConceptExplanation(String conceptExplanation) {
+        this.conceptExplanation = conceptExplanation;
+    }
+
+    public List<String> getCommonMistakes() {
+        return commonMistakes;
+    }
+
+    public void setCommonMistakes(List<String> commonMistakes) {
+        this.commonMistakes = commonMistakes;
+    }
+
+    public String getPracticePattern() {
+        return practicePattern;
+    }
+
+    public void setPracticePattern(String practicePattern) {
+        this.practicePattern = practicePattern;
     }
 }

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduMaster AI - Student Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#111125",
+                    "on-primary-fixed-variant": "#6700b5",
+                    "surface-dim": "#111125",
+                    "surface-container-high": "#28283d",
+                    "on-secondary-container": "#00311f",
+                    "surface-tint": "#dcb8ff",
+                    "tertiary-container": "#935400",
+                    "surface-container-highest": "#333348",
+                    "electric-glow": "linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%)",
+                    "tertiary": "#ffb873",
+                    "surface-container-low": "#1a1a2e",
+                    "on-background": "#e2e0fc",
+                    "inverse-on-surface": "#2f2e43",
+                    "outline": "#988ca0",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-fixed": "#2c0051",
+                    "surface-container-lowest": "#0c0c1f",
+                    "on-secondary-fixed": "#002113",
+                    "secondary-container": "#00a572",
+                    "surface": "#111125",
+                    "surface-deep": "#0F0F1E",
+                    "on-tertiary-container": "#ffdaba",
+                    "on-secondary-fixed-variant": "#005236",
+                    "on-primary": "#480081",
+                    "on-error": "#690005",
+                    "outline-variant": "#4c4354",
+                    "on-surface": "#e2e0fc",
+                    "on-surface-variant": "#cfc2d7",
+                    "secondary-fixed": "#6ffbbe",
+                    "surface-container": "#1e1e32",
+                    "inverse-surface": "#e2e0fc",
+                    "primary-fixed": "#efdbff",
+                    "slate-muted": "#94A3B8",
+                    "surface-glass": "rgba(26, 26, 46, 0.7)",
+                    "success-glow": "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                    "inverse-primary": "#8422dc",
+                    "secondary": "#4edea3",
+                    "primary": "#dcb8ff",
+                    "on-tertiary": "#4b2800",
+                    "on-tertiary-fixed": "#2d1600",
+                    "on-primary-container": "#eed9ff",
+                    "primary-fixed-dim": "#dcb8ff",
+                    "surface-bright": "#37374d",
+                    "error": "#ffb4ab",
+                    "tertiary-fixed": "#ffdcbf",
+                    "surface-variant": "#333348",
+                    "error-container": "#93000a",
+                    "secondary-fixed-dim": "#4edea3",
+                    "on-tertiary-fixed-variant": "#6a3b00",
+                    "on-secondary": "#003824",
+                    "primary-container": "#8a2be2",
+                    "tertiary-fixed-dim": "#ffb873"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "unit": "4px",
+                    "gutter": "24px",
+                    "xl": "32px",
+                    "xxl": "48px",
+                    "xs": "4px",
+                    "margin-mobile": "16px",
+                    "md": "16px",
+                    "lg": "24px",
+                    "margin-desktop": "40px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Sora"],
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Sora"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Sora"],
+                    "caption": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "display-lg-mobile": ["Sora"]
+            },
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #111125;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(138, 43, 226, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(78, 222, 163, 0.05) 0%, transparent 50%);
+            color: #e2e0fc;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-card {
+            background: rgba(30, 30, 50, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(220, 184, 255, 0.3);
+        }
+        .electric-glow-bg {
+            background: linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%);
+        }
+        .success-glow-bg {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 4px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- Top App Bar -->
+<header class="bg-surface-glass dark:bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md docked full-width top-0 sticky flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 z-50">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/30">
+<img alt="Student Profile Image" class="w-full h-full object-cover" data-alt="A highly detailed 3D avatar of a young, modern student with short styled hair and wearing a sleek, futuristic violet hoodie. The character is set against a dark, minimalist background with soft, purple ambient lighting. The style is clean, corporate-modern, reflecting a high-end educational AI platform aesthetic with smooth textures and a professional look." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5Ne2cWYMFd4KrRPh49leJQGxngf4wb9Pcj_5cTpRK0-raTEwC_vpT8uonSxLwqCBwlSmo59__wf6q3dMoCNUR66a-_M8-3hXcm3csDrHpSO75nuyOrqvkqgsqUWW2t5RvRulgyZOhG0GTq3xVDfLLzQiN4j3PGcEM9Wojf2Nl3yKSsWgKzXu_P0VlwsTsc8feDFG4_ajKrzI3Jg3tTfY01d4zbCz5C4k6u5Pnu0B1kcHvNMnaeVtbjscI_b10ITrOR64mbqFJJ2bf"/>
+</div>
+<h1 class="text-headline-md font-headline-md font-bold bg-clip-text text-transparent bg-[linear-gradient(135deg,#8A2BE2_0%,#4B0082_100%)]">EduMaster AI</h1>
+</div>
+<div class="flex items-center gap-md">
+<div class="hidden md:flex items-center gap-lg mr-lg">
+<span class="text-primary font-bold cursor-pointer">Dashboard</span>
+<span class="text-on-surface-variant hover:bg-white/5 transition-colors px-3 py-1 rounded-lg cursor-pointer">Practice</span>
+<span class="text-on-surface-variant hover:bg-white/5 transition-colors px-3 py-1 rounded-lg cursor-pointer">AI Tutor</span>
+<span class="text-on-surface-variant hover:bg-white/5 transition-colors px-3 py-1 rounded-lg cursor-pointer">Analytics</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 text-primary">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+</button>
+</div>
+</header>
+<main class="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-lg pb-xxl">
+<!-- Hero Section -->
+<section class="mb-xxl relative overflow-hidden rounded-xl p-lg md:p-xl glass-card flex flex-col md:flex-row justify-between items-center gap-lg">
+<div class="relative z-10 flex-1">
+<div class="flex items-center gap-xs mb-sm">
+<span class="px-3 py-1 rounded-full bg-secondary-container/20 text-secondary text-caption font-bold uppercase tracking-wider">Academic Excellence</span>
+</div>
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg text-on-surface mb-sm leading-tight">Hello, Scholar! You're in the top 5% today.</h2>
+<p class="text-on-surface-variant text-body-md max-w-xl">Your mastery in Organic Chemistry is surging. Keep the momentum to unlock the 'Elite Chemist' badge by Sunday.</p>
+<div class="mt-lg flex flex-wrap gap-md">
+<div class="flex items-center gap-sm bg-surface-container-highest/50 px-md py-sm rounded-xl border border-white/5">
+<span class="material-symbols-outlined text-secondary" data-icon="local_fire_department" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="font-bold">14 Day Flame</span>
+</div>
+<div class="flex items-center gap-sm bg-surface-container-highest/50 px-md py-sm rounded-xl border border-white/5">
+<span class="material-symbols-outlined text-primary" data-icon="military_tech">military_tech</span>
+<span class="font-bold">Rank #42</span>
+</div>
+</div>
+</div>
+<div class="relative w-full md:w-1/3 aspect-video md:aspect-square rounded-xl overflow-hidden group">
+<img alt="Abstract Study" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A high-quality cinematic image of a glowing, holographic 3D model of a DNA strand and chemical molecules rotating in a dark, high-tech laboratory environment. The scene is illuminated by vibrant electric violet and emerald green laser lights, creating a sense of advanced AI-driven research and scientific mastery. The lighting is low-key with high-contrast glowing elements, embodying a sophisticated, futuristic educational mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfh97y3WIVoitf-99pghkcpq_f6kyLV3jcv6EcHJV-0mpGrKlMyOv3jtpXQcJ9n0wrdjFfXeBw9F2BujIgOqhmBY0nUiF1zt241CF-ldxkPR6aoynrznGqgA_WnHaIDcCsadVCIDXEPOGoQ_Xe3JOqaKyEWTAssvBAAT6RnEZTQlzE8f-GpQZFJkrlw9XcLtJo_xI-jhHMj084fMvV5OSgx0H8Y8OitC2uhDEvnZqqFIjdLpnrPBY4LYC1--2zvNJkTINLYQedUQPm"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4 text-center">
+<button class="w-full py-3 electric-glow-bg rounded-lg text-on-primary-fixed font-bold shadow-lg shadow-primary-container/20 active:scale-95 transition-transform duration-150">Resume JEE Mock Test</button>
+</div>
+</div>
+</section>
+<!-- Bento Grid Main Content -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg">
+<!-- AI Insight Card (Left Column) -->
+<div class="md:col-span-8 space-y-lg">
+<div class="glass-card p-lg rounded-xl relative overflow-hidden group">
+<div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all"></div>
+<div class="flex items-start gap-md mb-lg">
+<div class="p-3 rounded-xl bg-primary-container/20 text-primary">
+<span class="material-symbols-outlined text-headline-md" data-icon="psychology">psychology</span>
+</div>
+<div>
+<h3 class="text-headline-md font-headline-md">AI Insights &amp; Trends</h3>
+<p class="text-on-surface-variant text-body-sm">Personalized corrective measures based on last 5 tests.</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest/50 p-md rounded-xl border-l-4 border-error mb-lg">
+<p class="text-body-md">"Focus on <span class="text-primary font-bold">Organic Chemistry</span>: Your accuracy dropped by <span class="text-error font-bold">10% in Alcohols</span>."</p>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+<!-- Mini Chart Performance -->
+<div class="p-md rounded-xl bg-surface-container-high/40">
+<div class="flex justify-between items-end mb-sm">
+<span class="text-label-md uppercase tracking-wider text-on-surface-variant">Accuracy Trend</span>
+<span class="text-secondary font-bold text-headline-md">+12%</span>
+</div>
+<div class="h-16 flex items-end gap-1">
+<div class="flex-1 bg-surface-container-highest rounded-t h-[40%]"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t h-[55%]"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t h-[45%]"></div>
+<div class="flex-1 bg-primary rounded-t h-[75%]"></div>
+<div class="flex-1 bg-primary rounded-t h-[85%]"></div>
+<div class="flex-1 bg-secondary rounded-t h-[95%]"></div>
+</div>
+</div>
+<!-- Subject Performance Bars -->
+<div class="p-md rounded-xl bg-surface-container-high/40">
+<span class="text-label-md uppercase tracking-wider text-on-surface-variant block mb-sm">Subject Mastery</span>
+<div class="space-y-3">
+<div>
+<div class="flex justify-between text-caption mb-1"><span>Physics</span><span>82%</span></div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 82%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-caption mb-1"><span>Chemistry</span><span>64%</span></div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 64%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-caption mb-1"><span>Maths</span><span>91%</span></div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary" style="width: 91%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Recommended AI Picks -->
+<div class="glass-card p-lg rounded-xl">
+<div class="flex justify-between items-center mb-lg">
+<h3 class="text-headline-md font-headline-md">AI Picks: 5 Physics PYQs from 2023</h3>
+<span class="material-symbols-outlined text-primary cursor-pointer hover:rotate-180 transition-transform duration-500" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<div class="space-y-md">
+<div class="flex items-center gap-md p-md rounded-xl bg-surface-container/50 border border-white/5 hover:border-primary/20 transition-all group cursor-pointer">
+<div class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container-highest group-hover:bg-primary-container/20 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-body-md">Rotational Dynamics - Challenge #1</h4>
+<p class="text-on-surface-variant text-caption">JEE Mains 2023 • Shift 2 • 85% Correctness Rate</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="flex items-center gap-md p-md rounded-xl bg-surface-container/50 border border-white/5 hover:border-primary/20 transition-all group cursor-pointer">
+<div class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container-highest group-hover:bg-primary-container/20 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-body-md">Electrostatics - Gauss's Law</h4>
+<p class="text-on-surface-variant text-caption">NEET 2023 • 92% AI Predicted Similarity</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Side Column -->
+<div class="md:col-span-4 space-y-lg">
+<!-- Mastery Heatmap -->
+<div class="glass-card p-lg rounded-xl">
+<h3 class="text-label-md uppercase tracking-widest text-on-surface-variant mb-md">Weekly Activity</h3>
+<div class="grid grid-cols-7 gap-1">
+<!-- Heatmap Cells -->
+<div class="heatmap-cell bg-surface-container-highest"></div>
+<div class="heatmap-cell bg-secondary/30"></div>
+<div class="heatmap-cell bg-secondary/60"></div>
+<div class="heatmap-cell bg-secondary"></div>
+<div class="heatmap-cell bg-secondary/20"></div>
+<div class="heatmap-cell bg-secondary/40"></div>
+<div class="heatmap-cell bg-secondary/80"></div>
+<div class="heatmap-cell bg-secondary/60"></div>
+<div class="heatmap-cell bg-secondary"></div>
+<div class="heatmap-cell bg-surface-container-highest"></div>
+<div class="heatmap-cell bg-secondary/20"></div>
+<div class="heatmap-cell bg-secondary/40"></div>
+<div class="heatmap-cell bg-secondary/80"></div>
+<div class="heatmap-cell bg-secondary/30"></div>
+<div class="heatmap-cell bg-secondary/80"></div>
+<div class="heatmap-cell bg-surface-container-highest"></div>
+<div class="heatmap-cell bg-secondary/40"></div>
+<div class="heatmap-cell bg-secondary"></div>
+<div class="heatmap-cell bg-secondary/30"></div>
+<div class="heatmap-cell bg-secondary/60"></div>
+<div class="heatmap-cell bg-secondary/20"></div>
+</div>
+<div class="flex justify-between mt-md text-[10px] text-on-surface-variant uppercase tracking-tighter">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+<!-- Recent Achievement -->
+<div class="glass-card p-lg rounded-xl overflow-hidden relative">
+<div class="absolute -bottom-4 -right-4 text-primary/10 select-none">
+<span class="material-symbols-outlined text-[80px]" data-icon="workspace_premium">workspace_premium</span>
+</div>
+<h3 class="text-label-md uppercase tracking-widest text-on-surface-variant mb-md">Current Goal</h3>
+<div class="flex items-center gap-md">
+<div class="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin-slow flex items-center justify-center p-1" style="animation-duration: 8s;">
+<div class="w-full h-full rounded-full bg-primary-container/20 flex items-center justify-center rotate-inverse">
+<span class="material-symbols-outlined text-primary" data-icon="trophy">trophy</span>
+</div>
+</div>
+<div>
+<p class="font-bold text-body-md">Top 100 Leaderboard</p>
+<p class="text-caption text-on-surface-variant">1,240 pts to next rank</p>
+</div>
+</div>
+</div>
+<!-- Quick Actions -->
+<div class="space-y-sm">
+<button class="w-full p-md rounded-xl bg-surface-container-high hover:bg-surface-bright transition-colors flex items-center justify-between border border-white/5">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-tertiary" data-icon="history">history</span>
+<span class="font-semibold">Mistake Vault</span>
+</div>
+<span class="bg-tertiary-container/30 text-tertiary text-[10px] px-2 py-0.5 rounded-full">42 New</span>
+</button>
+<button class="w-full p-md rounded-xl bg-surface-container-high hover:bg-surface-bright transition-colors flex items-center justify-between border border-white/5">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-secondary" data-icon="menu_book">menu_book</span>
+<span class="font-semibold">Study Material</span>
+</div>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-2 h-20 bg-surface-container-high/90 dark:bg-surface-container-high/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-3 py-1 scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-label-md font-label-md mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="text-label-md font-label-md mt-1">Practice</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="text-label-md font-label-md mt-1">AI Tutor</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span class="text-label-md font-label-md mt-1">Analytics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-label-md font-label-md mt-1">Profile</span>
+</a>
+</nav>
+<!-- Floating Action Button (AI Specialist) -->
+<div class="fixed bottom-24 right-6 md:bottom-10 md:right-10 z-40">
+<button class="w-14 h-14 rounded-full electric-glow-bg flex items-center justify-center shadow-2xl shadow-primary-container/40 hover:scale-110 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-white text-3xl" data-icon="smart_toy">smart_toy</span>
+</button>
+</div>
+<style>
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin-slow 8s linear infinite;
+        }
+        .rotate-inverse {
+            animation: spin-slow 8s linear infinite reverse;
+        }
+    </style>
+<script>
+        // Micro-interactions and effects
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body></html>
