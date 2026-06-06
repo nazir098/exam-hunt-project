@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neetlu.examhunt.config.AppProperties;
 import com.neetlu.examhunt.model.ContentPack;
+import com.neetlu.examhunt.model.FormulaCard;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
@@ -210,7 +211,55 @@ public class ManifestImportService {
         doc.setSolutionImageUrl(text(q, "solution_image_url"));
         doc.setQuestionTextPreview(text(q, "question_text_preview"));
         doc.setSolutionTextPreview(text(q, "solution_text_preview"));
+        doc.setHints(readStringList(q.path("hints")));
+        doc.setFormulaCards(readFormulaCards(q.path("formula_cards")));
+        doc.setConceptExplanation(text(q, "concept_explanation"));
+        doc.setCommonMistakes(readStringList(q.path("common_mistakes")));
         return doc;
+    }
+
+    private static List<String> readStringList(JsonNode arr) {
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        arr.forEach(node -> {
+            String value = node.asText("").strip();
+            if (!value.isBlank()) {
+                out.add(value);
+            }
+        });
+        return out;
+    }
+
+    private static List<FormulaCard> readFormulaCards(JsonNode arr) {
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<FormulaCard> out = new ArrayList<>();
+        for (JsonNode node : arr) {
+            String name = text(node, "name");
+            String formula = text(node, "formula");
+            if (formula.isBlank()) {
+                formula = text(node, "equation");
+            }
+            String description = text(node, "description");
+            if (description.isBlank()) {
+                description = text(node, "when_to_use");
+            }
+            if (description.isBlank()) {
+                description = text(node, "whenToUse");
+            }
+            if (name.isBlank() && formula.isBlank()) {
+                continue;
+            }
+            FormulaCard card = new FormulaCard();
+            card.setName(name);
+            card.setFormula(formula);
+            card.setDescription(description);
+            out.add(card);
+        }
+        return out;
     }
 
     private static String text(JsonNode node, String field) {

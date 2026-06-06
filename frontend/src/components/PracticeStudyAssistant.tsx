@@ -99,7 +99,7 @@ export default function PracticeStudyAssistant({
 }: Props) {
   const { user } = useAuth();
   const { settings, loading: settingsLoading } = usePlatformSettings();
-  const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
+  const available = settings.aiSuggestEnabled;
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tabs = useMemo(

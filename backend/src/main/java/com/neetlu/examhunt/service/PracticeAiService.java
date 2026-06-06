@@ -142,24 +142,39 @@ public class PracticeAiService {
     public StatusView status() {
         var settings = platformSettingsService.requireSettings();
         return new StatusView(
-                llm.isEnabled() && settings.isAiSuggestEnabled(),
+                settings.isAiSuggestEnabled(),
                 llm.isConfigured(),
                 settings.isAiSuggestEnabled(),
                 llm.isEnabled());
     }
 
     public AssistResponse assist(String userId, AssistRequest req) {
-        requireAvailable();
+        requirePlatformEnabled();
         String feature = normalizeFeature(req.feature());
         return switch (feature) {
-            case "why_wrong" -> whyWrong(req);
+            case "why_wrong" -> {
+                requireLlmAvailable();
+                yield whyWrong(req);
+            }
             case "hint" -> hint(req);
             case "formula" -> formula(req);
             case "explain_basics" -> explainBasics(req);
-            case "weak_chapter_analysis" -> weakChapterAnalysis(userId);
-            case "practice_from_weak" -> practiceFromWeak(userId);
-            case "revision_notes" -> revisionNotes(req);
-            case "mentor" -> mentor(userId);
+            case "weak_chapter_analysis" -> {
+                requireLlmAvailable();
+                yield weakChapterAnalysis(userId);
+            }
+            case "practice_from_weak" -> {
+                requireLlmAvailable();
+                yield practiceFromWeak(userId);
+            }
+            case "revision_notes" -> {
+                requireLlmAvailable();
+                yield revisionNotes(req);
+            }
+            case "mentor" -> {
+                requireLlmAvailable();
+                yield mentor(userId);
+            }
             case "similar_questions" -> similarQuestions(req);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown feature: " + feature);
         };
@@ -196,6 +211,11 @@ public class PracticeAiService {
 
     private AssistResponse hint(AssistRequest req) {
         Question q = requireQuestion(req.questionId());
+        if (hasPrebakedHints(q)) {
+            List<String> steps = prebakedHintSteps(q);
+            return new AssistResponse("hint", steps.get(0), false, List.of(), null, steps);
+        }
+        requireLlmAvailable();
         List<String> steps = fetchHintSteps(q);
         if (!hintsAreUsable(steps)) {
             steps = buildFallbackHints(q);
@@ -361,6 +381,11 @@ public class PracticeAiService {
                     List.of(),
                     null);
         }
+        List<FormulaEntry> prebaked = prebakedFormulaEntries(q);
+        if (formulasAreUsable(prebaked)) {
+            return new AssistResponse("formula", formulaToMarkdown(prebaked), false, List.of(), null);
+        }
+        requireLlmAvailable();
         String prompt =
                 """
                 %s
@@ -536,6 +561,10 @@ public class PracticeAiService {
 
     private AssistResponse explainBasics(AssistRequest req) {
         Question q = requireQuestion(req.questionId());
+        if (hasPrebakedBasics(q)) {
+            return new AssistResponse("explain_basics", buildBasicsFromPrebaked(q), false, List.of(), null);
+        }
+        requireLlmAvailable();
         boolean afterSubmit = hasSubmittedAnswer(req);
         String studentState =
                 afterSubmit
@@ -872,8 +901,20 @@ public class PracticeAiService {
                 """
                         .formatted(q.getSubject(), q.getChapter(), nullToEmpty(q.getTopic()), similar.size());
 
-        String text = llm.complete(SYSTEM_NEET, prompt, 0.35, 220);
-        return new AssistResponse("similar_questions", text, true, similar, bankUrl(q));
+        String text;
+        boolean usedLlm;
+        if (llm.isEnabled()) {
+            text = llm.complete(SYSTEM_NEET, prompt, 0.35, 220);
+            usedLlm = true;
+        } else {
+            text =
+                    """
+                    Practice these related PYQs from the same chapter — look for the same underlying concept and solution pattern.
+                    """
+                            .strip();
+            usedLlm = false;
+        }
+        return new AssistResponse("similar_questions", text, usedLlm, similar, bankUrl(q));
     }
 
     private List<SimilarQuestionRef> findSimilar(Question anchor, int limit) {
@@ -920,16 +961,126 @@ public class PracticeAiService {
         return practiceService.requireQuestion(questionId);
     }
 
-    private void requireAvailable() {
+    private void requirePlatformEnabled() {
         var settings = platformSettingsService.requireSettings();
         if (!settings.isAiSuggestEnabled()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "AI practice features are disabled");
         }
+    }
+
+    private void requireLlmAvailable() {
         if (!llm.isEnabled()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "LLM not configured — set OPENAI_API_KEY and start FreeLLMAPI");
         }
+    }
+
+    private static boolean hasPrebakedHints(Question q) {
+        List<String> hints = q.getHints();
+        if (hints == null || hints.size() < 3) {
+            return false;
+        }
+        List<String> usable =
+                hints.stream().map(PracticeAiService::nullToEmpty).map(String::strip).filter(s -> s.length() >= 15).toList();
+        return usable.size() >= 3;
+    }
+
+    private static List<String> prebakedHintSteps(Question q) {
+        return q.getHints().stream()
+                .map(PracticeAiService::nullToEmpty)
+                .map(String::strip)
+                .filter(s -> !s.isBlank())
+                .limit(3)
+                .toList();
+    }
+
+    private static boolean hasPrebakedBasics(Question q) {
+        return !nullToEmpty(q.getConceptExplanation()).strip().isBlank();
+    }
+
+    private List<FormulaEntry> prebakedFormulaEntries(Question q) {
+        if (q.getFormulaCards() == null || q.getFormulaCards().isEmpty()) {
+            return List.of();
+        }
+        List<FormulaEntry> out = new ArrayList<>();
+        for (var card : q.getFormulaCards()) {
+            String name = nullToEmpty(card.getName()).strip();
+            String equation = nullToEmpty(card.getFormula()).strip();
+            String whenToUse = nullToEmpty(card.getDescription()).strip();
+            if (name.isBlank() && equation.isBlank()) {
+                continue;
+            }
+            if (name.isBlank()) {
+                name = "Key formula";
+            }
+            if (whenToUse.isBlank()) {
+                whenToUse = "Use when solving this type of question.";
+            }
+            if (equation.isBlank()) {
+                continue;
+            }
+            out.add(new FormulaEntry(name, equation, whenToUse));
+        }
+        return out.size() > 2 ? out.subList(0, 2) : out;
+    }
+
+    private String buildBasicsFromPrebaked(Question q) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("### Concept\n\n").append(q.getConceptExplanation().strip()).append("\n\n");
+
+        sb.append("### Key Formula(s)\n\n");
+        List<FormulaEntry> formulas = prebakedFormulaEntries(q);
+        if (formulas.isEmpty()) {
+            sb.append("No single key formula — this question is primarily concept or reasoning based.\n\n");
+        } else {
+            for (FormulaEntry entry : formulas) {
+                sb.append("- **")
+                        .append(entry.name())
+                        .append("**: $")
+                        .append(stripMathDelimiters(entry.equation()))
+                        .append("$ — ")
+                        .append(entry.whenToUse())
+                        .append("\n");
+            }
+            sb.append("\n");
+        }
+
+        sb.append("### How to Approach This Question\n\n");
+        List<String> hints = q.getHints();
+        if (hints != null && !hints.isEmpty()) {
+            int step = 1;
+            for (String hint : hints) {
+                String text = nullToEmpty(hint).strip();
+                if (!text.isBlank()) {
+                    sb.append(step++).append(". ").append(text).append("\n");
+                }
+            }
+        } else {
+            sb.append("1. Identify the core concept from the chapter and topic.\n");
+            sb.append("2. Recall the key formula, law, or relation needed.\n");
+            sb.append("3. Set up the problem using the given information before picking an option.\n");
+        }
+        sb.append("\n");
+
+        sb.append("### Common Mistake\n\n");
+        List<String> mistakes = q.getCommonMistakes();
+        if (mistakes != null && !mistakes.isEmpty()) {
+            for (String mistake : mistakes) {
+                String text = nullToEmpty(mistake).strip();
+                if (!text.isBlank()) {
+                    sb.append("- ").append(text).append("\n");
+                }
+            }
+        } else {
+            sb.append("- Rushing to an option without checking units, signs, or given conditions.\n");
+        }
+        return sb.toString().strip();
+    }
+
+    private void requireAvailable() {
+        requirePlatformEnabled();
+        requireLlmAvailable();
     }
 
     private static String questionBlock(Question q) {
