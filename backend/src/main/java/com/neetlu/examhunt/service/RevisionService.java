@@ -112,12 +112,53 @@ public class RevisionService {
                 .orElse(false);
     }
 
+    public Set<String> revisedQuestionIds(String userId, Set<String> questionIds) {
+        if (questionIds == null || questionIds.isEmpty()) {
+            return Set.of();
+        }
+        return revisionQueue.findByUserIdAndQuestionIdIn(userId, questionIds).stream()
+                .filter(e -> e.getRevisedAt() != null)
+                .map(RevisionQueueEntry::getQuestionId)
+                .collect(Collectors.toSet());
+    }
+
     public void enqueueWrongAttemptsForSession(String userId, String sessionId) {
         List<QuestionAttempt> wrong = attempts.findBySessionId(sessionId).stream()
                 .filter(a -> !a.isCorrect())
                 .toList();
+        if (wrong.isEmpty()) {
+            return;
+        }
+        Set<String> qIds = wrong.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
+        Map<String, Question> qById = questions.findByQuestionIdIn(qIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+        Map<String, RevisionQueueEntry> existing = revisionQueue.findByUserIdAndQuestionIdIn(userId, qIds).stream()
+                .collect(Collectors.toMap(RevisionQueueEntry::getQuestionId, e -> e, (a, b) -> a));
+        List<RevisionQueueEntry> toSave = new ArrayList<>();
         for (QuestionAttempt a : wrong) {
-            add(userId, a.getQuestionId(), "wrong", a.getId(), sessionId);
+            Question q = qById.get(a.getQuestionId());
+            if (q == null) {
+                continue;
+            }
+            RevisionQueueEntry entry = existing.get(a.getQuestionId());
+            if (entry == null) {
+                entry = new RevisionQueueEntry();
+                entry.setUserId(userId);
+                entry.setQuestionId(a.getQuestionId());
+                entry.setAddedAt(Instant.now());
+                existing.put(a.getQuestionId(), entry);
+            }
+            entry.setPackId(q.getPackId());
+            entry.setSource("wrong");
+            if (a.getId() != null && !a.getId().isBlank()) {
+                entry.setWrongAttemptId(a.getId());
+            }
+            entry.setSessionId(sessionId);
+            entry.setRevisedAt(null);
+            toSave.add(entry);
+        }
+        if (!toSave.isEmpty()) {
+            revisionQueue.saveAll(toSave);
         }
     }
 

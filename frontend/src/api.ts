@@ -216,7 +216,9 @@ export type PracticeQuestion = {
 };
 
 export type SubmitResult = {
+  /** Always false in test mode — correctness is hidden until test submit. */
   correct: boolean;
+  /** Empty in test mode. */
   correctAnswer: string;
   marksAwarded: number;
   sessionTotalMarks: number;
@@ -227,7 +229,9 @@ export type SubmitResult = {
   adaptiveLevel: number;
   sessionStatus: string;
   nextQuestionId: string | null;
+  /** Empty in test mode. */
   solutionImageUrl: string;
+  /** Always false in test mode. */
   hasSolution: boolean;
 };
 
@@ -308,7 +312,7 @@ export type RatingView = {
   aggregate: { count: number; average: number };
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, timeoutMs = 25_000): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type") && init?.body) {
     headers.set("Content-Type", "application/json");
@@ -319,7 +323,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     touchSessionActivity();
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Request timed out — the server may still be starting. Try again in a moment.");
+    }
+    throw new Error("Cannot reach server — if you restarted the backend, wait a few seconds and try again.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const body = err as { message?: string; error?: string };
@@ -471,6 +489,18 @@ export function createPracticeSession(body: {
   });
 }
 
+export type RetakeTestFilter = "wrong" | "skipped" | "unanswered" | "mistakes";
+
+export function createRetakeTestSession(sessionId: string, filter: RetakeTestFilter) {
+  return request<PracticeSessionView>(
+    `/api/practice/sessions/${encodeURIComponent(sessionId)}/retake-test`,
+    {
+      method: "POST",
+      body: JSON.stringify({ filter }),
+    }
+  );
+}
+
 export function fetchWrongAttempts(filters?: {
   mode?: "practice" | "test" | "all";
   subject?: string;
@@ -538,7 +568,7 @@ export function toggleMarkForReview(sessionId: string, questionId: string) {
 }
 
 export function finishPracticeSession(sessionId: string) {
-  return request<PracticeSessionView>(
+  return request<SessionResultView>(
     `/api/practice/sessions/${encodeURIComponent(sessionId)}/finish`,
     { method: "POST" }
   );
@@ -585,7 +615,7 @@ export function fetchProgress() {
   }));
 }
 
-export function fetchLeaderboard(limit = 50, period: LeaderboardPeriod = "weekly") {
+export function fetchLeaderboard(limit = 50, period: LeaderboardPeriod = "monthly") {
   return getJson<LeaderboardResponse>(`/api/leaderboard?limit=${limit}&period=${period}`);
 }
 

@@ -86,6 +86,89 @@ public class PracticeService {
         return sessions.save(session);
     }
 
+    /**
+     * New timed test containing only wrong, skipped, or unanswered questions from a completed test.
+     */
+    public PracticeSession createRetakeTestSession(String userId, String sourceSessionId, String filter) {
+        PracticeSession source = sessions.findByIdAndUserId(sourceSessionId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        if (!"completed".equals(source.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session not completed yet");
+        }
+        if (!MODE_TEST.equals(source.getMode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Retake is only available for test sessions");
+        }
+
+        List<String> sourceIds = source.getQuestionIds() != null ? source.getQuestionIds() : List.of();
+        if (sourceIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source test has no questions");
+        }
+
+        Map<String, QuestionAttempt> attemptByQ = attempts.findBySessionId(sourceSessionId).stream()
+                .collect(Collectors.toMap(QuestionAttempt::getQuestionId, a -> a, (a, b) -> a));
+        Set<String> skipped = source.getSkippedQuestionIds() != null
+                ? new java.util.HashSet<>(source.getSkippedQuestionIds())
+                : Set.of();
+        Set<String> unanswered = source.getUnansweredQuestionIds() != null
+                ? new java.util.HashSet<>(source.getUnansweredQuestionIds())
+                : Set.of();
+
+        String normalizedFilter = filter != null ? filter.trim().toLowerCase() : "";
+        List<String> retakeIds = new ArrayList<>();
+        for (String qid : sourceIds) {
+            String status = reviewStatusForQuestion(qid, attemptByQ.get(qid), skipped, unanswered);
+            if (matchesRetakeFilter(status, normalizedFilter)) {
+                retakeIds.add(qid);
+            }
+        }
+        if (retakeIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No questions match this retake filter");
+        }
+
+        long missing = retakeIds.stream()
+                .filter(qid -> questions.findByQuestionId(qid).isEmpty())
+                .count();
+        if (missing > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Some questions are no longer available in the question bank");
+        }
+
+        PracticeSession session = new PracticeSession();
+        session.setUserId(userId);
+        session.setExam(source.getExam() != null ? source.getExam() : "NEET");
+        session.setPackId(source.getPackId());
+        session.setFilters(source.getFilters() != null ? new HashMap<>(source.getFilters()) : new HashMap<>());
+        session.setQuestionIds(retakeIds);
+        session.setMaxMarks(retakeIds.size() * 4);
+        session.setAdaptiveLevel(2);
+        session.setMode(MODE_TEST);
+        return sessions.save(session);
+    }
+
+    private static String reviewStatusForQuestion(
+            String qid, QuestionAttempt att, Set<String> skipped, Set<String> unanswered) {
+        if (att != null) {
+            return att.isCorrect() ? "correct" : "wrong";
+        }
+        if (unanswered.contains(qid)) {
+            return "unattempted";
+        }
+        if (skipped.contains(qid)) {
+            return "skipped";
+        }
+        return "unattempted";
+    }
+
+    private static boolean matchesRetakeFilter(String status, String filter) {
+        return switch (filter) {
+            case "wrong" -> "wrong".equals(status);
+            case "skipped" -> "skipped".equals(status);
+            case "unanswered" -> "unattempted".equals(status);
+            case "mistakes" -> "wrong".equals(status) || "skipped".equals(status) || "unattempted".equals(status);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid retake filter");
+        };
+    }
+
     private static String normalizeMode(String mode) {
         if (mode == null || mode.isBlank()) {
             return MODE_PRACTICE;
@@ -119,6 +202,16 @@ public class PracticeService {
     public PracticeSession requireSession(String userId, String sessionId) {
         PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        return reconcileSessionProgress(session);
+    }
+
+    /** Active test sessions skip reconcile on every answer — questions are fixed at creation. */
+    private PracticeSession requireSessionForAnswer(String userId, String sessionId) {
+        PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        if (MODE_TEST.equals(session.getMode()) && "active".equals(session.getStatus())) {
+            return session;
+        }
         return reconcileSessionProgress(session);
     }
 
@@ -158,7 +251,7 @@ public class PracticeService {
     }
 
     public SubmitResult submitAnswer(String userId, SubmitRequest req) {
-        PracticeSession session = requireSession(userId, req.sessionId());
+        PracticeSession session = requireSessionForAnswer(userId, req.sessionId());
         if (!"active".equals(session.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session is already completed");
         }
@@ -190,20 +283,24 @@ public class PracticeService {
             session.setWrongCount(session.getWrongCount() + 1);
         }
         session.setTotalMarks(session.getTotalMarks() + marks);
-        session.setAdaptiveLevel(clampAdaptive(session.getAdaptiveLevel() + (correct ? 1 : -1)));
-        reorderRemainingByAdaptive(session, req.questionId());
+        if (!MODE_TEST.equals(session.getMode())) {
+            session.setAdaptiveLevel(clampAdaptive(session.getAdaptiveLevel() + (correct ? 1 : -1)));
+            reorderRemainingByAdaptive(session, req.questionId());
+        }
 
         int idx = session.getQuestionIds().indexOf(req.questionId());
         if (idx >= session.getCurrentIndex()) {
             session.setCurrentIndex(idx + 1);
         }
         if (session.getCurrentIndex() >= session.getQuestionIds().size()) {
-            session.setStatus("completed");
-            session.setCompletedAt(Instant.now());
+            if (!MODE_TEST.equals(session.getMode())) {
+                session.setStatus("completed");
+                session.setCompletedAt(Instant.now());
+            }
         }
         sessions.save(session);
         if ("completed".equals(session.getStatus())) {
-            onSessionCompleted(userId, session);
+            onSessionCompletedAsync(userId, session);
         }
 
         String nextQuestionId = null;
@@ -211,6 +308,28 @@ public class PracticeService {
             nextQuestionId = session.getQuestionIds().get(session.getCurrentIndex());
         }
 
+        return toSubmitResult(session, q, correct, marks, nextQuestionId);
+    }
+
+    /** Practice returns full feedback; test omits answer/solution fields (exam simulation). */
+    private SubmitResult toSubmitResult(
+            PracticeSession session, Question q, boolean correct, int marks, String nextQuestionId) {
+        if (MODE_TEST.equals(session.getMode())) {
+            return new SubmitResult(
+                    false,
+                    "",
+                    0,
+                    session.getTotalMarks(),
+                    session.getMaxMarks(),
+                    session.getCorrectCount(),
+                    session.getWrongCount(),
+                    session.getSkipCount(),
+                    session.getAdaptiveLevel(),
+                    session.getStatus(),
+                    nextQuestionId,
+                    "",
+                    false);
+        }
         return new SubmitResult(
                 correct,
                 validation.normalize(q.getAnswer()),
@@ -228,7 +347,7 @@ public class PracticeService {
     }
 
     public SkipResult skipQuestion(String userId, SkipRequest req) {
-        PracticeSession session = requireSession(userId, req.sessionId());
+        PracticeSession session = requireSessionForAnswer(userId, req.sessionId());
         if (!"active".equals(session.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session is already completed");
         }
@@ -253,12 +372,14 @@ public class PracticeService {
         }
         session.setCurrentIndex(session.getCurrentIndex() + 1);
         if (session.getCurrentIndex() >= ids.size()) {
-            session.setStatus("completed");
-            session.setCompletedAt(Instant.now());
+            if (!MODE_TEST.equals(session.getMode())) {
+                session.setStatus("completed");
+                session.setCompletedAt(Instant.now());
+            }
         }
         sessions.save(session);
         if ("completed".equals(session.getStatus())) {
-            onSessionCompleted(userId, session);
+            onSessionCompletedAsync(userId, session);
         }
 
         String nextQuestionId = null;
@@ -464,10 +585,11 @@ public class PracticeService {
         List<String> head = new ArrayList<>(ids.subList(0, answeredIdx + 1));
         List<String> tail = new ArrayList<>(ids.subList(answeredIdx + 1, ids.size()));
         int target = session.getAdaptiveLevel();
+        Map<String, Question> qById = questions.findByQuestionIdIn(tail).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
         tail.sort(Comparator.comparingInt(qid -> {
-            return questions.findByQuestionId(qid)
-                    .map(q -> Math.abs(q.getDifficulty() - target))
-                    .orElse(999);
+            Question q = qById.get(qid);
+            return q != null ? Math.abs(q.getDifficulty() - target) : 999;
         }));
         head.addAll(tail);
         session.setQuestionIds(head);
@@ -494,11 +616,14 @@ public class PracticeService {
         return sessionView(session);
     }
 
-    /** End an active session early (used for test submit). */
-    public SessionView finishSession(String userId, String sessionId) {
+    /** End an active session early (used for test submit). Returns full result in one round trip. */
+    public SessionResultView finishSession(String userId, String sessionId) {
         PracticeSession session = requireSession(userId, sessionId);
         if (!"active".equals(session.getStatus())) {
-            return sessionView(session);
+            return getSessionResult(userId, sessionId);
+        }
+        if (MODE_TEST.equals(session.getMode())) {
+            markUnattemptedAsSkipped(session);
         }
         session.setStatus("completed");
         session.setCompletedAt(Instant.now());
@@ -506,12 +631,38 @@ public class PracticeService {
             session.setCurrentIndex(session.getQuestionIds().size());
         }
         sessions.save(session);
-        onSessionCompleted(userId, session);
-        return sessionView(session);
+        onSessionCompletedAsync(userId, session);
+        return getSessionResult(userId, sessionId);
     }
 
-    private void onSessionCompleted(String userId, PracticeSession session) {
-        revisionService.enqueueWrongAttemptsForSession(userId, session.getId());
+    private void markUnattemptedAsSkipped(PracticeSession session) {
+        List<String> ids = session.getQuestionIds();
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        Set<String> attempted = attempts.findBySessionId(session.getId()).stream()
+                .map(QuestionAttempt::getQuestionId)
+                .collect(Collectors.toSet());
+        if (session.getSkippedQuestionIds() == null) {
+            session.setSkippedQuestionIds(new ArrayList<>());
+        }
+        if (session.getUnansweredQuestionIds() == null) {
+            session.setUnansweredQuestionIds(new ArrayList<>());
+        }
+        Set<String> skipped = new java.util.HashSet<>(session.getSkippedQuestionIds());
+        for (String qid : ids) {
+            if (!attempted.contains(qid) && !skipped.contains(qid)) {
+                session.getSkippedQuestionIds().add(qid);
+                session.getUnansweredQuestionIds().add(qid);
+                session.setSkipCount(session.getSkipCount() + 1);
+                skipped.add(qid);
+            }
+        }
+    }
+
+    private void onSessionCompletedAsync(String userId, PracticeSession session) {
+        java.util.concurrent.CompletableFuture.runAsync(
+                () -> revisionService.enqueueWrongAttemptsForSession(userId, session.getId()));
     }
 
     public SessionResultView getSessionResult(String userId, String sessionId) {
@@ -530,6 +681,9 @@ public class PracticeService {
                 .collect(Collectors.toMap(QuestionAttempt::getQuestionId, a -> a, (a, b) -> b));
         Set<String> skipped = session.getSkippedQuestionIds() != null
                 ? new java.util.HashSet<>(session.getSkippedQuestionIds())
+                : Set.of();
+        Set<String> unanswered = session.getUnansweredQuestionIds() != null
+                ? new java.util.HashSet<>(session.getUnansweredQuestionIds())
                 : Set.of();
 
         long timeTakenSeconds = 0;
@@ -568,8 +722,12 @@ public class PracticeService {
                 } else {
                     byDifficulty.get(diff)[1]++;
                 }
+            } else if (unanswered.contains(qid)) {
+                status = "unattempted";
             } else if (skipped.contains(qid)) {
                 status = "skipped";
+            } else if (MODE_TEST.equals(session.getMode())) {
+                status = "unattempted";
             } else {
                 status = "unattempted";
             }
@@ -611,9 +769,14 @@ public class PracticeService {
                         b.subject, b.chapterLabel, b.attempts, b.correct, b.marks, b.accuracyPercent()))
                 .toList();
 
+        Set<String> wrongQIds = sessionAttempts.stream()
+                .filter(a -> !a.isCorrect())
+                .map(QuestionAttempt::getQuestionId)
+                .collect(Collectors.toSet());
+        Set<String> revisedIds = revisionService.revisedQuestionIds(userId, wrongQIds);
         List<WrongAttemptView> wrongAttempts = sessionAttempts.stream()
                 .filter(a -> !a.isCorrect())
-                .map(a -> toWrongAttemptView(a, qById.get(a.getQuestionId()), userId))
+                .map(a -> toWrongAttemptView(a, qById.get(a.getQuestionId()), revisedIds))
                 .filter(a -> a != null)
                 .toList();
 
@@ -634,7 +797,7 @@ public class PracticeService {
                 reviews);
     }
 
-    private WrongAttemptView toWrongAttemptView(QuestionAttempt a, Question q, String userId) {
+    private WrongAttemptView toWrongAttemptView(QuestionAttempt a, Question q, Set<String> revisedIds) {
         if (q == null) {
             return null;
         }
@@ -654,7 +817,7 @@ public class PracticeService {
                 q.isHasSolution(),
                 q.getSolutionImageUrl(),
                 a.getAnsweredAt(),
-                revisionService.isRevised(userId, a.getQuestionId()));
+                revisedIds.contains(a.getQuestionId()));
     }
 
     private static void trackBreakdown(
@@ -726,6 +889,7 @@ public class PracticeService {
         Set<String> qIds = wrong.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
         Map<String, Question> questionById = questions.findByQuestionIdIn(qIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+        Set<String> revisedIds = revisionService.revisedQuestionIds(userId, qIds);
         List<WrongAttemptView> out = new ArrayList<>();
         for (QuestionAttempt a : wrong) {
             Question q = questionById.get(a.getQuestionId());
@@ -753,7 +917,7 @@ public class PracticeService {
                     && !sessionIdFilter.equals(a.getSessionId())) {
                 continue;
             }
-            out.add(toWrongAttemptView(a, q, userId));
+            out.add(toWrongAttemptView(a, q, revisedIds));
         }
         return out.stream().limit(100).toList();
     }

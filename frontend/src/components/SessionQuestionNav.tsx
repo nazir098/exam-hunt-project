@@ -7,7 +7,8 @@ const STATUS_LABELS: Record<string, string> = {
   skipped: "Skipped",
   answered: "Answered",
   marked: "Marked for review",
-  unattempted: "Unattempted",
+  visited: "Visited",
+  unattempted: "Not visited",
   current: "Current",
 };
 
@@ -15,28 +16,36 @@ const MOBILE_PREVIEW = 5;
 const DESKTOP_PREVIEW = 10;
 const DESKTOP_MQ = "(min-width: 768px)";
 
-function tileLabel(tile: SessionQuestionTile, examMode: boolean, isMarked: boolean): string {
-  if (examMode) {
-    if (isMarked) return STATUS_LABELS.marked;
-    if (tile.status === "correct" || tile.status === "wrong" || tile.status === "skipped") {
-      return STATUS_LABELS.answered;
-    }
-  }
+function tileLabel(
+  tile: SessionQuestionTile,
+  examMode: boolean,
+  flagged: boolean,
+  visited: boolean
+): string {
+  if (examMode && isAnsweredTile(tile)) return STATUS_LABELS.answered;
+  if (flagged) return STATUS_LABELS.marked;
+  if (examMode && visited) return STATUS_LABELS.visited;
   return STATUS_LABELS[tile.status] ?? tile.status;
 }
 
-function tileTooltip(tile: SessionQuestionTile, examMode: boolean, isMarked: boolean): string {
-  return `Q${tile.number} · ${tileLabel(tile, examMode, isMarked)}`;
+function tileTooltip(
+  tile: SessionQuestionTile,
+  examMode: boolean,
+  flagged: boolean,
+  visited: boolean
+): string {
+  return `Q${tile.number} · ${tileLabel(tile, examMode, flagged, visited)}`;
 }
 
-function tileVisualStatus(tile: SessionQuestionTile, examMode: boolean, isMarked: boolean): string {
-  if (examMode) {
-    if (isMarked) return "marked";
-    if (tile.status === "correct" || tile.status === "wrong" || tile.status === "skipped") return "answered";
-    return tile.status;
-  }
-  if (isMarked) return "marked";
-  return tile.status;
+function examTileStatus(
+  tile: SessionQuestionTile,
+  flagged: boolean,
+  visited: boolean
+): string {
+  if (isAnsweredTile(tile)) return "answered";
+  if (flagged) return "marked";
+  if (visited) return "visited";
+  return "unattempted";
 }
 
 function isAnsweredTile(tile: SessionQuestionTile): boolean {
@@ -73,8 +82,12 @@ type Props = {
   onSelect: (questionId: string) => void;
   showMarked?: boolean;
   markedIds?: string[];
+  /** Questions opened during test but not yet answered. */
+  visitedIds?: string[];
   /** Hide correct/wrong/skipped styling during an active test. */
   examMode?: boolean;
+  /** Result page copy: "Reviewed X of Y Questions". */
+  resultOverview?: boolean;
 };
 
 export default function SessionQuestionNav({
@@ -83,7 +96,9 @@ export default function SessionQuestionNav({
   onSelect,
   showMarked = false,
   markedIds = [],
+  visitedIds = [],
   examMode = false,
+  resultOverview = false,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -113,17 +128,14 @@ export default function SessionQuestionNav({
 
   function renderTile(tile: SessionQuestionTile) {
     const isActive = tile.questionId === activeQuestionId;
-    const isMarked = showMarked && markedIds.includes(tile.questionId);
-    const visualStatus = tileVisualStatus(tile, examMode, isMarked);
-    const showStatus = visualStatus === "marked" || isMarked ? showMarked || examMode : true;
-    const statusClass =
-      showStatus && visualStatus !== "current" && !isActive
-        ? ` session-qnav__tile--${visualStatus}`
-        : isMarked
-          ? " session-qnav__tile--marked"
-          : "";
-    const activeClass = isActive || tile.status === "current" ? " session-qnav__tile--current" : "";
-    const tooltip = tileTooltip(tile, examMode, isMarked);
+    const answered = isAnsweredTile(tile);
+    const flagged = showMarked && markedIds.includes(tile.questionId) && !answered;
+    const visited =
+      examMode && visitedIds.includes(tile.questionId) && !answered && !flagged;
+    const baseStatus = examMode ? examTileStatus(tile, flagged, visited) : tile.status;
+    const statusClass = ` session-qnav__tile--${baseStatus}`;
+    const activeClass = isActive ? " session-qnav__tile--current" : "";
+    const tooltip = tileTooltip(tile, examMode, flagged, visited);
     return (
       <button
         key={tile.questionId}
@@ -151,9 +163,13 @@ export default function SessionQuestionNav({
       aria-label="Question navigation"
     >
       <div className="session-qnav__head">
-        <span className="session-qnav__head-label">Questions</span>
+        <span className="session-qnav__head-label">
+          {resultOverview ? "Question review" : "Questions"}
+        </span>
         <span className="session-qnav__head-meta">
-          Q{activeNumber} · {answeredCount}/{tiles.length}
+          {resultOverview
+            ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
+            : `Q${activeNumber} · ${answeredCount}/${tiles.length}`}
         </span>
         {canExpand && (
           <button

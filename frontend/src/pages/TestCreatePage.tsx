@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { createPracticeSession, fetchExams, fetchPacks, PackSummary } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import ProductModeBanner from "../components/ProductModeBanner";
+import AppLoader from "../components/AppLoader";
 import TestSessionBuilder from "../components/TestSessionBuilder";
 import TestSessionSummary from "../components/TestSessionSummary";
 import {
@@ -10,12 +11,13 @@ import {
   clampPracticeQuestionCount,
   estimatedTestMinutes,
   pickDefaultPack,
+  recentTestSessions,
   practicePoolMax,
 } from "../utils/practiceHub";
 import { sessionRoute } from "../navigation/modes";
 
 export default function TestCreatePage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, progress } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [packs, setPacks] = useState<PackSummary[]>([]);
@@ -49,7 +51,14 @@ export default function TestCreatePage() {
     () => clampPracticeQuestionCount(questionCount, poolMax),
     [questionCount, poolMax]
   );
-  const estMinutes = useMemo(() => estimatedTestMinutes(sessionSize), [sessionSize]);
+  const estMinutes = useMemo(
+    () => estimatedTestMinutes(sessionSize, subject || undefined),
+    [sessionSize, subject]
+  );
+  const recentTests = useMemo(
+    () => (user ? recentTestSessions(progress?.recentSessions ?? [], 4) : []),
+    [user, progress?.recentSessions]
+  );
 
   useEffect(() => {
     setQuestionCount((c) => clampPracticeQuestionCount(c, poolMax));
@@ -90,8 +99,17 @@ export default function TestCreatePage() {
 
   if (authLoading) {
     return (
-      <main className="dashboard-page pt-4">
-        <p className="muted">Loading…</p>
+      <main className="dashboard-page test-create-page pt-4 lg:pt-6">
+        <ProductModeBanner mode="test" />
+        <section className="glass-card content-loader-panel">
+          <AppLoader
+            variant="inline"
+            label="Loading test builder…"
+            hint="Preparing question packs"
+            mode="test"
+            icon="edit_note"
+          />
+        </section>
       </main>
     );
   }
@@ -129,14 +147,7 @@ export default function TestCreatePage() {
           onSubmit={startTest}
         />
 
-        <TestSessionSummary
-          selectedPack={selectedPack}
-          subject={subject}
-          chapter={chapter}
-          difficulty={difficulty}
-          sessionSize={sessionSize}
-          estMinutes={estMinutes}
-        />
+        <TestSessionSummary recentTests={recentTests} packs={practicePacks} />
       </div>
     </main>
   );

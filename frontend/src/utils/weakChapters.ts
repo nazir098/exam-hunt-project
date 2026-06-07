@@ -30,3 +30,8 @@ export function weakChapterPracticeUrl(chapter: ChapterProgress, packId?: string
 export function formatWeakChapterDesc(chapter: ChapterProgress): string {
   return `${chapter.subject} · ${chapter.chapter} — ${chapter.accuracyPercent}% accuracy (${chapter.attempts} attempts, ${chapter.marks} marks)`;
 }
+
+export function formatWeakChapterTooltip(chapter: ChapterProgress): string {
+  const wrong = Math.max(0, chapter.attempts - chapter.correct);
+  return `${chapter.accuracyPercent}% accuracy · ${chapter.attempts} attempts (${chapter.correct} correct, ${wrong} wrong) · ${chapter.marks} marks scored · Opens filtered PYQs`;
+}

@@ -26,6 +26,8 @@ type Props = {
   correct?: boolean | null;
   prominent?: boolean;
   layout: "sidebar" | "inline";
+  /** Nested inside test sidebar — no outer card chrome. */
+  embedded?: boolean;
   /** Hide Formula tab when the PYQ is concept-only (no LLM call needed). */
   formulaRelevant?: boolean;
   /** Whether an official solution image exists for the full-solution step. */
@@ -36,6 +38,8 @@ type Props = {
   /** Hide tools during an active test — results unlock after final submission. */
   examLocked?: boolean;
 };
+
+export type PracticeStudyAssistantProps = Props;
 
 const FORMULA_TAB: TabDef = {
   id: "formula",
@@ -129,6 +133,7 @@ export default function PracticeStudyAssistant({
   triggerFeature = null,
   onTriggerConsumed,
   examLocked = false,
+  embedded = false,
 }: Props) {
   const { user } = useAuth();
   const { settings, loading: settingsLoading } = usePlatformSettings();
@@ -377,7 +382,17 @@ export default function PracticeStudyAssistant({
 
   if (examLocked) {
     return (
-      <aside className={`study-assistant study-assistant--off study-assistant--exam-locked study-assistant--${layout}`}>
+      <aside
+        className={[
+          "study-assistant",
+          "study-assistant--off",
+          "study-assistant--exam-locked",
+          `study-assistant--${layout}`,
+          embedded ? "study-assistant--embedded" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <div className="study-assistant__head">
           <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
           <div>

@@ -44,6 +44,16 @@ export function sessionResultRoute(mode: ProductMode, sessionId: string): string
   return `/practice/result/${sessionId}`;
 }
 
+export function testReviewRoute(
+  sessionId: string,
+  filter: string = "wrong",
+  questionId?: string
+): string {
+  const params = new URLSearchParams({ filter });
+  if (questionId) params.set("q", questionId);
+  return `/test/result/${encodeURIComponent(sessionId)}/review?${params.toString()}`;
+}
+
 export function isTestSession(session: { mode?: string }): boolean {
   return session.mode === "test";
 }

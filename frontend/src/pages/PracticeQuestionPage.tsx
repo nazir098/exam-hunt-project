@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   fetchPracticeQuestion,
@@ -15,9 +15,12 @@ import {
   type PracticeAiFeature,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import AppLoader from "../components/AppLoader";
+import PageLoadShell from "../components/PageLoadShell";
 import PracticeStudyAssistant, { explainFeatureForResult } from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
 import SessionQuestionNav from "../components/SessionQuestionNav";
+import TestRunSidebar from "../components/TestRunSidebar";
 import SessionTimer from "../components/SessionTimer";
 import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName } from "../utils/labels";
@@ -47,6 +50,54 @@ function sequentialNav(tiles: PracticeSessionView["questionTiles"], questionId: 
   };
 }
 
+type SessionCounts = {
+  correctCount: number;
+  wrongCount: number;
+  skipCount: number;
+  sessionTotalMarks: number;
+  sessionMaxMarks: number;
+  adaptiveLevel: number;
+  sessionStatus: string;
+  nextQuestionId: string | null;
+};
+
+function patchSessionAfterAction(
+  session: PracticeSessionView,
+  actedQuestionId: string,
+  tileStatus: "correct" | "wrong" | "skipped",
+  res: SessionCounts
+): PracticeSessionView {
+  const nextId = res.nextQuestionId;
+  const tiles = session.questionTiles?.map((t) => {
+    if (t.questionId === actedQuestionId) return { ...t, status: tileStatus };
+    if (t.status === "current") return { ...t, status: "unattempted" as const };
+    return t;
+  });
+  const nextIndex = nextId
+    ? (tiles?.findIndex((t) => t.questionId === nextId) ?? session.currentIndex)
+    : session.questionCount;
+  return {
+    ...session,
+    correctCount: res.correctCount,
+    wrongCount: res.wrongCount,
+    skipCount: res.skipCount,
+    totalMarks: res.sessionTotalMarks,
+    maxMarks: res.sessionMaxMarks,
+    adaptiveLevel: res.adaptiveLevel,
+    status: res.sessionStatus,
+    currentQuestionId: nextId,
+    currentIndex: nextIndex >= 0 ? nextIndex : session.questionCount,
+    questionTiles: tiles,
+  };
+}
+
+function answeredTileStatus(
+  session: PracticeSessionView,
+  res: Pick<SubmitResult, "correctCount" | "wrongCount">
+): "correct" | "wrong" {
+  return res.wrongCount > session.wrongCount ? "wrong" : "correct";
+}
+
 export default function PracticeQuestionPage() {
   const { sessionId = "", questionId = "" } = useParams();
   const location = useLocation();
@@ -59,9 +110,16 @@ export default function PracticeQuestionPage() {
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [rating, setRating] = useState(0);
   const [error, setError] = useState("");
+  const [loadTick, setLoadTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [aiTrigger, setAiTrigger] = useState<PracticeAiFeature | null>(null);
+  const questionCacheRef = useRef(new Map<string, PracticeQuestion>());
+  const loadedSessionIdRef = useRef<string | null>(null);
+  const sessionRef = useRef<PracticeSessionView | null>(null);
+  const visitedIdsRef = useRef<string[]>([]);
+  const [visitedIds, setVisitedIds] = useState<string[]>([]);
+  sessionRef.current = session;
 
   const resultPath = useCallback(
     (sid: string) => (routeMode === "test" ? `/test/result/${sid}` : `/practice/result/${sid}`),
@@ -73,13 +131,75 @@ export default function PracticeQuestionPage() {
     [routeMode]
   );
 
+  useEffect(() => {
+    questionCacheRef.current.clear();
+    loadedSessionIdRef.current = null;
+    visitedIdsRef.current = [];
+    setVisitedIds([]);
+    setSession(null);
+    setQ(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (routeMode !== "test" || !questionId) return;
+    if (visitedIdsRef.current.includes(questionId)) return;
+    visitedIdsRef.current = [...visitedIdsRef.current, questionId];
+    setVisitedIds(visitedIdsRef.current);
+  }, [questionId, routeMode]);
+
+  const loadQuestionById = useCallback(
+    async (qid: string, opts?: { prefetch?: boolean }) => {
+      const cached = questionCacheRef.current.get(qid);
+      if (cached) {
+        if (!opts?.prefetch) {
+          setSelected("");
+          setRating(0);
+          setShowSolution(false);
+          setResult(null);
+          setQ(cached);
+        }
+        return cached;
+      }
+      const question = await fetchPracticeQuestion(qid);
+      questionCacheRef.current.set(qid, question);
+      if (!opts?.prefetch) {
+        setSelected("");
+        setRating(0);
+        setShowSolution(false);
+        setResult(null);
+        setQ(question);
+      }
+      return question;
+    },
+    []
+  );
+
+  const prefetchNextQuestion = useCallback(
+    (tiles: PracticeSessionView["questionTiles"], currentId: string) => {
+      const { nextId } = sequentialNav(tiles, currentId);
+      if (nextId) void loadQuestionById(nextId, { prefetch: true });
+    },
+    [loadQuestionById]
+  );
+
   const load = useCallback(async () => {
     setError("");
+    if (routeMode === "test" && loadedSessionIdRef.current === sessionId && sessionRef.current) {
+      try {
+        await loadQuestionById(questionId);
+        prefetchNextQuestion(sessionRef.current.questionTiles, questionId);
+        return;
+      } catch {
+        loadedSessionIdRef.current = null;
+      }
+    }
+
     setResult(null);
     setSelected("");
     setRating(0);
     setShowSolution(false);
     const s = await fetchPracticeSession(sessionId);
+    loadedSessionIdRef.current = sessionId;
     setSession(s);
     const inSession = s.questionTiles?.some((t) => t.questionId === questionId) ?? false;
     if (s.status === "completed" && !inSession) {
@@ -95,8 +215,7 @@ export default function PracticeQuestionPage() {
       return;
     }
     try {
-      const question = await fetchPracticeQuestion(questionId);
-      setQ(question);
+      await loadQuestionById(questionId);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load question";
       if (msg.toLowerCase().includes("not found") && s.currentQuestionId) {
@@ -105,13 +224,17 @@ export default function PracticeQuestionPage() {
       }
       throw e;
     }
-    try {
-      const r = await fetchQuestionRating(questionId);
-      if (r.yourScore > 0) setRating(r.yourScore);
-    } catch {
-      /* optional */
+    if (routeMode !== "test") {
+      try {
+        const r = await fetchQuestionRating(questionId);
+        if (r.yourScore > 0) setRating(r.yourScore);
+      } catch {
+        /* optional */
+      }
+    } else {
+      prefetchNextQuestion(s.questionTiles, questionId);
     }
-  }, [sessionId, questionId, navigate, sessionPath]);
+  }, [sessionId, questionId, navigate, sessionPath, routeMode, loadQuestionById, prefetchNextQuestion]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -120,7 +243,15 @@ export default function PracticeQuestionPage() {
       return;
     }
     load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-  }, [user, authLoading, load, navigate, sessionId, questionId]);
+  }, [user, authLoading, load, navigate, sessionId, questionId, location.pathname, loadTick]);
+
+  function retryLoad() {
+    loadedSessionIdRef.current = null;
+    setSession(null);
+    setQ(null);
+    setError("");
+    setLoadTick((t) => t + 1);
+  }
 
   async function submit() {
     if (!selected || !session) return;
@@ -132,10 +263,27 @@ export default function PracticeQuestionPage() {
         questionId,
         selectedAnswer: selected,
       });
-      setResult(res);
+      if (routeMode === "test") {
+        const patched = patchSessionAfterAction(
+          session,
+          questionId,
+          answeredTileStatus(session, res),
+          res
+        );
+        setSession(patched);
+        setBusy(false);
+        if (res.nextQuestionId) {
+          void loadQuestionById(res.nextQuestionId, { prefetch: true });
+          navigate(sessionPath(sessionId, res.nextQuestionId));
+        } else {
+          navigate(sessionPath(sessionId, questionId), { replace: true });
+        }
+        return;
+      }
       refreshProgress();
       const updated = await fetchPracticeSession(session.id);
       setSession(updated);
+      setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
     } finally {
@@ -149,6 +297,15 @@ export default function PracticeQuestionPage() {
     setError("");
     try {
       const res = await skipPracticeQuestion({ sessionId: session.id, questionId });
+      if (routeMode === "test") {
+        setSession(patchSessionAfterAction(session, questionId, "skipped", res));
+        if (res.nextQuestionId) {
+          navigate(sessionPath(sessionId, res.nextQuestionId));
+        } else {
+          navigate(sessionPath(sessionId, questionId), { replace: true });
+        }
+        return;
+      }
       refreshProgress();
       if (res.nextQuestionId) {
         navigate(sessionPath(sessionId, res.nextQuestionId));
@@ -202,10 +359,9 @@ export default function PracticeQuestionPage() {
     if (!window.confirm(msg)) return;
     setBusy(true);
     try {
-      const updated = await finishPracticeSession(session.id);
-      setSession(updated);
-      refreshProgress();
-      navigate(resultPath(session.id));
+      const result = await finishPracticeSession(session.id);
+      void refreshProgress();
+      navigate(resultPath(session.id), { state: { result } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit test");
     } finally {
@@ -224,6 +380,7 @@ export default function PracticeQuestionPage() {
       navigate(sessionPath(sessionId, nextId));
       return;
     }
+    if (routeMode === "test") return;
     if (result?.nextQuestionId) {
       navigate(sessionPath(sessionId, result.nextQuestionId));
       return;
@@ -243,11 +400,63 @@ export default function PracticeQuestionPage() {
   const isMarked =
     session?.markedForReviewIds?.includes(questionId) ?? false;
 
-  if (!user || !q || !session) {
+  const pageLoading =
+    authLoading || (!user && !error) || Boolean(user && !error && (!session || !q));
+  const loaderLabel =
+    authLoading || !user
+      ? "Checking your session…"
+      : routeMode === "test"
+        ? "Loading your test…"
+        : "Loading practice…";
+  const loaderHint =
+    routeMode === "test"
+      ? "Syncing questions and progress"
+      : "Fetching session and question";
+
+  const backTo = routeMode === "test" ? "/test/create" : "/practice";
+  const backLabel = routeMode === "test" ? "Test" : "Practice";
+
+  if (pageLoading) {
     return (
-      <main className="practice-run-page">
-        <p className="practice-run-loading">{error || "Loading practice…"}</p>
+      <main className={`practice-run-page practice-run-page--${routeMode}`}>
+        <ProductModeBanner mode={routeMode} compact />
+        <header className="practice-run-header sticky-below-header">
+          <div className="practice-run-header__top">
+            <Link to={backTo} className="practice-run-header__back">
+              <span className="material-symbols-outlined">arrow_back</span>
+              {backLabel}
+            </Link>
+          </div>
+        </header>
+        <div className="practice-run-layout">
+          <div className="practice-run-main">
+            <section className="glass-card content-loader-panel">
+              <AppLoader
+                variant="inline"
+                label={loaderLabel}
+                hint={loaderHint}
+                mode={routeMode === "test" ? "test" : "practice"}
+                icon={routeMode === "test" ? "timer" : "school"}
+              />
+            </section>
+          </div>
+        </div>
       </main>
+    );
+  }
+
+  if (error || !user || !q || !session) {
+    return (
+      <PageLoadShell
+        error={error || "This session could not be loaded."}
+        onRetry={retryLoad}
+        backHref={routeMode === "test" ? "/test/create" : "/practice"}
+        backLabel={routeMode === "test" ? "Back to tests" : "Back to practice"}
+        className="practice-run-page"
+        loaderMode={routeMode === "test" ? "test" : "practice"}
+      >
+        {null}
+      </PageLoadShell>
     );
   }
 
@@ -280,8 +489,6 @@ export default function PracticeQuestionPage() {
   const scoreMarks = result?.sessionTotalMarks ?? session.totalMarks;
   const scoreMax = result?.sessionMaxMarks ?? session.maxMarks;
   const showFormula = q.formulaRelevant;
-  const backTo = routeMode === "test" ? "/test/create" : "/practice";
-  const backLabel = routeMode === "test" ? "Test" : "Practice";
   const hasSolution = result?.hasSolution ?? q.hasSolution;
   const solutionUrl = result?.solutionImageUrl;
 
@@ -352,44 +559,73 @@ export default function PracticeQuestionPage() {
   function renderTestMarkReview() {
     if (!isTestActive) return null;
     return (
-      <div className="practice-run-actions practice-run-actions--secondary">
-        <button
-          type="button"
-          className={`practice-run-mark-review${isMarked ? " is-on" : ""}`}
-          disabled={busy}
-          onClick={toggleReview}
-        >
-          <span className="material-symbols-outlined">flag</span>
-          {isMarked ? "Marked for review" : "Mark for review"}
-        </button>
-      </div>
+      <button
+        type="button"
+        className={`practice-run-mark-review${isMarked ? " is-on" : ""}`}
+        disabled={busy}
+        onClick={toggleReview}
+      >
+        <span className="material-symbols-outlined">flag</span>
+        <span className="practice-run-mark-review__label">
+          {isMarked ? "Flagged" : "Flag"}
+        </span>
+      </button>
     );
   }
 
-  function renderTestSavedCard() {
+  function renderQuestionBlock(includeMarkReview = false) {
     return (
-      <section className="practice-run-result practice-run-result--test-saved glass-card is-revealed">
-        <div className="practice-run-result__banner practice-run-result__banner--compact">
-          <span
-            className="material-symbols-outlined practice-run-result__icon practice-run-result__icon--saved"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            task_alt
-          </span>
-          <h2 className="practice-run-result__title">Answer Saved</h2>
+      <section className="practice-run-question glass-card">
+        <div className="practice-run-question__head">
+          <h1 className="practice-run-question__title">Question {q.questionNo}</h1>
+          {includeMarkReview && renderTestMarkReview()}
         </div>
-        <div className="practice-run-result__actions practice-run-result__actions--compact">
+        <div className="practice-run-question__media">
+          {q.questionImageUrl ? (
+            <img src={imageSrc(q.questionImageUrl)} alt={`Question ${q.questionNo}`} />
+          ) : (
+            <p className="practice-run-question__fallback">{q.questionTextPreview || "No image"}</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderTestRevisitNav() {
+    const { nextId } = sequentialNav(session?.questionTiles, questionId);
+    const answeredTiles =
+      session.questionTiles?.filter(
+        (t) => t.status === "correct" || t.status === "wrong" || t.status === "skipped"
+      ).length ?? 0;
+    const allAnswered = answeredTiles >= session.questionCount;
+    return (
+      <>
+        {allAnswered && !nextId && (
+          <p className="practice-run-test-finish-hint muted">
+            All questions answered — tap <strong>Submit test</strong> when you&apos;re ready.
+          </p>
+        )}
+        <div className="practice-run-actions practice-run-actions--pair">
           <button
             type="button"
-            className="practice-run-result__action practice-run-result__action--primary"
-            onClick={goSequentialNext}
+            className="practice-run-nav-btn"
+            disabled={!prevId || busy}
+            onClick={goPrev}
           >
-            Next Question
+            <span className="material-symbols-outlined">arrow_back</span>
+            Previous
+          </button>
+          <button
+            type="button"
+            className="practice-run-nav-btn"
+            disabled={!nextId || busy}
+            onClick={() => nextId && navigate(sessionPath(sessionId, nextId))}
+          >
+            Next
             <span className="material-symbols-outlined">arrow_forward</span>
           </button>
         </div>
-        {renderTestMarkReview()}
-      </section>
+      </>
     );
   }
 
@@ -455,6 +691,10 @@ export default function PracticeQuestionPage() {
 
   async function handleNextQuestion() {
     if (!session || busy) return;
+    if (isTestActive) {
+      if (nextId) navigate(sessionPath(sessionId, nextId));
+      return;
+    }
     if (isSessionCurrentQuestion && session.status === "active" && !result) {
       await skipQuestion();
       return;
@@ -631,67 +871,40 @@ export default function PracticeQuestionPage() {
             onSelect={goToTile}
             showMarked={routeMode === "test"}
             markedIds={session.markedForReviewIds}
+            visitedIds={visitedIds}
             examMode={isTestActive}
           />
         )}
       </header>
 
       <div className={`practice-run-layout${showPracticeAssistant ? " practice-run-layout--result" : ""}`}>
-        <div className="practice-run-main">
-          <div className="practice-run-meta">
-            <span className="practice-run-chip">{examDisplayName(q.exam, q.year)} {q.year}</span>
-            <span className="practice-run-chip">{diff}</span>
-            {q.chapter && <span className="practice-run-chip practice-run-chip--muted">{q.chapter}</span>}
-            <span className="practice-run-chip practice-run-chip--accent">
-              {routeMode === "test" ? "Test Mode" : `Level ${session.adaptiveLevel}/3`}
-            </span>
-          </div>
+        <div className="practice-run-main practice-run-main--busy-host">
+          {routeMode !== "test" && (
+            <div className="practice-run-meta">
+              <span className="practice-run-chip">{examDisplayName(q.exam, q.year)} {q.year}</span>
+              <span className="practice-run-chip">{diff}</span>
+              {q.chapter && <span className="practice-run-chip practice-run-chip--muted">{q.chapter}</span>}
+              <span className="practice-run-chip practice-run-chip--accent">
+                Level {session.adaptiveLevel}/3
+              </span>
+            </div>
+          )}
 
           {result ? (
-            routeMode === "test" ? renderTestSavedCard() : renderPracticeResult(result)
+            renderPracticeResult(result)
           ) : testAnswerSaved ? (
             <>
-              <section className="practice-run-question glass-card">
-                <h1 className="practice-run-question__title">Question {q.questionNo}</h1>
-                <div className="practice-run-question__media">
-                  {q.questionImageUrl ? (
-                    <img src={imageSrc(q.questionImageUrl)} alt={`Question ${q.questionNo}`} />
-                  ) : (
-                    <p className="practice-run-question__fallback">{q.questionTextPreview || "No image"}</p>
-                  )}
-                </div>
-              </section>
-              {renderTestSavedCard()}
+              {renderQuestionBlock(true)}
+              {renderTestRevisitNav()}
             </>
           ) : tileLocked ? (
             <>
-              <section className="practice-run-question glass-card">
-                <h1 className="practice-run-question__title">Question {q.questionNo}</h1>
-                <div className="practice-run-question__media">
-                  {q.questionImageUrl ? (
-                    <img src={imageSrc(q.questionImageUrl)} alt={`Question ${q.questionNo}`} />
-                  ) : (
-                    <p className="practice-run-question__fallback">{q.questionTextPreview || "No image"}</p>
-                  )}
-                </div>
-              </section>
+              {renderQuestionBlock(false)}
               {renderPracticeLockedReview()}
             </>
           ) : (
             <>
-              <section className="practice-run-question glass-card">
-                <h1 className="practice-run-question__title">Question {q.questionNo}</h1>
-                <div className="practice-run-question__media">
-                  {q.questionImageUrl ? (
-                    <img
-                      src={imageSrc(q.questionImageUrl)}
-                      alt={`Question ${q.questionNo}`}
-                    />
-                  ) : (
-                    <p className="practice-run-question__fallback">{q.questionTextPreview || "No image"}</p>
-                  )}
-                </div>
-              </section>
+              {renderQuestionBlock(isTestActive)}
 
               <section className="practice-run-options" aria-label="Answer options">
                 <p className="practice-run-options__label">Select one option</p>
@@ -718,22 +931,44 @@ export default function PracticeQuestionPage() {
               {error && <p className="practice-run-error">{error}</p>}
 
               {renderQuestionNavRow()}
-
-              {renderTestMarkReview()}
             </>
+          )}
+
+          {busy && (
+            <section
+              className="content-loader-panel content-loader-panel--overlay"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <AppLoader
+                variant="compact"
+                label={routeMode === "test" ? "Updating test…" : "Saving answer…"}
+                mode={routeMode === "test" ? "test" : "practice"}
+                icon="sync"
+              />
+            </section>
           )}
         </div>
 
         <aside
           className={`practice-run-aside hidden lg:block${showAssistantPanel ? "" : " practice-run-aside--hidden"}`}
         >
-          {showAssistantPanel && <PracticeStudyAssistant {...assistantProps} layout="sidebar" />}
+          {isTestActive ? (
+            <TestRunSidebar assistant={assistantProps} />
+          ) : (
+            showAssistantPanel && <PracticeStudyAssistant {...assistantProps} layout="sidebar" />
+          )}
         </aside>
       </div>
 
-      {showAssistantPanel && (
+      {showAssistantPanel && !isTestActive && (
         <div className="practice-run-ai-inline lg:hidden">
           <PracticeStudyAssistant {...assistantProps} layout="inline" />
+        </div>
+      )}
+      {isTestActive && (
+        <div className="practice-run-ai-inline lg:hidden">
+          <TestRunSidebar assistant={assistantProps} />
         </div>
       )}
     </main>

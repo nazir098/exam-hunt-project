@@ -11,12 +11,42 @@ import { buildDashboardStats, computeStreakDays } from "../utils/dashboardStats"
 import { sessionResumeUrl } from "../utils/practiceHub";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { buildPlatformStats } from "../utils/platformStats";
+import {
+  BANK_MODE_HINT,
+  LEADERBOARD_MODE_HINT,
+  PRACTICE_MODE_HINT,
+} from "../navigation/modeHints";
 
 const QUICK_ACTIONS = [
-  { to: "/practice", icon: "bolt", title: "Practice", desc: "Scored adaptive sessions", primary: true },
-  { to: "/bank?exam=NEET", icon: "menu_book", title: "Question Bank", desc: "PYQs with solutions" },
-  { to: "/analytics", icon: "insights", title: "Analytics", desc: "Trends & heatmaps" },
-  { to: "/leaderboard", icon: "emoji_events", title: "Leaderboard", desc: "Your rank vs peers" },
+  {
+    to: "/practice",
+    icon: "bolt",
+    title: "Practice",
+    desc: "Scored adaptive sessions",
+    hint: PRACTICE_MODE_HINT,
+    primary: true,
+  },
+  {
+    to: "/bank?exam=NEET",
+    icon: "menu_book",
+    title: "Question Bank",
+    desc: "PYQs with solutions",
+    hint: BANK_MODE_HINT,
+  },
+  {
+    to: "/analytics",
+    icon: "insights",
+    title: "Analytics",
+    desc: "Trends & heatmaps",
+    hint: "Accuracy trends, weak chapters, heatmaps, and AI coaching from your sessions.",
+  },
+  {
+    to: "/leaderboard",
+    icon: "emoji_events",
+    title: "Leaderboard",
+    desc: "Your rank vs peers",
+    hint: LEADERBOARD_MODE_HINT,
+  },
 ] as const;
 
 export default function DashboardPage() {
@@ -112,7 +142,8 @@ export default function DashboardPage() {
           <Link
             key={action.to}
             to={action.to}
-            className={`dashboard-action-card glass-card ${"primary" in action && action.primary ? "dashboard-action-card--primary" : ""}`}
+            className={`dashboard-action-card glass-card hover-hint ${"primary" in action && action.primary ? "dashboard-action-card--primary" : ""}`}
+            data-tooltip={action.hint}
           >
             <span className="material-symbols-outlined dashboard-action-card__icon">{action.icon}</span>
             <strong>{action.title}</strong>
@@ -122,7 +153,11 @@ export default function DashboardPage() {
       </section>
 
       {attempts > 0 && (
-        <Link to="/analytics" className="dashboard-teaser glass-card">
+        <Link
+          to="/analytics"
+          className="dashboard-teaser glass-card hover-hint"
+          data-tooltip="See accuracy over time, subject breakdowns, practice heatmaps, and session history."
+        >
           <div className="dashboard-teaser__icon">
             <span className="material-symbols-outlined">trending_up</span>
           </div>

@@ -7,6 +7,7 @@ import {
   clampPracticeQuestionCount,
   MAX_PRACTICE_QUESTIONS,
   MIN_PRACTICE_QUESTIONS,
+  testTimingLabel,
 } from "../utils/practiceHub";
 
 const DIFFICULTY_OPTIONS = [
@@ -308,7 +309,8 @@ export default function TestSessionBuilder({
               </button>
             </div>
             <p className="practice-advanced__meta">
-              ~{estMinutes} min timed · {MIN_PRACTICE_QUESTIONS}–{inputMax} allowed
+              ~{estMinutes} min timed · {testTimingLabel(subject)} · {MIN_PRACTICE_QUESTIONS}–{inputMax}{" "}
+              allowed
             </p>
           </div>
         </div>

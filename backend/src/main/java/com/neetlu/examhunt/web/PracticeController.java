@@ -47,6 +47,15 @@ public class PracticeController {
         return practiceService.toView(session);
     }
 
+    @PostMapping("/sessions/{sessionId}/retake-test")
+    public PracticeService.SessionView retakeTest(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String sessionId,
+            @RequestBody RetakeTestBody body) {
+        PracticeSession session = practiceService.createRetakeTestSession(userId, sessionId, body.filter());
+        return practiceService.toView(session);
+    }
+
     @GetMapping("/sessions/{sessionId}")
     public PracticeService.SessionView getSession(
             @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
@@ -100,7 +109,7 @@ public class PracticeController {
     }
 
     @PostMapping("/sessions/{sessionId}/finish")
-    public PracticeService.SessionView finishSession(
+    public PracticeService.SessionResultView finishSession(
             @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
         return practiceService.finishSession(userId, sessionId);
     }
@@ -150,6 +159,8 @@ public class PracticeController {
             String startQuestionId,
             String mode,
             Integer questionCount) {}
+
+    public record RetakeTestBody(@NotBlank String filter) {}
 
     public record SubmitBody(
             @NotBlank String sessionId, @NotBlank String questionId, @NotBlank String selectedAnswer) {}

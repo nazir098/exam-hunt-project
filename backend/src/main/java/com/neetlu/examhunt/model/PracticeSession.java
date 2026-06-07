@@ -27,6 +27,8 @@ public class PracticeSession {
     /** practice | test */
     private String mode = "practice";
     private List<String> skippedQuestionIds = new ArrayList<>();
+    /** Test submit: questions never answered, auto-marked at finish (not user skip). */
+    private List<String> unansweredQuestionIds = new ArrayList<>();
     private List<String> markedForReviewIds = new ArrayList<>();
     private int totalMarks;
     private int maxMarks;
@@ -136,6 +138,14 @@ public class PracticeSession {
 
     public void setSkippedQuestionIds(List<String> skippedQuestionIds) {
         this.skippedQuestionIds = skippedQuestionIds != null ? skippedQuestionIds : new ArrayList<>();
+    }
+
+    public List<String> getUnansweredQuestionIds() {
+        return unansweredQuestionIds;
+    }
+
+    public void setUnansweredQuestionIds(List<String> unansweredQuestionIds) {
+        this.unansweredQuestionIds = unansweredQuestionIds != null ? unansweredQuestionIds : new ArrayList<>();
     }
 
     public List<String> getMarkedForReviewIds() {

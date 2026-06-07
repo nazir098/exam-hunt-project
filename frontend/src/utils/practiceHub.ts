@@ -38,9 +38,63 @@ export function estimatedDrillMinutes(questions = FOCUSED_DRILL_QUESTIONS): numb
   return Math.max(5, Math.round(questions * 0.8));
 }
 
-/** Timed test estimate — roughly one minute per question. */
-export function estimatedTestMinutes(questions: number): number {
-  return Math.max(15, Math.round(questions));
+/** NEET per-question pacing for test creation (seconds). */
+export const TEST_QUESTION_SECONDS = {
+  Biology: 40,
+  Chemistry: 55,
+  Physics: 60,
+} as const;
+
+/** Full NEET marks share per subject (used for mixed-paper allocation). */
+export const NEET_SUBJECT_MARKS = {
+  Physics: 180,
+  Chemistry: 180,
+  Biology: 360,
+} as const;
+
+export type NeetTestSubject = keyof typeof TEST_QUESTION_SECONDS;
+
+const MIXED_TEST_SECONDS = Math.max(
+  TEST_QUESTION_SECONDS.Biology,
+  TEST_QUESTION_SECONDS.Chemistry,
+  TEST_QUESTION_SECONDS.Physics
+);
+
+/** Map pack facet / filter subject to NEET pacing bucket. */
+export function normalizeNeetTestSubject(subject?: string): NeetTestSubject | null {
+  const s = subject?.trim().toLowerCase() ?? "";
+  if (!s) return null;
+  if (s.startsWith("phys")) return "Physics";
+  if (s.startsWith("chem")) return "Chemistry";
+  if (s.startsWith("bio") || s === "botany" || s === "zoology") return "Biology";
+  return null;
+}
+
+/**
+ * Seconds allowed per question when building a timed test.
+ * Single subject → Bio 40s, Chem 55s, Phy 60s.
+ * Mixed / all subjects → max among subjects with marks allocated in NEET (Phy/Chem/Bio).
+ */
+export function testSecondsPerQuestion(subject?: string): number {
+  const bucket = normalizeNeetTestSubject(subject);
+  if (!bucket) return MIXED_TEST_SECONDS;
+  return TEST_QUESTION_SECONDS[bucket];
+}
+
+export function estimatedTestSeconds(questions: number, subject?: string): number {
+  return Math.max(60, Math.round(questions * testSecondsPerQuestion(subject)));
+}
+
+/** Timed test estimate from NEET subject pacing. */
+export function estimatedTestMinutes(questions: number, subject?: string): number {
+  return Math.max(1, Math.round(estimatedTestSeconds(questions, subject) / 60));
+}
+
+/** Short label for the builder meta line. */
+export function testTimingLabel(subject?: string): string {
+  const bucket = normalizeNeetTestSubject(subject);
+  if (!bucket) return `${MIXED_TEST_SECONDS}s per question (mixed max)`;
+  return `${TEST_QUESTION_SECONDS[bucket]}s per question (${bucket})`;
 }
 
 export function formatRecommendedPracticeSubtitle(
@@ -97,6 +151,81 @@ export function sessionFocusLine(session: PracticeSessionView): string | null {
     session.filterChapter?.trim() || session.filterTopic?.trim(),
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
+}
+
+/** Most recent test session (completed or in progress with answers). */
+export function lastTestSession(sessions: PracticeSessionView[]): PracticeSessionView | null {
+  return recentTestSessions(sessions, 1)[0] ?? null;
+}
+
+export function recentTestSessions(
+  sessions: PracticeSessionView[],
+  limit = 4
+): PracticeSessionView[] {
+  return sessions
+    .filter(
+      (s) =>
+        s.mode === "test" &&
+        (s.status === "completed" || sessionAnsweredCount(s) > 0 || (s.skipCount ?? 0) > 0)
+    )
+    .slice(0, limit);
+}
+
+export function formatTestSessionScope(session: PracticeSessionView, packs: PackSummary[]): string {
+  const pack = packs.find((p) => p.packId === session.packId);
+  const packLabel = pack ? `NEET ${pack.year}` : formatPackLabel(session.packId);
+  const focus = sessionFocusLine(session);
+  if (focus) return `${packLabel} · ${focus}`;
+  return `${packLabel} · All subjects`;
+}
+
+export function formatTestSessionWhen(session: PracticeSessionView): string {
+  const iso = session.completedAt ?? session.startedAt;
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** Modern date chip: "Today" / "Yesterday" / "Mon, Jun 8" plus time when available. */
+export function formatTestSessionDateModern(session: PracticeSessionView): {
+  dateLabel: string;
+  timeLabel: string | null;
+} {
+  const iso = session.completedAt ?? session.startedAt;
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayDiff = Math.round((startOfToday.getTime() - startOfTarget.getTime()) / 86400000);
+
+  let dateLabel: string;
+  if (dayDiff === 0) dateLabel = "Today";
+  else if (dayDiff === 1) dateLabel = "Yesterday";
+  else if (dayDiff < 7 && dayDiff > 0) {
+    dateLabel = d.toLocaleDateString(undefined, { weekday: "short" });
+  } else {
+    dateLabel = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  const timeLabel = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return { dateLabel, timeLabel };
+}
+
+export function formatSessionDuration(session: PracticeSessionView): string | null {
+  if (!session.completedAt) return null;
+  const seconds = Math.max(
+    0,
+    Math.round(
+      (new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000
+    )
+  );
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
+  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  return `${s}s`;
 }
 
 export function sessionAnsweredCount(session: PracticeSessionView): number {
