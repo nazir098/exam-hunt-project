@@ -1,168 +1,301 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { ExamCatalogEntry, PackSummary } from "../api";
+import type { PackSummary } from "../api";
 import HintTooltip from "./HintTooltip";
 import { PRACTICE_MODE_HINT } from "../navigation/modeHints";
-
-const EXAM_OPTIONS = [
-  { id: "NEET", label: "NEET", live: true },
-  { id: "JEE_MAIN", label: "JEE Main", live: false },
-  { id: "JEE_ADV", label: "JEE Advanced", live: false },
-  { id: "UPSC", label: "UPSC", live: false },
-  { id: "CAT", label: "CAT", live: false },
-];
+import {
+  clampPracticeQuestionCount,
+  estimatedDrillMinutes,
+  MAX_PRACTICE_QUESTIONS,
+  MIN_PRACTICE_QUESTIONS,
+} from "../utils/practiceHub";
 
 type Props = {
-  exam: string;
   packId: string;
   subject: string;
   chapter: string;
   adaptive: boolean;
+  questionCount: number;
+  poolMax: number;
+  sessionSize: number;
   packs: PackSummary[];
-  catalog: ExamCatalogEntry[];
   selectedPack: PackSummary | undefined;
   busy: boolean;
   error: string;
-  onExam: (id: string) => void;
   onPackId: (id: string) => void;
   onSubject: (v: string) => void;
   onChapter: (v: string) => void;
   onAdaptive: (v: boolean) => void;
+  onQuestionCount: (v: number) => void;
   onStart: () => void;
 };
 
 export default function PracticeAdvancedBuilder({
-  exam,
   packId,
   subject,
   chapter,
   adaptive,
+  questionCount,
+  poolMax,
+  sessionSize,
   packs,
-  catalog,
   selectedPack,
   busy,
   error,
-  onExam,
   onPackId,
   onSubject,
   onChapter,
   onAdaptive,
+  onQuestionCount,
   onStart,
 }: Props) {
-  const neetLive = catalog.find((c) => c.id === "NEET")?.status === "available";
+  const inputMax = Math.min(MAX_PRACTICE_QUESTIONS, poolMax);
+  const estMinutes = estimatedDrillMinutes(sessionSize);
+
+  const subjectCount =
+    subject && selectedPack?.facets?.subjects
+      ? selectedPack.facets.subjects.find((s) => s.name === subject)?.count
+      : null;
+
+  const chapterCount =
+    subject &&
+    chapter &&
+    selectedPack?.facets?.chapters
+      ? selectedPack.facets.chapters.find((c) => c.subject === subject && c.chapter === chapter)?.count
+      : null;
+
+  const chapterOptions =
+    selectedPack?.facets?.chapters?.filter((c) => c.subject === subject) ?? [];
+
+  const previewScope = [
+    selectedPack ? `NEET ${selectedPack.year}` : "NEET",
+    subject || "All subjects",
+    chapter || "All chapters",
+  ].join(" · ");
+
+  const previewMeta = [
+    `${sessionSize} Questions`,
+    adaptive ? "Adaptive" : "Fixed order",
+    `~${estMinutes} min`,
+  ].join(" · ");
+
+  const [countDraft, setCountDraft] = useState(String(sessionSize));
+  const [countFocused, setCountFocused] = useState(false);
+
+  useEffect(() => {
+    if (!countFocused) {
+      setCountDraft(String(sessionSize));
+    }
+  }, [sessionSize, countFocused]);
+
+  function stepCount(delta: number) {
+    const next = clampPracticeQuestionCount(questionCount + delta, poolMax);
+    onQuestionCount(next);
+    setCountDraft(String(next));
+  }
+
+  function commitCountDraft(raw: string) {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    if (!Number.isFinite(parsed)) {
+      const fallback = clampPracticeQuestionCount(sessionSize, poolMax);
+      onQuestionCount(fallback);
+      setCountDraft(String(fallback));
+      return;
+    }
+    const clamped = clampPracticeQuestionCount(parsed, poolMax);
+    onQuestionCount(clamped);
+    setCountDraft(String(clamped));
+  }
+
+  function onCountInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    if (value === "" || /^\d+$/.test(value)) {
+      setCountDraft(value);
+    }
+  }
+
+  function onCountInputBlur() {
+    setCountFocused(false);
+    commitCountDraft(countDraft);
+  }
+
+  function onCountInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    }
+  }
 
   return (
-    <details className="practice-advanced glass-card">
-      <summary className="practice-advanced__summary">
-        <span className="practice-advanced__summary-left">
+    <section className="practice-advanced glass-card" aria-label="Custom session">
+      <header className="practice-advanced__head">
+        <span className="practice-advanced__head-left">
           <span className="material-symbols-outlined">tune</span>
-          Advanced session builder
+          Custom session
           <HintTooltip text={PRACTICE_MODE_HINT} />
         </span>
-        <span className="practice-advanced__hint">Custom exam, pack &amp; filters</span>
-      </summary>
+      </header>
+
       <div className="practice-advanced__body">
-        <p className="practice-advanced__intro muted">
-          Fine-tune when quick starts are not enough. Same 20-question scored session (+4/−1).
-        </p>
-
-        <div className="practice-advanced__field">
-          <span className="practice-advanced__label">Exam</span>
-          <div className="practice-exam-row">
-            {EXAM_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={
-                  exam === opt.id
-                    ? opt.live && neetLive
-                      ? "exam-pill active"
-                      : "exam-pill active coming-soon-pill"
-                    : "exam-pill"
-                }
-                disabled={!opt.live}
-                onClick={() => opt.live && onExam(opt.id)}
-              >
-                {opt.label}
-                {!opt.live && <span className="pill-soon">Soon</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="practice-advanced__field">
           <label className="practice-advanced__label" htmlFor="practice-pack">
             Year / pack
           </label>
-          <select id="practice-pack" value={packId} onChange={(e) => onPackId(e.target.value)}>
-            {packs.map((p) => (
-              <option key={p.packId} value={p.packId}>
-                NEET {p.year} ({p.questionCount} questions)
-              </option>
-            ))}
-          </select>
+          <div className="practice-advanced__select-wrap">
+            <select
+              id="practice-pack"
+              className="practice-advanced__select"
+              value={packId}
+              onChange={(e) => onPackId(e.target.value)}
+            >
+              {packs.map((p) => (
+                <option key={p.packId} value={p.packId}>
+                  NEET {p.year}
+                </option>
+              ))}
+            </select>
+            <span className="practice-advanced__meta">
+              {selectedPack ? `${selectedPack.questionCount} questions in pack` : "Select a pack"}
+            </span>
+          </div>
         </div>
 
         {selectedPack?.facets?.subjects && (
           <div className="practice-advanced__field">
             <label className="practice-advanced__label" htmlFor="practice-subject">
-              Subject (optional)
+              Subject
             </label>
-            <select
-              id="practice-subject"
-              value={subject}
-              onChange={(e) => onSubject(e.target.value)}
-            >
-              <option value="">All subjects</option>
-              {selectedPack.facets.subjects.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name} ({s.count})
-                </option>
-              ))}
-            </select>
+            <div className="practice-advanced__select-wrap">
+              <select
+                id="practice-subject"
+                className="practice-advanced__select"
+                value={subject}
+                onChange={(e) => onSubject(e.target.value)}
+              >
+                <option value="">All subjects</option>
+                {selectedPack.facets.subjects.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <span className="practice-advanced__meta">
+                {subjectCount != null
+                  ? `${subjectCount} available`
+                  : `${selectedPack.questionCount} available`}
+              </span>
+            </div>
           </div>
         )}
 
         {selectedPack?.facets?.chapters && subject && (
           <div className="practice-advanced__field">
             <label className="practice-advanced__label" htmlFor="practice-chapter">
-              Chapter (optional)
+              Chapter
             </label>
-            <select
-              id="practice-chapter"
-              value={chapter}
-              onChange={(e) => onChapter(e.target.value)}
-            >
-              <option value="">All chapters</option>
-              {selectedPack.facets.chapters
-                .filter((c) => c.subject === subject)
-                .map((c) => (
+            <div className="practice-advanced__select-wrap">
+              <select
+                id="practice-chapter"
+                className="practice-advanced__select"
+                value={chapter}
+                onChange={(e) => onChapter(e.target.value)}
+              >
+                <option value="">All chapters</option>
+                {chapterOptions.map((c) => (
                   <option key={`${c.subject}-${c.chapter}`} value={c.chapter}>
-                    {c.chapter} ({c.count})
+                    {c.chapter}
                   </option>
                 ))}
-            </select>
+              </select>
+              <span className="practice-advanced__meta">
+                {chapterCount != null
+                  ? `${chapterCount} available`
+                  : `${chapterOptions.length} chapters · ${subjectCount ?? poolMax} available`}
+              </span>
+            </div>
           </div>
         )}
 
-        <label className="practice-adaptive-toggle practice-advanced__toggle">
-          <input type="checkbox" checked={adaptive} onChange={(e) => onAdaptive(e.target.checked)} />
-          Adaptive difficulty
-        </label>
+        <div className="practice-advanced__controls">
+          <div className="practice-advanced__stepper-block">
+            <span className="practice-advanced__label">Questions</span>
+            <div className="practice-advanced__stepper" role="group" aria-label="Question count">
+              <button
+                type="button"
+                className="practice-advanced__stepper-btn"
+                aria-label="Decrease question count"
+                disabled={sessionSize <= MIN_PRACTICE_QUESTIONS}
+                onClick={() => stepCount(-1)}
+              >
+                <span className="material-symbols-outlined">remove</span>
+              </button>
+              <input
+                id="practice-question-count"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="practice-advanced__stepper-input"
+                aria-label="Question count"
+                value={countDraft}
+                onFocus={() => setCountFocused(true)}
+                onChange={onCountInputChange}
+                onBlur={onCountInputBlur}
+                onKeyDown={onCountInputKeyDown}
+              />
+              <button
+                type="button"
+                className="practice-advanced__stepper-btn"
+                aria-label="Increase question count"
+                disabled={sessionSize >= inputMax}
+                onClick={() => stepCount(1)}
+              >
+                <span className="material-symbols-outlined">add</span>
+              </button>
+            </div>
+            <p className="practice-advanced__meta">
+              ~{estMinutes} min estimated · {MIN_PRACTICE_QUESTIONS}–{inputMax} allowed
+            </p>
+          </div>
 
-        {error && <p className="error-text">{error}</p>}
+          <div className="practice-advanced__switch-row">
+            <span className="practice-advanced__switch-label">Adaptive Difficulty</span>
+            <button
+              type="button"
+              role="switch"
+              className={`practice-advanced__switch${adaptive ? " is-on" : ""}`}
+              aria-checked={adaptive}
+              onClick={() => onAdaptive(!adaptive)}
+            >
+              <span className="practice-advanced__switch-track">
+                <span className="practice-advanced__switch-thumb" />
+              </span>
+              <span className="practice-advanced__switch-state">{adaptive ? "ON" : "OFF"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="practice-advanced__preview" aria-label="Session preview">
+          <span className="practice-advanced__preview-line">{previewScope}</span>
+          <span className="practice-advanced__preview-line practice-advanced__preview-line--meta">
+            {previewMeta}
+          </span>
+        </div>
+
+        {error && <p className="error-text practice-advanced__error">{error}</p>}
 
         <button
           type="button"
-          className="btn btn-block practice-advanced__start"
+          className="btn primary btn-block practice-advanced__start"
           onClick={onStart}
           disabled={busy || !packId}
         >
-          {busy ? "Starting…" : "Build & start session"}
+          {busy ? "Starting…" : "Start Practice Session"}
+          {!busy && <span className="material-symbols-outlined">arrow_forward</span>}
         </button>
-        <p className="muted practice-note">
-          <Link to="/bank?exam=NEET">Browse PYQs</Link> instead of custom filters
+
+        <p className="muted practice-note practice-advanced__foot">
+          <Link to="/bank?exam=NEET">Browse PYQs</Link>
         </p>
       </div>
-    </details>
+    </section>
   );
 }

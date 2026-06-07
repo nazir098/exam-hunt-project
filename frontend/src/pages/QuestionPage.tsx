@@ -4,6 +4,7 @@ import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from ".
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "../components/BookmarkButton";
 import PracticeAiPanel from "../components/PracticeAiPanel";
+import ProductModeBanner from "../components/ProductModeBanner";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 
 const OPTIONS = [
@@ -72,7 +73,7 @@ export default function QuestionPage() {
 
   const goToQuestion = useCallback(
     (id: string) => {
-      navigate(`/question/${id}?${new URLSearchParams(searchParams).toString()}`);
+      navigate(`/solve/${id}?${new URLSearchParams(searchParams).toString()}`);
     },
     [navigate, searchParams]
   );
@@ -136,7 +137,8 @@ export default function QuestionPage() {
   const diff = difficultyLabel(q.difficulty);
 
   return (
-    <main className="px-margin-mobile lg:px-0 lg:pt-4">
+    <main className="px-margin-mobile lg:px-0 lg:pt-4 solve-page">
+      <ProductModeBanner mode="solve" />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
         <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
           <Link to={backHref()} className="hover:text-primary cursor-pointer transition-colors">
@@ -180,15 +182,15 @@ export default function QuestionPage() {
               Question {q.questionNo}
               {q.topic ? ` · ${q.topic}` : ""}
             </h1>
-            <div className="aspect-video w-full rounded-lg bg-surface-deep/50 border border-white/5 flex items-center justify-center overflow-hidden mb-lg">
+            <div className="exam-paper-image-frame mb-lg">
               {q.questionImageUrl ? (
                 <img
-                  className="w-full h-full object-contain bg-white"
+                  className="exam-paper-image"
                   src={imageSrc(q.questionImageUrl)}
                   alt={`Question ${q.questionNo}`}
                 />
               ) : (
-                <p className="text-outline">No question image</p>
+                <p className="text-outline px-4 py-8">No question image</p>
               )}
             </div>
             <div className="flex items-center gap-md p-md bg-primary-container/10 border-l-4 border-primary rounded-r-lg">
@@ -305,9 +307,9 @@ export default function QuestionPage() {
                 )}
               </p>
               {q.hasSolution && q.solutionImageUrl && (
-                <div className="aspect-video w-full rounded-lg overflow-hidden border border-white/5 bg-white">
+                <div className="exam-paper-image-frame">
                   <img
-                    className="w-full h-full object-contain"
+                    className="exam-paper-image"
                     src={imageSrc(q.solutionImageUrl)}
                     alt={`Solution ${q.questionNo}`}
                   />

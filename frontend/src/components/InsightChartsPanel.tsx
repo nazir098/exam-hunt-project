@@ -1,17 +1,31 @@
 import { Link } from "react-router-dom";
+import type { ProgressSummary } from "../api";
+import { buildAnalyticsInsights } from "../utils/analyticsInsights";
 import { DashboardStats } from "../utils/dashboardStats";
+import { primaryWeakChapter } from "../utils/weakChapters";
 
 type SubjectRow = { name: string; pct: number };
 
 type Props = {
   stats: DashboardStats;
+  progress: ProgressSummary | null;
   accuracy: number | null;
   attempts: number;
   subjects: SubjectRow[];
   barHeights: number[];
 };
 
-export default function InsightChartsPanel({ stats, accuracy, attempts, subjects, barHeights }: Props) {
+export default function InsightChartsPanel({
+  stats,
+  progress,
+  accuracy,
+  attempts,
+  subjects,
+  barHeights,
+}: Props) {
+  const insights = buildAnalyticsInsights(progress, stats);
+  const weak = primaryWeakChapter(progress?.weakChapters);
+
   return (
     <section className="analytics-card analytics-card--glow glass-card">
       <header className="analytics-card-head">
@@ -20,28 +34,23 @@ export default function InsightChartsPanel({ stats, accuracy, attempts, subjects
         </div>
         <div>
           <h2>AI Insights &amp; Trends</h2>
-          <p className="analytics-card-sub">Based on your last {Math.min(5, stats.bars.length) || 5} Practice sessions.</p>
+          <p className="analytics-card-sub">
+            Based on your last {Math.min(5, stats.bars.length) || 5} practice sessions
+          </p>
         </div>
       </header>
 
-      <div className="analytics-insight-callout">
-        <p>
-          {attempts === 0 ? (
-            "Start a practice session to receive personalized focus areas."
-          ) : (
-            <>
-              Focus on <span className="analytics-spark">weak chapters</span>: overall accuracy is{" "}
-              <span className="analytics-warn">{accuracy}%</span>.
-            </>
-          )}
-        </p>
-      </div>
+      <ul className="analytics-insight-list">
+        {insights.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
 
       <div className="analytics-mini-grid">
         <div className="analytics-mini-card">
           <div className="analytics-mini-head">
             <span>Accuracy trend</span>
-            <span className="analytics-good">
+            <span className={stats.trend >= 0 ? "analytics-good" : "analytics-warn"}>
               {stats.trend >= 0 ? "+" : ""}
               {stats.trend}%
             </span>
@@ -85,7 +94,9 @@ export default function InsightChartsPanel({ stats, accuracy, attempts, subjects
                   <div key={p.packId}>
                     <div className="analytics-subject-row">
                       <span>{p.packId.replace(/_/g, " ")}</span>
-                      <span>{pct}% · {p.marks} marks</span>
+                      <span>
+                        {pct}% · {p.marks} marks
+                      </span>
                     </div>
                     <div className="analytics-subject-track">
                       <div className="analytics-subject-fill" style={{ width: `${pct}%` }} />
@@ -98,10 +109,13 @@ export default function InsightChartsPanel({ stats, accuracy, attempts, subjects
         </div>
       </div>
 
-      {attempts > 0 && (
+      {attempts > 0 && weak && (
         <p className="analytics-card-footer">
-          <Link to="/bank?exam=NEET" className="text-primary font-bold">
-            Drill weak topics in Question Bank →
+          <Link
+            to={`/bank?exam=NEET&subject=${encodeURIComponent(weak.subject)}&chapter=${encodeURIComponent(weak.chapter)}`}
+            className="text-primary font-bold"
+          >
+            Open {weak.chapter} in Question Bank →
           </Link>
         </p>
       )}

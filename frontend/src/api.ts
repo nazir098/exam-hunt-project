@@ -91,21 +91,112 @@ export type AuthResult = {
   user: UserProfile;
 };
 
+export type SessionQuestionTile = {
+  number: number;
+  questionId: string;
+  status: "current" | "correct" | "wrong" | "skipped" | "marked" | "unattempted";
+};
+
 export type PracticeSessionView = {
   id: string;
   packId: string;
   exam: string;
+  mode?: "practice" | "test";
   status: string;
   questionCount: number;
   currentIndex: number;
   correctCount: number;
   wrongCount: number;
+  skipCount: number;
   totalMarks: number;
   maxMarks: number;
   adaptiveLevel: number;
   startedAt: string;
   completedAt: string | null;
   currentQuestionId: string | null;
+  filterSubject?: string;
+  filterChapter?: string;
+  filterTopic?: string;
+  markedForReviewIds?: string[];
+  questionTiles?: SessionQuestionTile[];
+};
+
+export type WrongAttemptView = {
+  attemptId: string;
+  questionId: string;
+  sessionId: string;
+  packId: string;
+  mode: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  subject: string;
+  chapter: string;
+  exam: string;
+  year: number;
+  questionNo: number;
+  hasSolution: boolean;
+  solutionImageUrl: string;
+  answeredAt: string;
+  revised: boolean;
+};
+
+export type SessionBreakdownRow = {
+  label: string;
+  subject: string;
+  chapter: string | null;
+  correct: number;
+  wrong: number;
+  skipped: number;
+  accuracyPercent: number;
+};
+
+export type SessionQuestionReview = {
+  number: number;
+  questionId: string;
+  status: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  hasSolution: boolean;
+  solutionImageUrl: string;
+  subject: string;
+  chapter: string;
+  questionNo: number;
+  difficulty: number;
+};
+
+export type SessionResultView = {
+  session: PracticeSessionView;
+  timeTakenSeconds: number;
+  accuracyPercent: number;
+  countsForRank: boolean;
+  subjectBreakdown: SessionBreakdownRow[];
+  chapterBreakdown: SessionBreakdownRow[];
+  weakChaptersInSession: ChapterProgress[];
+  strongChaptersInSession: ChapterProgress[];
+  aiInsights: string[];
+  wrongAttempts: WrongAttemptView[];
+  questionReviews: SessionQuestionReview[];
+};
+
+export type RevisionSummary = {
+  pending: number;
+  revised: number;
+};
+
+export type RevisionItemView = {
+  questionId: string;
+  packId: string;
+  source: string;
+  wrongAttemptId: string | null;
+  sessionId: string | null;
+  exam: string;
+  year: number;
+  subject: string;
+  chapter: string;
+  questionNo: number;
+  addedAt: string;
+  revisedAt: string | null;
+  pending: boolean;
 };
 
 export type PracticeQuestion = {
@@ -132,11 +223,23 @@ export type SubmitResult = {
   sessionMaxMarks: number;
   correctCount: number;
   wrongCount: number;
+  skipCount: number;
   adaptiveLevel: number;
   sessionStatus: string;
   nextQuestionId: string | null;
   solutionImageUrl: string;
   hasSolution: boolean;
+};
+
+export type SkipResult = {
+  skipCount: number;
+  correctCount: number;
+  wrongCount: number;
+  sessionTotalMarks: number;
+  sessionMaxMarks: number;
+  adaptiveLevel: number;
+  sessionStatus: string;
+  nextQuestionId: string | null;
 };
 
 export type ChapterProgress = {
@@ -358,13 +461,87 @@ export function createPracticeSession(body: {
   topic?: string;
   difficulty?: string;
   adaptive: boolean;
-  /** When set, practice session begins on this PYQ (e.g. from question bank). */
   startQuestionId?: string;
+  mode?: "practice" | "test";
+  questionCount?: number;
 }) {
   return request<PracticeSessionView>("/api/practice/sessions", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function fetchWrongAttempts(filters?: {
+  mode?: "practice" | "test" | "all";
+  subject?: string;
+  chapter?: string;
+  exam?: string;
+  year?: number;
+  sessionId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.mode && filters.mode !== "all") params.set("mode", filters.mode);
+  if (filters?.subject) params.set("subject", filters.subject);
+  if (filters?.chapter) params.set("chapter", filters.chapter);
+  if (filters?.exam) params.set("exam", filters.exam);
+  if (filters?.year) params.set("year", String(filters.year));
+  if (filters?.sessionId) params.set("sessionId", filters.sessionId);
+  const q = params.toString();
+  return request<WrongAttemptView[]>(`/api/practice/wrong-attempts${q ? `?${q}` : ""}`);
+}
+
+export function fetchSessionResult(sessionId: string) {
+  return request<SessionResultView>(`/api/practice/sessions/${encodeURIComponent(sessionId)}/result`);
+}
+
+export function fetchRevisionSummary() {
+  return request<RevisionSummary>("/api/revision/summary");
+}
+
+export function fetchRevisionQueue(status?: "pending" | "revised" | "all") {
+  const q = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  return request<RevisionItemView[]>(`/api/revision/queue${q}`);
+}
+
+export function addToRevisionQueue(body: {
+  questionId: string;
+  source?: string;
+  wrongAttemptId?: string;
+  sessionId?: string;
+}) {
+  return request<RevisionItemView>("/api/revision/add", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function markRevisionRevised(questionId: string) {
+  return request<RevisionItemView>(`/api/revision/${encodeURIComponent(questionId)}/mark-revised`, {
+    method: "POST",
+  });
+}
+
+export function markRevisionPending(questionId: string) {
+  return request<RevisionItemView>(`/api/revision/${encodeURIComponent(questionId)}/mark-pending`, {
+    method: "POST",
+  });
+}
+
+export function toggleMarkForReview(sessionId: string, questionId: string) {
+  return request<PracticeSessionView>(
+    `/api/practice/sessions/${encodeURIComponent(sessionId)}/mark-review`,
+    {
+      method: "POST",
+      body: JSON.stringify({ questionId }),
+    }
+  );
+}
+
+export function finishPracticeSession(sessionId: string) {
+  return request<PracticeSessionView>(
+    `/api/practice/sessions/${encodeURIComponent(sessionId)}/finish`,
+    { method: "POST" }
+  );
 }
 
 export function fetchPracticeSession(sessionId: string) {
@@ -377,12 +554,25 @@ export function fetchPracticeQuestion(questionId: string) {
   );
 }
 
+export function fetchPracticeSolution(questionId: string) {
+  return request<{ hasSolution: boolean; solutionImageUrl: string }>(
+    `/api/practice/questions/${encodeURIComponent(questionId)}/solution`
+  );
+}
+
 export function submitPracticeAnswer(body: {
   sessionId: string;
   questionId: string;
   selectedAnswer: string;
 }) {
   return request<SubmitResult>("/api/practice/submit", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function skipPracticeQuestion(body: { sessionId: string; questionId: string }) {
+  return request<SkipResult>("/api/practice/skip", {
     method: "POST",
     body: JSON.stringify(body),
   });

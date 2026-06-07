@@ -7,6 +7,7 @@ import com.neetlu.examhunt.service.PracticeService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -39,7 +41,9 @@ public class PracticeController {
                         body.topic(),
                         body.difficulty(),
                         body.adaptive(),
-                        body.startQuestionId()));
+                        body.startQuestionId(),
+                        body.mode(),
+                        body.questionCount()));
         return practiceService.toView(session);
     }
 
@@ -54,6 +58,24 @@ public class PracticeController {
         return practiceService.progress(userId);
     }
 
+    @GetMapping("/wrong-attempts")
+    public List<PracticeService.WrongAttemptView> wrongAttempts(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(required = false) String mode,
+            @RequestParam(required = false) String subject,
+            @RequestParam(required = false) String chapter,
+            @RequestParam(required = false) String exam,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String sessionId) {
+        return practiceService.listWrongAttempts(userId, mode, subject, chapter, exam, year, sessionId);
+    }
+
+    @GetMapping("/sessions/{sessionId}/result")
+    public PracticeService.SessionResultView sessionResult(
+            @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
+        return practiceService.getSessionResult(userId, sessionId);
+    }
+
     @PostMapping("/submit")
     public PracticeService.SubmitResult submit(
             @AuthenticationPrincipal String userId, @RequestBody SubmitBody body) {
@@ -62,11 +84,45 @@ public class PracticeController {
                 new PracticeService.SubmitRequest(body.sessionId(), body.questionId(), body.selectedAnswer()));
     }
 
+    @PostMapping("/skip")
+    public PracticeService.SkipResult skip(
+            @AuthenticationPrincipal String userId, @RequestBody SkipBody body) {
+        return practiceService.skipQuestion(
+                userId, new PracticeService.SkipRequest(body.sessionId(), body.questionId()));
+    }
+
+    @PostMapping("/sessions/{sessionId}/mark-review")
+    public PracticeService.SessionView markReview(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String sessionId,
+            @RequestBody MarkReviewBody body) {
+        return practiceService.toggleMarkForReview(userId, sessionId, body.questionId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/finish")
+    public PracticeService.SessionView finishSession(
+            @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
+        return practiceService.finishSession(userId, sessionId);
+    }
+
     @GetMapping("/questions/{questionId}")
     public QuestionPracticeView practiceQuestion(
             @AuthenticationPrincipal String userId, @PathVariable String questionId) {
         Question q = practiceService.requireQuestion(questionId);
         return QuestionPracticeView.from(q);
+    }
+
+    /** Official solution image — revealed after hint ladder in study assistant. */
+    @GetMapping("/questions/{questionId}/solution")
+    public SolutionRevealView practiceSolution(
+            @AuthenticationPrincipal String userId, @PathVariable String questionId) {
+        Question q = practiceService.requireQuestion(questionId);
+        return new SolutionRevealView(
+                q.isHasSolution(), q.isHasSolution() ? nullToEmpty(q.getSolutionImageUrl()) : "");
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 
     @PutMapping("/questions/{questionId}/rating")
@@ -91,10 +147,16 @@ public class PracticeController {
             String topic,
             String difficulty,
             boolean adaptive,
-            String startQuestionId) {}
+            String startQuestionId,
+            String mode,
+            Integer questionCount) {}
 
     public record SubmitBody(
             @NotBlank String sessionId, @NotBlank String questionId, @NotBlank String selectedAnswer) {}
+
+    public record SkipBody(@NotBlank String sessionId, @NotBlank String questionId) {}
+
+    public record MarkReviewBody(@NotBlank String questionId) {}
 
     public record RateBody(@Min(1) @Max(5) int score, String comment) {}
 
@@ -129,4 +191,6 @@ public class PracticeController {
                     q.getQuestionTextPreview());
         }
     }
+
+    public record SolutionRevealView(boolean hasSolution, String solutionImageUrl) {}
 }

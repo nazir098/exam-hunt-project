@@ -7,24 +7,53 @@ import {
   fetchLeaderboard,
   fetchPacks,
   PackSummary,
+  PracticeSessionView,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import DashboardPerformanceSnapshot from "../components/DashboardPerformanceSnapshot";
 import PracticeAdvancedBuilder from "../components/PracticeAdvancedBuilder";
 import PracticeGuestLanding from "../components/PracticeGuestLanding";
+import PracticeRecommendedCard from "../components/PracticeRecommendedCard";
+import PracticeWeakAreas from "../components/PracticeWeakAreas";
+import ProductModeBanner from "../components/ProductModeBanner";
 import {
   activeSession,
   buildRecommendedPractice,
   bankDisplayPacks,
+  clampPracticeQuestionCount,
   DAILY_GOAL_QUESTIONS,
+  DEFAULT_PRACTICE_QUESTIONS,
   formatPackLabel,
   pickDefaultPack,
   pickPackByYear,
+  practicePoolMax,
   resolveSubjectName,
   sessionResumeUrl,
   todayQuestionsAnswered,
 } from "../utils/practiceHub";
-import { buildDashboardStats, computeStreakDays, meaningfulSessions, sessionAccuracy } from "../utils/dashboardStats";
+import {
+  bestStreakDays,
+  buildDashboardStats,
+  computeStreakDays,
+  meaningfulSessions,
+  questionsThisWeek,
+  sessionAccuracy,
+} from "../utils/dashboardStats";
+import { sessionResultRoute } from "../navigation/modes";
+
+function formatSessionStatusLabel(status: string): string {
+  if (status === "ACTIVE") return "Active";
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function formatRecentSessionHeadline(session: PracticeSessionView): string {
+  const answered = session.correctCount + session.wrongCount;
+  const qPos =
+    session.status === "ACTIVE"
+      ? `Q${session.currentIndex + 1}/${session.questionCount}`
+      : `Q${answered}/${session.questionCount}`;
+  return `${formatPackLabel(session.packId)} · ${formatSessionStatusLabel(session.status)} · ${qPos}`;
+}
 
 export default function PracticePage() {
   const { user, progress, loading: authLoading, refreshProgress } = useAuth();
@@ -32,11 +61,11 @@ export default function PracticePage() {
   const [searchParams] = useSearchParams();
   const [packs, setPacks] = useState<PackSummary[]>([]);
   const [catalog, setCatalog] = useState<ExamCatalogEntry[]>([]);
-  const [exam, setExam] = useState("NEET");
   const [packId, setPackId] = useState("");
   const [subject, setSubject] = useState(searchParams.get("subject") || "");
   const [chapter, setChapter] = useState(searchParams.get("chapter") || "");
   const [adaptive, setAdaptive] = useState(true);
+  const [questionCount, setQuestionCount] = useState(DEFAULT_PRACTICE_QUESTIONS);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
@@ -76,6 +105,19 @@ export default function PracticePage() {
 
   const practicePacks = useMemo(() => bankDisplayPacks(packs), [packs]);
   const selectedPack = practicePacks.find((p) => p.packId === packId);
+  const poolMax = useMemo(
+    () => practicePoolMax(selectedPack, subject || undefined, chapter || undefined),
+    [selectedPack, subject, chapter]
+  );
+  const sessionSize = useMemo(
+    () => clampPracticeQuestionCount(questionCount, poolMax),
+    [questionCount, poolMax]
+  );
+
+  useEffect(() => {
+    setQuestionCount((c) => clampPracticeQuestionCount(c, poolMax));
+  }, [poolMax]);
+
   const showGuestLanding = !user && !authLoading;
 
   const sessions = useMemo(
@@ -91,6 +133,8 @@ export default function PracticePage() {
   const goalPct = Math.min(100, Math.round((todayDone / DAILY_GOAL_QUESTIONS) * 100));
   const stats = useMemo(() => buildDashboardStats(progress), [progress]);
   const streak = computeStreakDays(stats.sessions);
+  const weekQuestions = questionsThisWeek(stats.sessions);
+  const bestStreak = bestStreakDays(stats.sessions);
   const rankLabel =
     leaderboardRank != null ? `#${leaderboardRank}` : (progress?.totalAttempts ?? 0) > 0 ? "Unranked" : "—";
 
@@ -100,6 +144,7 @@ export default function PracticePage() {
       subject?: string;
       chapter?: string;
       adaptive?: boolean;
+      questionCount?: number;
     }) => {
       if (!user) {
         navigate(`/login?next=${encodeURIComponent("/practice")}`);
@@ -110,15 +155,24 @@ export default function PracticePage() {
         setError("Import NEET packs first (Admin) or check your connection.");
         return;
       }
+      const pack = practicePacks.find((p) => p.packId === pid);
+      const subj = opts.subject;
+      const ch = opts.chapter;
+      const count = clampPracticeQuestionCount(
+        opts.questionCount ?? questionCount,
+        practicePoolMax(pack, subj, ch)
+      );
       setBusy(true);
       setError("");
       try {
         const session = await createPracticeSession({
           exam: "NEET",
           packId: pid,
-          subject: opts.subject,
-          chapter: opts.chapter,
+          subject: subj,
+          chapter: ch,
           adaptive: opts.adaptive ?? true,
+          mode: "practice",
+          questionCount: count,
         });
         const qId = session.currentQuestionId;
         if (!qId) throw new Error("Session has no questions");
@@ -129,7 +183,7 @@ export default function PracticePage() {
         setBusy(false);
       }
     },
-    [user, navigate, packId, practicePacks]
+    [user, navigate, packId, practicePacks, questionCount]
   );
 
   async function startSession() {
@@ -145,7 +199,7 @@ export default function PracticePage() {
         id: "adaptive",
         icon: "auto_awesome",
         title: "Adaptive Practice",
-        subtitle: "Difficulty shifts with every answer",
+        subtitle: `${sessionSize} questions · difficulty adjusts`,
         featured: true,
         run: () => startQuick({ packId: defaultPack?.packId, adaptive: true }),
       },
@@ -183,7 +237,7 @@ export default function PracticePage() {
           }),
       },
     ],
-    [defaultPack, pack2025, startQuick]
+    [defaultPack, pack2025, startQuick, sessionSize]
   );
 
   if (showGuestLanding) {
@@ -205,15 +259,23 @@ export default function PracticePage() {
   }
 
   const resumeUrl = resume ? sessionResumeUrl(resume) : null;
+  const recentSessions = sessions.slice(0, 3);
 
   return (
     <main className="dashboard-page practice-page practice-page--hub pt-4 lg:pt-6">
-      <header className="practice-hub-hero glass-card">
+      <ProductModeBanner mode="practice" />
+      <header className="practice-hub-hero practice-hub-hero--compact glass-card">
         <div className="practice-hub-hero__text">
-          <p className="page-eyebrow">Practice arena</p>
-          <h1 className="practice-page-title">Start solving in seconds</h1>
+          <h1 className="practice-page-title">Practice Arena</h1>
           <p className="practice-page-desc">
-            Tap a quick start — marks save on every submit (+4 correct, −1 wrong).
+            Timed scoring sessions — counts toward rank, streak, and daily goal.
+          </p>
+          <p className="practice-page-mode-links">
+            <Link to="/test/create">Prepare Test</Link>
+            <span aria-hidden> · </span>
+            <Link to="/review/wrong-attempts">Review wrong attempts</Link>
+            <span aria-hidden> · </span>
+            <Link to="/bank?exam=NEET">Study in Solve Mode</Link>
           </p>
         </div>
         <div className="practice-hub-hero__badge" aria-hidden>
@@ -231,7 +293,7 @@ export default function PracticePage() {
               <h2 className="practice-section-title">Continue previous session</h2>
               <p className="practice-continue__meta">
                 {formatPackLabel(resume.packId)} · Question {resume.currentIndex + 1} of{" "}
-                {resume.questionCount} · {resume.totalMarks}/{resume.maxMarks} marks so far
+                {resume.questionCount} · {resume.totalMarks}/{resume.maxMarks} marks
               </p>
             </div>
           </div>
@@ -241,36 +303,56 @@ export default function PracticePage() {
         </section>
       )}
 
-      {recommended && (
-        <section className="practice-recommended glass-card" aria-label="Recommended practice">
-          <p className="practice-recommended__eyebrow">
-            <span className="material-symbols-outlined">recommend</span>
-            Recommended for you
-          </p>
-          <h2 className="practice-recommended__title">{recommended.title}</h2>
-          <p className="practice-recommended__sub">{recommended.subtitle}</p>
-          <button
-            type="button"
-            className="btn primary btn-block practice-recommended__cta"
-            disabled={busy}
-            onClick={() =>
+      <div
+        className={`practice-session-row${recommended ? "" : " practice-session-row--solo"}`}
+      >
+        <PracticeAdvancedBuilder
+          packId={packId}
+          subject={subject}
+          chapter={chapter}
+          adaptive={adaptive}
+          questionCount={questionCount}
+          poolMax={poolMax}
+          sessionSize={sessionSize}
+          packs={practicePacks}
+          selectedPack={selectedPack}
+          busy={busy}
+          error={error}
+          onPackId={setPackId}
+          onSubject={setSubject}
+          onChapter={setChapter}
+          onAdaptive={setAdaptive}
+          onQuestionCount={setQuestionCount}
+          onStart={startSession}
+        />
+
+        {recommended && (
+          <PracticeRecommendedCard
+            recommended={recommended}
+            busy={busy}
+            onStart={() =>
               startQuick({
                 packId: recommended.packId,
                 subject: recommended.subject,
                 chapter: recommended.chapter,
                 adaptive: recommended.adaptive,
+                questionCount: recommended.questionCount,
               })
             }
-          >
-            {busy ? "Starting…" : recommended.cta}
-          </button>
-        </section>
-      )}
+          />
+        )}
+      </div>
+
+      <PracticeWeakAreas
+        chapters={progress?.weakChapters ?? []}
+        defaultPackId={defaultPack?.packId}
+        loading={authLoading}
+      />
 
       <section className="practice-quick" aria-label="Quick start">
         <div className="practice-section-head">
           <h2 className="practice-section-title">Quick start</h2>
-          <span className="practice-section-meta">One tap → first question</span>
+          <span className="practice-section-meta">{sessionSize} questions per session</span>
         </div>
         <div className="practice-quick-grid">
           {quickCards.map((card) => (
@@ -299,7 +381,7 @@ export default function PracticePage() {
             <p className="practice-goal__sub">
               {todayDone >= DAILY_GOAL_QUESTIONS
                 ? "Goal crushed — keep the streak alive."
-                : `${DAILY_GOAL_QUESTIONS - todayDone} more to hit your daily target`}
+                : `${DAILY_GOAL_QUESTIONS - todayDone} questions left to complete today's goal`}
             </p>
           </div>
           <span className="practice-goal__count">
@@ -327,71 +409,70 @@ export default function PracticePage() {
         streakDays={streak}
         rankLabel={rankLabel}
         progress={progress}
+        statHints={{
+          accuracy: "Target 60%",
+          questions: `This week: ${weekQuestions}`,
+          streak: `Best: ${bestStreak} days`,
+          rank: "Weekly rank",
+        }}
       />
 
       <section className="practice-recent glass-card" aria-label="Recent sessions">
         <div className="practice-section-head">
           <h2 className="practice-section-title">Recent sessions</h2>
-          <Link to="/analytics" className="practice-recent__link">
-            Analytics
-          </Link>
         </div>
-        {sessions.length === 0 ? (
+        {recentSessions.length === 0 ? (
           <p className="practice-recent__empty muted">
-            No sessions yet — pick a quick start card above to begin.
+            No sessions yet — use custom session above or a quick start card.
           </p>
         ) : (
-          <ul className="practice-recent-list">
-            {sessions.slice(0, 6).map((s) => {
-              const url = sessionResumeUrl(s);
-              const acc = sessionAccuracy(s);
-              return (
-                <li key={s.id} className="practice-recent-item">
-                  <div className="practice-recent-item__main">
-                    <strong>{formatPackLabel(s.packId)}</strong>
-                    <span className="practice-recent-item__meta">
-                      {s.status} · {acc}% · {s.totalMarks}/{s.maxMarks} marks
-                    </span>
-                  </div>
-                  {url ? (
-                    <Link to={url} className="btn btn-sm primary">
-                      Resume
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      disabled={busy}
-                      onClick={() => startQuick({ packId: s.packId, adaptive: true })}
-                    >
-                      Again
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="practice-recent-list">
+              {recentSessions.map((s) => {
+                const url = sessionResumeUrl(s);
+                const resultUrl =
+                  s.status === "completed"
+                    ? sessionResultRoute(s.mode === "test" ? "test" : "practice", s.id)
+                    : null;
+                const acc = sessionAccuracy(s);
+                return (
+                  <li key={s.id} className="practice-recent-item">
+                    <div className="practice-recent-item__main">
+                      <strong>{formatRecentSessionHeadline(s)}</strong>
+                      <span className="practice-recent-item__meta">
+                        {s.totalMarks}/{s.maxMarks} marks · {acc}%
+                      </span>
+                    </div>
+                    {url ? (
+                      <Link to={url} className="btn btn-sm primary practice-recent-item__cta">
+                        Resume
+                      </Link>
+                    ) : resultUrl ? (
+                      <Link to={resultUrl} className="btn btn-sm practice-recent-item__cta">
+                        View results
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm practice-recent-item__cta"
+                        disabled={busy}
+                        onClick={() => startQuick({ packId: s.packId, adaptive: true })}
+                      >
+                        Again
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {sessions.length > 0 && (
+              <Link to="/analytics" className="practice-recent__view-all">
+                View all sessions →
+              </Link>
+            )}
+          </>
         )}
       </section>
-
-      <PracticeAdvancedBuilder
-        exam={exam}
-        packId={packId}
-        subject={subject}
-        chapter={chapter}
-        adaptive={adaptive}
-        packs={practicePacks}
-        catalog={catalog}
-        selectedPack={selectedPack}
-        busy={busy}
-        error={error}
-        onExam={setExam}
-        onPackId={setPackId}
-        onSubject={setSubject}
-        onChapter={setChapter}
-        onAdaptive={setAdaptive}
-        onStart={startSession}
-      />
     </main>
   );
 }

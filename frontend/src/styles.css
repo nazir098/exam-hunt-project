@@ -999,17 +999,24 @@ a {
 }
 
 .modal-question-body {
+  display: flex;
+  justify-content: center;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--paper);
-  overflow: hidden;
+  overflow: auto;
   margin-bottom: 0.85rem;
+  padding: 0.5rem;
 }
 
 .modal-img {
-  width: 100%;
-  height: auto;
   display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 42rem);
+  max-height: min(32rem, 68vh);
+  margin-inline: auto;
+  object-fit: contain;
   background: var(--paper);
 }
 
@@ -1331,66 +1338,6 @@ a {
 .neet-import-hint code {
   display: inline-block;
   margin: 0.35rem 0;
-}
-
-.neet-roadmap {
-  margin-bottom: 1rem;
-  padding: 0.85rem 0;
-}
-
-.neet-roadmap-title {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted-foreground);
-}
-
-.neet-roadmap-grid {
-  display: flex;
-  gap: 0.45rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding-bottom: 0.15rem;
-}
-
-.neet-roadmap-grid::-webkit-scrollbar {
-  display: none;
-}
-
-.neet-year-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 4.25rem;
-  padding: 0.5rem 0.65rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--card);
-  font-size: 0.72rem;
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-  text-decoration: none;
-}
-
-.neet-year-chip strong {
-  font-size: 0.95rem;
-  color: var(--foreground);
-}
-
-.neet-year-chip.available {
-  border-color: var(--primary-border);
-  background: var(--primary-soft);
-}
-
-.neet-year-chip.available strong {
-  color: var(--primary);
-}
-
-.neet-year-chip.soon {
-  opacity: 0.6;
 }
 
 /* —— Auth —— */

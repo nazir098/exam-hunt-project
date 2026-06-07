@@ -23,6 +23,11 @@ public class PracticeSession {
     private int adaptiveLevel = 2;
     private int correctCount;
     private int wrongCount;
+    private int skipCount;
+    /** practice | test */
+    private String mode = "practice";
+    private List<String> skippedQuestionIds = new ArrayList<>();
+    private List<String> markedForReviewIds = new ArrayList<>();
     private int totalMarks;
     private int maxMarks;
     private String status = "active";
@@ -107,6 +112,38 @@ public class PracticeSession {
 
     public void setWrongCount(int wrongCount) {
         this.wrongCount = wrongCount;
+    }
+
+    public int getSkipCount() {
+        return skipCount;
+    }
+
+    public void setSkipCount(int skipCount) {
+        this.skipCount = skipCount;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    public void setMode(String mode) {
+        this.mode = mode;
+    }
+
+    public List<String> getSkippedQuestionIds() {
+        return skippedQuestionIds;
+    }
+
+    public void setSkippedQuestionIds(List<String> skippedQuestionIds) {
+        this.skippedQuestionIds = skippedQuestionIds != null ? skippedQuestionIds : new ArrayList<>();
+    }
+
+    public List<String> getMarkedForReviewIds() {
+        return markedForReviewIds;
+    }
+
+    public void setMarkedForReviewIds(List<String> markedForReviewIds) {
+        this.markedForReviewIds = markedForReviewIds != null ? markedForReviewIds : new ArrayList<>();
     }
 
     public int getTotalMarks() {

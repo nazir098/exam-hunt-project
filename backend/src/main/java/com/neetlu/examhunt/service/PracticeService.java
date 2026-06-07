@@ -28,24 +28,31 @@ import java.util.stream.Collectors;
 public class PracticeService {
 
     private static final int SESSION_SIZE = 20;
+    private static final int DEFAULT_TEST_SIZE = 45;
+
+    public static final String MODE_PRACTICE = "practice";
+    public static final String MODE_TEST = "test";
 
     private final PracticeSessionRepository sessions;
     private final QuestionRepository questions;
     private final QuestionAttemptRepository attempts;
     private final QuestionRatingRepository ratings;
     private final AnswerValidationService validation;
+    private final RevisionService revisionService;
 
     public PracticeService(
             PracticeSessionRepository sessions,
             QuestionRepository questions,
             QuestionAttemptRepository attempts,
             QuestionRatingRepository ratings,
-            AnswerValidationService validation) {
+            AnswerValidationService validation,
+            RevisionService revisionService) {
         this.sessions = sessions;
         this.questions = questions;
         this.attempts = attempts;
         this.ratings = ratings;
         this.validation = validation;
+        this.revisionService = revisionService;
     }
 
     public PracticeSession createSession(String userId, CreateSessionRequest req) {
@@ -65,6 +72,7 @@ public class PracticeService {
                 : list;
 
         List<String> questionIds = buildQuestionIds(ordered, list, req);
+        String mode = normalizeMode(req.mode());
 
         PracticeSession session = new PracticeSession();
         session.setUserId(userId);
@@ -74,7 +82,38 @@ public class PracticeService {
         session.setQuestionIds(questionIds);
         session.setMaxMarks(questionIds.size() * 4);
         session.setAdaptiveLevel(2);
+        session.setMode(mode);
         return sessions.save(session);
+    }
+
+    private static String normalizeMode(String mode) {
+        if (mode == null || mode.isBlank()) {
+            return MODE_PRACTICE;
+        }
+        return switch (mode.toLowerCase()) {
+            case "test" -> MODE_TEST;
+            default -> MODE_PRACTICE;
+        };
+    }
+
+    private int resolveSessionSize(CreateSessionRequest req, String mode) {
+        if (req.questionCount() != null && req.questionCount() > 0) {
+            return Math.min(180, Math.max(5, req.questionCount()));
+        }
+        return MODE_TEST.equals(mode) ? DEFAULT_TEST_SIZE : SESSION_SIZE;
+    }
+
+    public static boolean countsForLeaderboard(QuestionAttempt a) {
+        String mode = a.getMode();
+        return mode == null || mode.isBlank() || MODE_PRACTICE.equals(mode);
+    }
+
+    public static boolean countsForAnalytics(QuestionAttempt a) {
+        String mode = a.getMode();
+        return mode == null
+                || mode.isBlank()
+                || MODE_PRACTICE.equals(mode)
+                || MODE_TEST.equals(mode);
     }
 
     public PracticeSession requireSession(String userId, String sessionId) {
@@ -142,6 +181,7 @@ public class PracticeService {
         attempt.setSelectedAnswer(validation.normalize(req.selectedAnswer()));
         attempt.setCorrect(correct);
         attempt.setMarksAwarded(marks);
+        attempt.setMode(session.getMode() != null ? session.getMode() : MODE_PRACTICE);
         attempts.save(attempt);
 
         if (correct) {
@@ -162,6 +202,9 @@ public class PracticeService {
             session.setCompletedAt(Instant.now());
         }
         sessions.save(session);
+        if ("completed".equals(session.getStatus())) {
+            onSessionCompleted(userId, session);
+        }
 
         String nextQuestionId = null;
         if (session.getCurrentIndex() < session.getQuestionIds().size()) {
@@ -176,6 +219,7 @@ public class PracticeService {
                 session.getMaxMarks(),
                 session.getCorrectCount(),
                 session.getWrongCount(),
+                session.getSkipCount(),
                 session.getAdaptiveLevel(),
                 session.getStatus(),
                 nextQuestionId,
@@ -183,14 +227,65 @@ public class PracticeService {
                 q.isHasSolution());
     }
 
+    public SkipResult skipQuestion(String userId, SkipRequest req) {
+        PracticeSession session = requireSession(userId, req.sessionId());
+        if (!"active".equals(session.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session is already completed");
+        }
+        List<String> ids = session.getQuestionIds();
+        if (session.getCurrentIndex() >= ids.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No more questions in this session");
+        }
+        String currentId = ids.get(session.getCurrentIndex());
+        if (!currentId.equals(req.questionId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can only skip the current question");
+        }
+        attempts.findBySessionIdAndQuestionId(session.getId(), req.questionId()).ifPresent(a -> {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Question already answered in this session");
+        });
+
+        session.setSkipCount(session.getSkipCount() + 1);
+        if (session.getSkippedQuestionIds() == null) {
+            session.setSkippedQuestionIds(new ArrayList<>());
+        }
+        if (!session.getSkippedQuestionIds().contains(req.questionId())) {
+            session.getSkippedQuestionIds().add(req.questionId());
+        }
+        session.setCurrentIndex(session.getCurrentIndex() + 1);
+        if (session.getCurrentIndex() >= ids.size()) {
+            session.setStatus("completed");
+            session.setCompletedAt(Instant.now());
+        }
+        sessions.save(session);
+        if ("completed".equals(session.getStatus())) {
+            onSessionCompleted(userId, session);
+        }
+
+        String nextQuestionId = null;
+        if (session.getCurrentIndex() < ids.size()) {
+            nextQuestionId = ids.get(session.getCurrentIndex());
+        }
+
+        return new SkipResult(
+                session.getSkipCount(),
+                session.getCorrectCount(),
+                session.getWrongCount(),
+                session.getTotalMarks(),
+                session.getMaxMarks(),
+                session.getAdaptiveLevel(),
+                session.getStatus(),
+                nextQuestionId);
+    }
+
     public ProgressSummary progress(String userId) {
-        long total = attempts.countByUserId(userId);
-        long correct = attempts.countByUserIdAndCorrect(userId, true);
+        List<QuestionAttempt> userAttempts = attempts.findByUserIdOrderByAnsweredAtDesc(userId);
+        List<QuestionAttempt> analyticsAttempts =
+                userAttempts.stream().filter(PracticeService::countsForAnalytics).toList();
+        long total = analyticsAttempts.size();
+        long correct = analyticsAttempts.stream().filter(QuestionAttempt::isCorrect).count();
         List<PracticeSession> recent = sessions.findByUserIdOrderByStartedAtDesc(userId).stream()
                 .limit(10)
                 .toList();
-
-        List<QuestionAttempt> userAttempts = attempts.findByUserIdOrderByAnsweredAtDesc(userId);
 
         Map<String, PackStats> byPack = new LinkedHashMap<>();
         Map<String, ChapterStats> byChapter = new LinkedHashMap<>();
@@ -200,6 +295,9 @@ public class PracticeService {
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
 
         for (QuestionAttempt a : userAttempts) {
+            if (!countsForAnalytics(a)) {
+                continue;
+            }
             byPack.computeIfAbsent(a.getPackId(), k -> new PackStats())
                     .add(a.isCorrect(), a.getMarksAwarded());
             Question q = questionById.get(a.getQuestionId());
@@ -274,9 +372,10 @@ public class PracticeService {
 
     private List<String> buildQuestionIds(
             List<Question> ordered, List<Question> filteredPool, CreateSessionRequest req) {
+        int size = resolveSessionSize(req, normalizeMode(req.mode()));
         String rawStartId = req.startQuestionId();
         if (rawStartId == null || rawStartId.isBlank()) {
-            return ordered.stream().limit(SESSION_SIZE).map(Question::getQuestionId).toList();
+            return ordered.stream().limit(size).map(Question::getQuestionId).toList();
         }
 
         final String startId = rawStartId.trim();
@@ -293,7 +392,7 @@ public class PracticeService {
         List<String> ids = new ArrayList<>();
         ids.add(startId);
         for (Question q : ordered) {
-            if (ids.size() >= SESSION_SIZE) {
+            if (ids.size() >= size) {
                 break;
             }
             if (!q.getQuestionId().equals(startId)) {
@@ -304,7 +403,7 @@ public class PracticeService {
     }
 
     private List<Question> loadPool(CreateSessionRequest req) {
-        PageRequest pageable = PageRequest.of(0, 300, Sort.by("questionNo"));
+        PageRequest pageable = PageRequest.of(0, 500, Sort.by("questionNo"));
         if (req.subject() != null && !req.subject().isBlank()
                 && req.chapter() != null && !req.chapter().isBlank()) {
             return questions
@@ -374,26 +473,349 @@ public class PracticeService {
         session.setQuestionIds(head);
     }
 
+    public SessionView toggleMarkForReview(String userId, String sessionId, String questionId) {
+        PracticeSession session = requireSession(userId, sessionId);
+        if (!MODE_TEST.equals(session.getMode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mark for review is only available in test mode");
+        }
+        if (!session.getQuestionIds().contains(questionId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question is not in this session");
+        }
+        if (session.getMarkedForReviewIds() == null) {
+            session.setMarkedForReviewIds(new ArrayList<>());
+        }
+        List<String> marked = session.getMarkedForReviewIds();
+        if (marked.contains(questionId)) {
+            marked.remove(questionId);
+        } else {
+            marked.add(questionId);
+        }
+        sessions.save(session);
+        return sessionView(session);
+    }
+
+    /** End an active session early (used for test submit). */
+    public SessionView finishSession(String userId, String sessionId) {
+        PracticeSession session = requireSession(userId, sessionId);
+        if (!"active".equals(session.getStatus())) {
+            return sessionView(session);
+        }
+        session.setStatus("completed");
+        session.setCompletedAt(Instant.now());
+        if (session.getQuestionIds() != null) {
+            session.setCurrentIndex(session.getQuestionIds().size());
+        }
+        sessions.save(session);
+        onSessionCompleted(userId, session);
+        return sessionView(session);
+    }
+
+    private void onSessionCompleted(String userId, PracticeSession session) {
+        revisionService.enqueueWrongAttemptsForSession(userId, session.getId());
+    }
+
+    public SessionResultView getSessionResult(String userId, String sessionId) {
+        PracticeSession session = requireSession(userId, sessionId);
+        if (!"completed".equals(session.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session not completed yet");
+        }
+        SessionView view = sessionView(session);
+        List<QuestionAttempt> sessionAttempts = attempts.findBySessionId(sessionId);
+        Set<String> qIds = session.getQuestionIds() != null
+                ? new java.util.HashSet<>(session.getQuestionIds())
+                : Set.of();
+        Map<String, Question> qById = questions.findByQuestionIdIn(qIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+        Map<String, QuestionAttempt> attemptByQ = sessionAttempts.stream()
+                .collect(Collectors.toMap(QuestionAttempt::getQuestionId, a -> a, (a, b) -> b));
+        Set<String> skipped = session.getSkippedQuestionIds() != null
+                ? new java.util.HashSet<>(session.getSkippedQuestionIds())
+                : Set.of();
+
+        long timeTakenSeconds = 0;
+        if (session.getStartedAt() != null && session.getCompletedAt() != null) {
+            timeTakenSeconds = Math.max(
+                    0, session.getCompletedAt().getEpochSecond() - session.getStartedAt().getEpochSecond());
+        }
+        int answered = session.getCorrectCount() + session.getWrongCount();
+        int accuracyPercent = answered > 0 ? (int) Math.round((session.getCorrectCount() * 100.0) / answered) : 0;
+        boolean countsForRank = MODE_PRACTICE.equals(session.getMode() != null ? session.getMode() : MODE_PRACTICE);
+
+        Map<String, BreakdownStats> bySubject = new LinkedHashMap<>();
+        Map<String, BreakdownStats> byChapter = new LinkedHashMap<>();
+        Map<Integer, int[]> byDifficulty = new HashMap<>();
+
+        List<SessionQuestionReview> reviews = new ArrayList<>();
+        List<String> ids = session.getQuestionIds() != null ? session.getQuestionIds() : List.of();
+        for (int i = 0; i < ids.size(); i++) {
+            String qid = ids.get(i);
+            Question q = qById.get(qid);
+            if (q == null) {
+                continue;
+            }
+            QuestionAttempt att = attemptByQ.get(qid);
+            String status;
+            String selected = "";
+            String correctAns = validation.normalize(q.getAnswer());
+            if (att != null) {
+                status = att.isCorrect() ? "correct" : "wrong";
+                selected = att.getSelectedAnswer();
+                trackBreakdown(bySubject, byChapter, q, att.isCorrect());
+                int diff = Math.max(1, Math.min(3, q.getDifficulty()));
+                byDifficulty.computeIfAbsent(diff, k -> new int[] {0, 0});
+                if (att.isCorrect()) {
+                    byDifficulty.get(diff)[0]++;
+                } else {
+                    byDifficulty.get(diff)[1]++;
+                }
+            } else if (skipped.contains(qid)) {
+                status = "skipped";
+            } else {
+                status = "unattempted";
+            }
+            reviews.add(new SessionQuestionReview(
+                    i + 1,
+                    qid,
+                    status,
+                    selected,
+                    correctAns,
+                    q.isHasSolution(),
+                    q.getSolutionImageUrl(),
+                    q.getSubject(),
+                    q.getChapter(),
+                    q.getQuestionNo(),
+                    q.getDifficulty()));
+        }
+
+        List<BreakdownRow> subjectBreakdown = bySubject.values().stream()
+                .sorted(Comparator.comparingInt(BreakdownStats::accuracyPercent))
+                .map(BreakdownStats::toRow)
+                .toList();
+        List<BreakdownRow> chapterBreakdown = byChapter.values().stream()
+                .sorted(Comparator.comparingInt(BreakdownStats::accuracyPercent))
+                .map(BreakdownStats::toChapterRow)
+                .toList();
+
+        List<ChapterProgress> weakInSession = byChapter.values().stream()
+                .filter(b -> b.wrong > 0)
+                .sorted(Comparator.comparingInt((BreakdownStats b) -> b.wrong).reversed())
+                .limit(5)
+                .map(b -> new ChapterProgress(
+                        b.subject, b.chapterLabel, b.attempts, b.correct, b.marks, b.accuracyPercent()))
+                .toList();
+        List<ChapterProgress> strongInSession = byChapter.values().stream()
+                .filter(b -> b.attempts >= 2 && b.accuracyPercent() >= 75)
+                .sorted(Comparator.comparingInt(BreakdownStats::accuracyPercent).reversed())
+                .limit(5)
+                .map(b -> new ChapterProgress(
+                        b.subject, b.chapterLabel, b.attempts, b.correct, b.marks, b.accuracyPercent()))
+                .toList();
+
+        List<WrongAttemptView> wrongAttempts = sessionAttempts.stream()
+                .filter(a -> !a.isCorrect())
+                .map(a -> toWrongAttemptView(a, qById.get(a.getQuestionId()), userId))
+                .filter(a -> a != null)
+                .toList();
+
+        List<String> aiInsights = buildSessionInsights(
+                session, byChapter, bySubject, byDifficulty, accuracyPercent, wrongAttempts.size());
+
+        return new SessionResultView(
+                view,
+                timeTakenSeconds,
+                accuracyPercent,
+                countsForRank,
+                subjectBreakdown,
+                chapterBreakdown,
+                weakInSession,
+                strongInSession,
+                aiInsights,
+                wrongAttempts,
+                reviews);
+    }
+
+    private WrongAttemptView toWrongAttemptView(QuestionAttempt a, Question q, String userId) {
+        if (q == null) {
+            return null;
+        }
+        return new WrongAttemptView(
+                a.getId(),
+                a.getQuestionId(),
+                a.getSessionId(),
+                a.getPackId(),
+                a.getMode() != null ? a.getMode() : MODE_PRACTICE,
+                a.getSelectedAnswer(),
+                validation.normalize(q.getAnswer()),
+                q.getSubject(),
+                q.getChapter(),
+                q.getExam(),
+                q.getYear(),
+                q.getQuestionNo(),
+                q.isHasSolution(),
+                q.getSolutionImageUrl(),
+                a.getAnsweredAt(),
+                revisionService.isRevised(userId, a.getQuestionId()));
+    }
+
+    private static void trackBreakdown(
+            Map<String, BreakdownStats> bySubject,
+            Map<String, BreakdownStats> byChapter,
+            Question q,
+            boolean correct) {
+        String subj = q.getSubject() != null ? q.getSubject() : "General";
+        bySubject.computeIfAbsent(subj, BreakdownStats::forSubject).add(correct);
+        String chapter = q.getChapter() != null && !q.getChapter().isBlank() ? q.getChapter() : "General";
+        String chapterKey = subj + "\u0000" + chapter;
+        byChapter.computeIfAbsent(chapterKey, k -> BreakdownStats.forChapter(subj, chapter)).add(correct);
+    }
+
+    private List<String> buildSessionInsights(
+            PracticeSession session,
+            Map<String, BreakdownStats> byChapter,
+            Map<String, BreakdownStats> bySubject,
+            Map<Integer, int[]> byDifficulty,
+            int accuracyPercent,
+            int wrongCount) {
+        List<String> insights = new ArrayList<>();
+        if (wrongCount == 0 && session.getSkipCount() == 0) {
+            insights.add("Perfect run — every attempted question was correct.");
+            return insights;
+        }
+        byChapter.values().stream()
+                .filter(b -> b.wrong > 0)
+                .max(Comparator.comparingInt(b -> b.wrong))
+                .ifPresent(worst -> {
+                    int pct = worst.wrong > 0 && (worst.correct + worst.wrong) > 0
+                            ? (int) Math.round((worst.wrong * 100.0) / (worst.correct + worst.wrong))
+                            : 0;
+                    insights.add(worst.chapterLabel + " caused " + pct + "% of your mistakes in this session.");
+                });
+        int[] medium = byDifficulty.get(2);
+        if (medium != null && medium[1] > medium[0]) {
+            insights.add("Accuracy drops on medium difficulty questions — slow down and verify units.");
+        }
+        bySubject.values().stream()
+                .filter(b -> b.attempts >= 2)
+                .max(Comparator.comparingInt(BreakdownStats::accuracyPercent))
+                .ifPresent(best -> insights.add("You perform best in " + best.subject + " (" + best.accuracyPercent() + "%)."));
+        if (insights.isEmpty()) {
+            insights.add("Session accuracy: " + accuracyPercent + "% — review wrong answers below.");
+        }
+        return insights.stream().limit(3).toList();
+    }
+
+    public List<WrongAttemptView> listWrongAttempts(
+            String userId,
+            String modeFilter,
+            String subjectFilter,
+            String chapterFilter,
+            String examFilter,
+            Integer yearFilter,
+            String sessionIdFilter) {
+        List<QuestionAttempt> wrong = attempts.findByUserIdOrderByAnsweredAtDesc(userId).stream()
+                .filter(a -> !a.isCorrect())
+                .filter(a -> {
+                    if (modeFilter == null || modeFilter.isBlank() || "all".equalsIgnoreCase(modeFilter)) {
+                        return countsForAnalytics(a);
+                    }
+                    String m = a.getMode() != null ? a.getMode() : MODE_PRACTICE;
+                    return m.equalsIgnoreCase(modeFilter);
+                })
+                .limit(200)
+                .toList();
+        Set<String> qIds = wrong.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
+        Map<String, Question> questionById = questions.findByQuestionIdIn(qIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+        List<WrongAttemptView> out = new ArrayList<>();
+        for (QuestionAttempt a : wrong) {
+            Question q = questionById.get(a.getQuestionId());
+            if (q == null) {
+                continue;
+            }
+            if (subjectFilter != null
+                    && !subjectFilter.isBlank()
+                    && !subjectFilter.equalsIgnoreCase(q.getSubject())) {
+                continue;
+            }
+            if (chapterFilter != null
+                    && !chapterFilter.isBlank()
+                    && !chapterFilter.equalsIgnoreCase(q.getChapter())) {
+                continue;
+            }
+            if (examFilter != null && !examFilter.isBlank() && !examFilter.equalsIgnoreCase(q.getExam())) {
+                continue;
+            }
+            if (yearFilter != null && yearFilter > 0 && q.getYear() != yearFilter) {
+                continue;
+            }
+            if (sessionIdFilter != null
+                    && !sessionIdFilter.isBlank()
+                    && !sessionIdFilter.equals(a.getSessionId())) {
+                continue;
+            }
+            out.add(toWrongAttemptView(a, q, userId));
+        }
+        return out.stream().limit(100).toList();
+    }
+
     private SessionView sessionView(PracticeSession s) {
         String current = null;
-        if (!s.getQuestionIds().isEmpty() && s.getCurrentIndex() < s.getQuestionIds().size()) {
-            current = s.getQuestionIds().get(s.getCurrentIndex());
+        List<String> ids = s.getQuestionIds();
+        if (ids != null && !ids.isEmpty() && s.getCurrentIndex() < ids.size()) {
+            current = ids.get(s.getCurrentIndex());
+        }
+        Map<String, String> filters = s.getFilters() != null ? s.getFilters() : Map.of();
+        List<QuestionAttempt> sessionAttempts = attempts.findBySessionId(s.getId());
+        Map<String, QuestionAttempt> attemptByQ = sessionAttempts.stream()
+                .collect(Collectors.toMap(QuestionAttempt::getQuestionId, a -> a, (a, b) -> b));
+        Set<String> skipped = s.getSkippedQuestionIds() != null
+                ? new java.util.HashSet<>(s.getSkippedQuestionIds())
+                : Set.of();
+        Set<String> marked = s.getMarkedForReviewIds() != null
+                ? new java.util.HashSet<>(s.getMarkedForReviewIds())
+                : Set.of();
+        List<SessionQuestionTile> tiles = new ArrayList<>();
+        if (ids != null) {
+            for (int i = 0; i < ids.size(); i++) {
+                String qid = ids.get(i);
+                String status;
+                QuestionAttempt att = attemptByQ.get(qid);
+                if (att != null) {
+                    status = att.isCorrect() ? "correct" : "wrong";
+                } else if (skipped.contains(qid)) {
+                    status = "skipped";
+                } else if (marked.contains(qid)) {
+                    status = "marked";
+                } else if (qid.equals(current)) {
+                    status = "current";
+                } else {
+                    status = "unattempted";
+                }
+                tiles.add(new SessionQuestionTile(i + 1, qid, status));
+            }
         }
         return new SessionView(
                 s.getId(),
                 s.getPackId(),
                 s.getExam(),
+                s.getMode() != null ? s.getMode() : MODE_PRACTICE,
                 s.getStatus(),
-                s.getQuestionIds().size(),
+                ids != null ? ids.size() : 0,
                 s.getCurrentIndex(),
                 s.getCorrectCount(),
                 s.getWrongCount(),
+                s.getSkipCount(),
                 s.getTotalMarks(),
                 s.getMaxMarks(),
                 s.getAdaptiveLevel(),
                 s.getStartedAt(),
                 s.getCompletedAt(),
-                current);
+                current,
+                nullToEmpty(filters.get("subject")),
+                nullToEmpty(filters.get("chapter")),
+                nullToEmpty(filters.get("topic")),
+                new ArrayList<>(marked),
+                tiles);
     }
 
     public record CreateSessionRequest(
@@ -404,9 +826,68 @@ public class PracticeService {
             String topic,
             String difficulty,
             boolean adaptive,
-            String startQuestionId) {}
+            String startQuestionId,
+            String mode,
+            Integer questionCount) {}
+
+    public record SessionQuestionTile(int number, String questionId, String status) {}
+
+    public record WrongAttemptView(
+            String attemptId,
+            String questionId,
+            String sessionId,
+            String packId,
+            String mode,
+            String selectedAnswer,
+            String correctAnswer,
+            String subject,
+            String chapter,
+            String exam,
+            int year,
+            int questionNo,
+            boolean hasSolution,
+            String solutionImageUrl,
+            Instant answeredAt,
+            boolean revised) {}
+
+    public record BreakdownRow(
+            String label,
+            String subject,
+            String chapter,
+            int correct,
+            int wrong,
+            int skipped,
+            int accuracyPercent) {}
+
+    public record SessionQuestionReview(
+            int number,
+            String questionId,
+            String status,
+            String selectedAnswer,
+            String correctAnswer,
+            boolean hasSolution,
+            String solutionImageUrl,
+            String subject,
+            String chapter,
+            int questionNo,
+            int difficulty) {}
+
+    public record SessionResultView(
+            SessionView session,
+            long timeTakenSeconds,
+            int accuracyPercent,
+            boolean countsForRank,
+            List<BreakdownRow> subjectBreakdown,
+            List<BreakdownRow> chapterBreakdown,
+            List<ChapterProgress> weakChaptersInSession,
+            List<ChapterProgress> strongChaptersInSession,
+            List<String> aiInsights,
+            List<WrongAttemptView> wrongAttempts,
+            List<SessionQuestionReview> questionReviews) {}
 
     public record SubmitRequest(String sessionId, String questionId, String selectedAnswer) {}
+
+    public record SkipRequest(String sessionId, String questionId) {}
 
     public record SubmitResult(
             boolean correct,
@@ -416,27 +897,45 @@ public class PracticeService {
             int sessionMaxMarks,
             int correctCount,
             int wrongCount,
+            int skipCount,
             int adaptiveLevel,
             String sessionStatus,
             String nextQuestionId,
             String solutionImageUrl,
             boolean hasSolution) {}
 
+    public record SkipResult(
+            int skipCount,
+            int correctCount,
+            int wrongCount,
+            int sessionTotalMarks,
+            int sessionMaxMarks,
+            int adaptiveLevel,
+            String sessionStatus,
+            String nextQuestionId) {}
+
     public record SessionView(
             String id,
             String packId,
             String exam,
+            String mode,
             String status,
             int questionCount,
             int currentIndex,
             int correctCount,
             int wrongCount,
+            int skipCount,
             int totalMarks,
             int maxMarks,
             int adaptiveLevel,
             Instant startedAt,
             Instant completedAt,
-            String currentQuestionId) {}
+            String currentQuestionId,
+            String filterSubject,
+            String filterChapter,
+            String filterTopic,
+            List<String> markedForReviewIds,
+            List<SessionQuestionTile> questionTiles) {}
 
     public record ProgressSummary(
             long totalAttempts,
@@ -467,6 +966,53 @@ public class PracticeService {
         }
     }
 
+    private static class BreakdownStats {
+        final String subject;
+        final String chapterLabel;
+        int correct;
+        int wrong;
+        int skipped;
+        int attempts;
+        int marks;
+
+        private BreakdownStats(String subject, String chapterLabel) {
+            this.subject = subject;
+            this.chapterLabel = chapterLabel;
+        }
+
+        static BreakdownStats forSubject(String subject) {
+            return new BreakdownStats(subject, null);
+        }
+
+        static BreakdownStats forChapter(String subject, String chapter) {
+            return new BreakdownStats(subject, chapter);
+        }
+
+        void add(boolean wasCorrect) {
+            attempts++;
+            if (wasCorrect) {
+                correct++;
+                marks += 4;
+            } else {
+                wrong++;
+                marks -= 1;
+            }
+        }
+
+        int accuracyPercent() {
+            int total = correct + wrong;
+            return total > 0 ? (int) Math.round((correct * 100.0) / total) : 0;
+        }
+
+        BreakdownRow toRow() {
+            return new BreakdownRow(subject, subject, null, correct, wrong, skipped, accuracyPercent());
+        }
+
+        BreakdownRow toChapterRow() {
+            return new BreakdownRow(chapterLabel, subject, chapterLabel, correct, wrong, skipped, accuracyPercent());
+        }
+    }
+
     private static class ChapterStats {
         final String subject;
         final String chapter;
@@ -488,5 +1034,9 @@ public class PracticeService {
         int accuracyPercent() {
             return attempts > 0 ? (int) Math.round((correct * 100.0) / attempts) : 0;
         }
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "EduMaster AI",
+  "short_name": "EduMaster",
+  "description": "NEET PYQ practice with AI study coaching",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#111125",
+  "background_color": "#111125",
+  "display": "standalone"
+}

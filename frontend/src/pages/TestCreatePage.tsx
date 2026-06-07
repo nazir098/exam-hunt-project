@@ -1,0 +1,143 @@
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { createPracticeSession, fetchExams, fetchPacks, PackSummary } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import ProductModeBanner from "../components/ProductModeBanner";
+import TestSessionBuilder from "../components/TestSessionBuilder";
+import TestSessionSummary from "../components/TestSessionSummary";
+import {
+  bankDisplayPacks,
+  clampPracticeQuestionCount,
+  estimatedTestMinutes,
+  pickDefaultPack,
+  practicePoolMax,
+} from "../utils/practiceHub";
+import { sessionRoute } from "../navigation/modes";
+
+export default function TestCreatePage() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [packs, setPacks] = useState<PackSummary[]>([]);
+  const [packId, setPackId] = useState(searchParams.get("packId") || "");
+  const [subject, setSubject] = useState(searchParams.get("subject") || "");
+  const [chapter, setChapter] = useState(searchParams.get("chapter") || "");
+  const [difficulty, setDifficulty] = useState("");
+  const [questionCount, setQuestionCount] = useState(45);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([fetchPacks(), fetchExams()])
+      .then(([p]) => {
+        setPacks(p);
+        if (!packId) {
+          const def = pickDefaultPack(bankDisplayPacks(p))?.packId || "";
+          if (def) setPackId(def);
+        }
+      })
+      .catch((e) => setError(e.message));
+  }, [packId]);
+
+  const practicePacks = bankDisplayPacks(packs);
+  const selectedPack = practicePacks.find((p) => p.packId === packId);
+  const poolMax = useMemo(
+    () => practicePoolMax(selectedPack, subject || undefined, chapter || undefined),
+    [selectedPack, subject, chapter]
+  );
+  const sessionSize = useMemo(
+    () => clampPracticeQuestionCount(questionCount, poolMax),
+    [questionCount, poolMax]
+  );
+  const estMinutes = useMemo(() => estimatedTestMinutes(sessionSize), [sessionSize]);
+
+  useEffect(() => {
+    setQuestionCount((c) => clampPracticeQuestionCount(c, poolMax));
+  }, [poolMax]);
+
+  async function startTest(e: FormEvent) {
+    e.preventDefault();
+    if (!user) {
+      navigate(`/login?next=${encodeURIComponent("/test/create")}`);
+      return;
+    }
+    if (!packId) {
+      setError("Select a pack to build your test.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const session = await createPracticeSession({
+        exam: "NEET",
+        packId,
+        subject: subject || undefined,
+        chapter: chapter || undefined,
+        difficulty: difficulty || undefined,
+        adaptive: false,
+        mode: "test",
+        questionCount: sessionSize,
+      });
+      const qId = session.currentQuestionId;
+      if (!qId) throw new Error("Test has no questions for these filters.");
+      navigate(sessionRoute("test", session.id, qId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create test");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <main className="dashboard-page pt-4">
+        <p className="muted">Loading…</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="dashboard-page test-create-page pt-4 lg:pt-6">
+      <ProductModeBanner mode="test" />
+      <header className="test-create-page__head">
+        <h1 className="practice-page-title">Prepare your test</h1>
+        <p className="practice-page-desc">
+          Build a timed NEET-style test. Scores feed analytics and weak-area detection — not the
+          leaderboard.
+        </p>
+      </header>
+
+      <div className="practice-session-row">
+        <TestSessionBuilder
+          packId={packId}
+          subject={subject}
+          chapter={chapter}
+          difficulty={difficulty}
+          questionCount={questionCount}
+          sessionSize={sessionSize}
+          poolMax={poolMax}
+          estMinutes={estMinutes}
+          packs={practicePacks}
+          selectedPack={selectedPack}
+          busy={busy}
+          error={error}
+          onPackId={setPackId}
+          onSubject={setSubject}
+          onChapter={setChapter}
+          onDifficulty={setDifficulty}
+          onQuestionCount={setQuestionCount}
+          onSubmit={startTest}
+        />
+
+        <TestSessionSummary
+          selectedPack={selectedPack}
+          subject={subject}
+          chapter={chapter}
+          difficulty={difficulty}
+          sessionSize={sessionSize}
+          estMinutes={estMinutes}
+        />
+      </div>
+    </main>
+  );
+}

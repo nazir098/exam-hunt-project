@@ -19,6 +19,8 @@ public class QuestionAttempt {
     private String selectedAnswer;
     private boolean correct;
     private int marksAwarded;
+    /** practice | test | solve — leaderboard uses practice only. */
+    private String mode = "practice";
     private Instant answeredAt = Instant.now();
 
     public String getId() {
@@ -83,6 +85,14 @@ public class QuestionAttempt {
 
     public void setMarksAwarded(int marksAwarded) {
         this.marksAwarded = marksAwarded;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    public void setMode(String mode) {
+        this.mode = mode;
     }
 
     public Instant getAnsweredAt() {

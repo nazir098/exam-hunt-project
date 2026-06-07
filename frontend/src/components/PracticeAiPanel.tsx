@@ -9,7 +9,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { PRACTICE_AI_FEATURES } from "../utils/practiceAiFeatures";
-import AiMarkdown from "./AiMarkdown";
+import AiStreamingMarkdown from "./AiStreamingMarkdown";
 
 type Props = {
   questionId?: string;
@@ -20,6 +20,7 @@ type Props = {
   /** Only show features matching this filter */
   featureIds?: PracticeAiFeature[];
   compact?: boolean;
+  className?: string;
   title?: string;
 };
 
@@ -31,6 +32,7 @@ export default function PracticeAiPanel({
   formulaRelevant = true,
   featureIds,
   compact,
+  className = "",
   title = "AI practice coach",
 }: Props) {
   const { user } = useAuth();
@@ -123,7 +125,13 @@ export default function PracticeAiPanel({
   }
 
   return (
-    <section className={"practice-ai-panel glass-card" + (compact ? " practice-ai-panel--compact" : "")}>
+    <section
+      className={
+        "practice-ai-panel glass-card" +
+        (compact ? " practice-ai-panel--compact" : "") +
+        (className ? ` ${className}` : "")
+      }
+    >
       <p className="practice-ai-panel__title">{title}</p>
       <p className="practice-ai-panel__sub text-caption text-outline">
         Powered by FreeLLMAPI · focused on practice, not open chat
@@ -154,7 +162,7 @@ export default function PracticeAiPanel({
             {PRACTICE_AI_FEATURES.find((x) => x.id === result.feature)?.label || result.feature}
           </p>
           <div className="practice-ai-panel__result-text">
-            <AiMarkdown text={result.text} />
+            <AiStreamingMarkdown text={result.text} />
           </div>
 
           {result.similarQuestions.length > 0 && (

@@ -1,27 +1,41 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import AnalyticsGuestPreview from "../components/AnalyticsGuestPreview";
+import AnalyticsFocusCard from "../components/AnalyticsFocusCard";
+import AnalyticsRecommendedCard from "../components/AnalyticsRecommendedCard";
+import AnalyticsSessionsSection from "../components/AnalyticsSessionsSection";
+import AnalyticsWeakSubjectGrid from "../components/AnalyticsWeakSubjectGrid";
 import { useAuth } from "../auth/AuthContext";
 import InsightChartsPanel from "../components/InsightChartsPanel";
-import Scorecard from "../components/Scorecard";
-import SessionHistoryList from "../components/SessionHistoryList";
 import WeeklyActivityPanel from "../components/WeeklyActivityPanel";
 import PracticeAiPanel from "../components/PracticeAiPanel";
-import {
-  buildDashboardStats,
-  meaningfulSessions,
-  NEET_SUBJECT_MASTERY,
-  sessionAccuracy,
-} from "../utils/dashboardStats";
+import { fetchPacks, type PackSummary } from "../api";
+import { buildDashboardStats, NEET_SUBJECT_MASTERY } from "../utils/dashboardStats";
+import { bankDisplayPacks, buildRecommendedPractice } from "../utils/practiceHub";
+import { primaryWeakChapter } from "../utils/weakChapters";
 
 export default function AnalyticsPage() {
   const { user, progress, loading, refreshProgress } = useAuth();
+  const [packs, setPacks] = useState<PackSummary[]>([]);
 
   useEffect(() => {
     if (user) refreshProgress();
   }, [user, refreshProgress]);
 
+  useEffect(() => {
+    fetchPacks()
+      .then(setPacks)
+      .catch(() => setPacks([]));
+  }, []);
+
   const stats = useMemo(() => buildDashboardStats(progress), [progress]);
+  const displayPacks = useMemo(() => bankDisplayPacks(packs), [packs]);
+  const recommended = useMemo(
+    () => buildRecommendedPractice(displayPacks, progress),
+    [displayPacks, progress]
+  );
+  const defaultPackId = recommended?.packId ?? displayPacks[0]?.packId;
+  const weak = primaryWeakChapter(progress?.weakChapters);
 
   const accuracy = progress?.accuracyPercent ?? null;
   const attempts = progress?.totalAttempts ?? 0;
@@ -53,132 +67,41 @@ export default function AnalyticsPage() {
     <main className="analytics-page pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
       <header className="analytics-page-header">
         <p className="page-eyebrow">Progress lab</p>
-        <h1 className="analytics-page-title">Analytics &amp; scores</h1>
+        <h1 className="analytics-page-title">Analytics</h1>
         <p className="analytics-page-desc">
-          Full scorecard, trends, and session history. Use the{" "}
-          <Link to="/" className="text-primary font-bold">
-            Dashboard
-          </Link>{" "}
-          for quick actions and daily study shortcuts.
+          See what to fix, what to practice next, and whether you&apos;re improving.
+          Practice + Test data feed weak areas; leaderboard uses Practice only.
+        </p>
+        <p className="analytics-page-links">
+          <Link to="/review/wrong-attempts">Review wrong attempts →</Link>
         </p>
       </header>
 
-      <Scorecard progress={progress} summaryOnly showSessionNote={false} />
+      <AnalyticsFocusCard progress={progress} stats={stats} defaultPackId={defaultPackId} />
+
+      <AnalyticsRecommendedCard recommended={recommended} weakChapter={weak} />
 
       <PracticeAiPanel
-        featureIds={[
-          "weak_chapter_analysis",
-          "practice_from_weak",
-          "mentor",
-          "revision_notes",
-        ]}
+        featureIds={["weak_chapter_analysis", "practice_from_weak", "revision_notes", "mentor"]}
         title="AI practice coach"
+        compact
+        className="practice-ai-panel--analytics"
       />
 
-      <div className="analytics-grid">
-        <div className="analytics-main">
-          <InsightChartsPanel
-            stats={stats}
-            accuracy={accuracy}
-            attempts={attempts}
-            subjects={subjects}
-            barHeights={barHeights}
-          />
+      <AnalyticsWeakSubjectGrid progress={progress} defaultPackId={defaultPackId} />
 
-          <section className="analytics-card glass-card">
-            <header className="analytics-card-head spread">
-              <div>
-                <h2>Session history</h2>
-                <p className="analytics-card-sub">
-                  Sessions where you submitted at least one answer (empty abandoned runs omitted).
-                </p>
-              </div>
-              <Link to="/practice" className="text-primary text-label-md font-bold whitespace-nowrap">
-                New session →
-              </Link>
-            </header>
-            <SessionHistoryList sessions={stats.sessions} limit={12} />
-          </section>
+      <AnalyticsSessionsSection stats={stats} />
 
-          <section className="analytics-card glass-card">
-            <header className="analytics-card-head spread">
-              <h2>Recommended next</h2>
-              <span className="material-symbols-outlined text-primary">auto_awesome</span>
-            </header>
-            <div className="analytics-picks">
-              {meaningfulSessions(stats.sessions).slice(0, 2).map((s, i) => (
-                <Link
-                  key={s.id}
-                  to={s.currentQuestionId ? `/practice/${s.id}/${s.currentQuestionId}` : "/practice"}
-                  className="analytics-pick-row"
-                >
-                  <div className="analytics-pick-icon">
-                    <span className="material-symbols-outlined">{i === 0 ? "terminal" : "bolt"}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <strong className="block truncate">
-                      {s.exam} · {s.packId.replace("NEET_", "NEET ")}
-                    </strong>
-                    <p>
-                      {s.correctCount}✓ {s.wrongCount}✗ · {sessionAccuracy(s)}% accuracy
-                    </p>
-                  </div>
-                  <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
-                </Link>
-              ))}
-              <Link to="/bank?exam=NEET" className="analytics-pick-row">
-                <div className="analytics-pick-icon">
-                  <span className="material-symbols-outlined">menu_book</span>
-                </div>
-                <div className="flex-1">
-                  <strong>Browse NEET question bank</strong>
-                  <p>Study without scoring</p>
-                </div>
-                <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
-              </Link>
-            </div>
-          </section>
-        </div>
-
-        <aside className="analytics-side space-y-lg">
-          <WeeklyActivityPanel
-            heatmap={stats.heatmap}
-            caption={`${attempts} total questions answered`}
-          />
-
-          <section className="analytics-card analytics-goal-card glass-card">
-            <span className="analytics-goal-watermark material-symbols-outlined">workspace_premium</span>
-            <h3 className="analytics-side-title">Marks goal</h3>
-            <div className="analytics-goal-body">
-              <div className="analytics-goal-ring">
-                <span className="material-symbols-outlined">trophy</span>
-              </div>
-              <div>
-                <p className="analytics-goal-name">Session marks</p>
-                <p className="analytics-empty">
-                  {stats.maxMarks > 0
-                    ? `${stats.totalMarks} / ${stats.maxMarks} marks earned`
-                    : "Complete adaptive practice to earn marks"}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="analytics-card glass-card analytics-compare">
-            <h3 className="analytics-side-title">Dashboard vs Analytics</h3>
-            <ul className="analytics-compare-list">
-              <li>
-                <strong>Dashboard</strong> — shortcuts; Question Bank for study; Practice for marks
-              </li>
-              <li>
-                <strong>Analytics</strong> — practice submits only (not Question Bank checks)
-              </li>
-            </ul>
-            <Link to="/" className="analytics-compare-link">
-              Back to Dashboard
-            </Link>
-          </section>
-        </aside>
+      <div className="analytics-trends-grid">
+        <InsightChartsPanel
+          stats={stats}
+          progress={progress}
+          accuracy={accuracy}
+          attempts={attempts}
+          subjects={subjects}
+          barHeights={barHeights}
+        />
+        <WeeklyActivityPanel sessions={stats.sessions} totalQuestions={attempts} />
       </div>
     </main>
   );
