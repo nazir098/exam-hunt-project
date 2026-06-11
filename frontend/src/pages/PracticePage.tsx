@@ -8,6 +8,7 @@ import {
   fetchPacks,
   PackSummary,
   PracticeSessionView,
+  type QuestionSetMode,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import DashboardPerformanceSnapshot from "../components/DashboardPerformanceSnapshot";
@@ -65,6 +66,7 @@ export default function PracticePage() {
   const [subject, setSubject] = useState(searchParams.get("subject") || "");
   const [chapter, setChapter] = useState(searchParams.get("chapter") || "");
   const [adaptive, setAdaptive] = useState(true);
+  const [questionSet, setQuestionSet] = useState<QuestionSetMode>("pyq");
   const [questionCount, setQuestionCount] = useState(DEFAULT_PRACTICE_QUESTIONS);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -106,8 +108,8 @@ export default function PracticePage() {
   const practicePacks = useMemo(() => bankDisplayPacks(packs), [packs]);
   const selectedPack = practicePacks.find((p) => p.packId === packId);
   const poolMax = useMemo(
-    () => practicePoolMax(selectedPack, subject || undefined, chapter || undefined),
-    [selectedPack, subject, chapter]
+    () => practicePoolMax(selectedPack, subject || undefined, chapter || undefined, questionSet),
+    [selectedPack, subject, chapter, questionSet]
   );
   const sessionSize = useMemo(
     () => clampPracticeQuestionCount(questionCount, poolMax),
@@ -145,6 +147,7 @@ export default function PracticePage() {
       chapter?: string;
       adaptive?: boolean;
       questionCount?: number;
+      questionSet?: QuestionSetMode;
     }) => {
       if (!user) {
         navigate(`/login?next=${encodeURIComponent("/practice")}`);
@@ -158,9 +161,10 @@ export default function PracticePage() {
       const pack = practicePacks.find((p) => p.packId === pid);
       const subj = opts.subject;
       const ch = opts.chapter;
+      const setMode = opts.questionSet ?? questionSet;
       const count = clampPracticeQuestionCount(
         opts.questionCount ?? questionCount,
-        practicePoolMax(pack, subj, ch)
+        practicePoolMax(pack, subj, ch, setMode)
       );
       setBusy(true);
       setError("");
@@ -173,6 +177,7 @@ export default function PracticePage() {
           adaptive: opts.adaptive ?? true,
           mode: "practice",
           questionCount: count,
+          questionSet: setMode,
         });
         const qId = session.currentQuestionId;
         if (!qId) throw new Error("Session has no questions");
@@ -183,7 +188,7 @@ export default function PracticePage() {
         setBusy(false);
       }
     },
-    [user, navigate, packId, practicePacks, questionCount]
+    [user, navigate, packId, practicePacks, questionCount, questionSet]
   );
 
   async function startSession() {
@@ -233,6 +238,18 @@ export default function PracticePage() {
           startQuick({
             packId: defaultPack?.packId,
             subject: resolveSubjectName(defaultPack, "Chemistry"),
+            adaptive: true,
+          }),
+      },
+      {
+        id: "biology",
+        icon: "genetics",
+        title: "Biology Practice",
+        subtitle: "Focused session · Biology only",
+        run: () =>
+          startQuick({
+            packId: defaultPack?.packId,
+            subject: resolveSubjectName(defaultPack, "Biology"),
             adaptive: true,
           }),
       },
@@ -311,6 +328,7 @@ export default function PracticePage() {
           subject={subject}
           chapter={chapter}
           adaptive={adaptive}
+          questionSet={questionSet}
           questionCount={questionCount}
           poolMax={poolMax}
           sessionSize={sessionSize}
@@ -319,9 +337,13 @@ export default function PracticePage() {
           busy={busy}
           error={error}
           onPackId={setPackId}
-          onSubject={setSubject}
+          onSubject={(v) => {
+            setSubject(v);
+            setChapter("");
+          }}
           onChapter={setChapter}
           onAdaptive={setAdaptive}
+          onQuestionSet={setQuestionSet}
           onQuestionCount={setQuestionCount}
           onStart={startSession}
         />

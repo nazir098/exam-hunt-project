@@ -19,7 +19,21 @@ export function heatmapClass(level: number): string {
   return "dashboard-heatmap-cell--4";
 }
 
-/** 4 weeks × 7 days (Mon–Sun columns), most recent day bottom-right. */
+/** Map raw daily question counts to heatmap intensity levels 0–4. */
+export function dailyCountsToHeatmapLevels(dailyCounts: number[]): number[] {
+  const counts = dailyCounts.length === 28 ? dailyCounts : Array(28).fill(0);
+  const max = Math.max(1, ...counts);
+  return counts.map((questionCount) => {
+    if (questionCount <= 0) return 0;
+    const ratio = questionCount / max;
+    if (ratio >= 0.75) return 4;
+    if (ratio >= 0.5) return 3;
+    if (ratio >= 0.25) return 2;
+    return 1;
+  });
+}
+
+/** Fallback — session start dates when weeklyActivity is unavailable. */
 export function buildWeeklyGrid(sessions: PracticeSessionView[]): number[] {
   const cells = Array(28).fill(0);
   const now = new Date();
@@ -114,7 +128,10 @@ export function buildDashboardStats(progress: ProgressSummary | null): Dashboard
     sessions,
     bars,
     trend,
-    heatmap: buildWeeklyGrid(sessions),
+    heatmap:
+      progress?.weeklyActivity?.length === 28
+        ? dailyCountsToHeatmapLevels(progress.weeklyActivity)
+        : buildWeeklyGrid(sessions),
     totalMarks,
     maxMarks,
     packs: progress?.byPack ?? [],

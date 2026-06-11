@@ -1,6 +1,6 @@
 import type { ChapterProgress, PracticeSessionView, ProgressSummary } from "../api";
 import type { DashboardStats } from "./dashboardStats";
-import { buildSubjectAccuracy, meaningfulSessions, sessionAccuracy } from "./dashboardStats";
+import { meaningfulSessions, sessionAccuracy } from "./dashboardStats";
 import { primaryWeakChapter } from "./weakChapters";
 
 export function performanceTrendLabel(stats: DashboardStats, attempts: number): string {
@@ -18,7 +18,7 @@ export function performanceTrendLabel(stats: DashboardStats, attempts: number): 
 
 export function buildAnalyticsInsights(
   progress: ProgressSummary | null,
-  stats: DashboardStats
+  _stats: DashboardStats
 ): string[] {
   const weak = primaryWeakChapter(progress?.weakChapters);
   const attempts = progress?.totalAttempts ?? 0;
@@ -52,8 +52,8 @@ export type WeeklyActivityCell = {
   tooltip: string;
 };
 
-/** Last 4 weeks — question counts per day for heatmap + tooltips. */
-export function buildWeeklyActivityCells(sessions: PracticeSessionView[]): WeeklyActivityCell[] {
+/** Fallback when API weeklyActivity is missing — buckets recent sessions by start date. */
+export function weeklyCountsFromSessions(sessions: PracticeSessionView[]): number[] {
   const counts = Array(28).fill(0);
   const now = new Date();
 
@@ -65,7 +65,14 @@ export function buildWeeklyActivityCells(sessions: PracticeSessionView[]): Weekl
     }
   }
 
+  return counts;
+}
+
+/** Last 4 weeks — question counts per day for heatmap + tooltips. */
+export function buildWeeklyActivityCells(dailyCounts: number[]): WeeklyActivityCell[] {
+  const counts = dailyCounts.length === 28 ? dailyCounts : Array(28).fill(0);
   const max = Math.max(1, ...counts);
+  const now = new Date();
 
   return counts.map((questionCount, idx) => {
     const dayOffset = 27 - idx;

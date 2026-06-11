@@ -46,6 +46,14 @@ export const PRACTICE_AI_FEATURES: {
     afterSubmit: true,
   },
   {
+    id: "pitfalls",
+    label: "Common mistakes & pattern",
+    icon: "error_outline",
+    description: "Typical NEET traps and recurring solution pattern",
+    beforeSubmit: true,
+    afterSubmit: true,
+  },
+  {
     id: "weak_chapter_analysis",
     label: "Weak chapter analysis",
     icon: "analytics",

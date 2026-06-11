@@ -6,6 +6,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Document(collection = "questions")
 @CompoundIndex(name = "pack_question_no", def = "{'packId': 1, 'questionNo': 1}")
@@ -39,11 +41,34 @@ public class Question {
     private String solutionImageUrl;
     private String questionTextPreview;
     private String solutionTextPreview;
+    /** Text MCQ options for AI variants (id 1–4 + option text). */
+    private List<McqOption> options;
     private List<String> hints;
     private List<FormulaCard> formulaCards;
     private String conceptExplanation;
     private List<String> commonMistakes;
     private String practicePattern;
+    /** Cached LLM revision notes for this PYQ (Explain after correct submit). */
+    private String revisionNotes;
+    /** Cached LLM wrong-answer explanations keyed by student option (1–4). */
+    private Map<String, String> whyWrongByAnswer;
+    /** pyq | ai_variant */
+    private String sourceType = "pyq";
+    /** Parent PYQ question_id for AI variants (e.g. NEET_2016_Q158). */
+    private String parentQuestionId;
+    /** 0 = original PYQ; 1–5 = AI variant number. */
+    private int variantNo;
+    private String variantType;
+    /** mcq | assertion_reason | statement_based */
+    private String questionFormat;
+    private String assertion;
+    private String reason;
+    private List<McqOption> statements;
+    /** Inline SVG from extractor diagrams/ (when no raster image). */
+    private String questionDiagramSvg;
+    private String solutionDiagramSvg;
+    /** Field names admin edited — import/enrich/LLM must not overwrite these. */
+    private Set<String> adminLockedFields;
 
     public String getId() {
         return id;
@@ -213,6 +238,14 @@ public class Question {
         this.solutionTextPreview = solutionTextPreview;
     }
 
+    public List<McqOption> getOptions() {
+        return options;
+    }
+
+    public void setOptions(List<McqOption> options) {
+        this.options = options;
+    }
+
     public List<String> getHints() {
         return hints;
     }
@@ -251,5 +284,109 @@ public class Question {
 
     public void setPracticePattern(String practicePattern) {
         this.practicePattern = practicePattern;
+    }
+
+    public String getRevisionNotes() {
+        return revisionNotes;
+    }
+
+    public void setRevisionNotes(String revisionNotes) {
+        this.revisionNotes = revisionNotes;
+    }
+
+    public Map<String, String> getWhyWrongByAnswer() {
+        return whyWrongByAnswer;
+    }
+
+    public void setWhyWrongByAnswer(Map<String, String> whyWrongByAnswer) {
+        this.whyWrongByAnswer = whyWrongByAnswer;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public String getParentQuestionId() {
+        return parentQuestionId;
+    }
+
+    public void setParentQuestionId(String parentQuestionId) {
+        this.parentQuestionId = parentQuestionId;
+    }
+
+    public int getVariantNo() {
+        return variantNo;
+    }
+
+    public void setVariantNo(int variantNo) {
+        this.variantNo = variantNo;
+    }
+
+    public String getVariantType() {
+        return variantType;
+    }
+
+    public void setVariantType(String variantType) {
+        this.variantType = variantType;
+    }
+
+    public String getQuestionFormat() {
+        return questionFormat;
+    }
+
+    public void setQuestionFormat(String questionFormat) {
+        this.questionFormat = questionFormat;
+    }
+
+    public String getAssertion() {
+        return assertion;
+    }
+
+    public void setAssertion(String assertion) {
+        this.assertion = assertion;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+
+    public List<McqOption> getStatements() {
+        return statements;
+    }
+
+    public void setStatements(List<McqOption> statements) {
+        this.statements = statements;
+    }
+
+    public String getQuestionDiagramSvg() {
+        return questionDiagramSvg;
+    }
+
+    public void setQuestionDiagramSvg(String questionDiagramSvg) {
+        this.questionDiagramSvg = questionDiagramSvg;
+    }
+
+    public String getSolutionDiagramSvg() {
+        return solutionDiagramSvg;
+    }
+
+    public void setSolutionDiagramSvg(String solutionDiagramSvg) {
+        this.solutionDiagramSvg = solutionDiagramSvg;
+    }
+
+    public Set<String> getAdminLockedFields() {
+        return adminLockedFields;
+    }
+
+    public void setAdminLockedFields(Set<String> adminLockedFields) {
+        this.adminLockedFields = adminLockedFields;
     }
 }

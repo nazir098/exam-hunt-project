@@ -39,6 +39,7 @@ public class PracticeService {
     private final QuestionRatingRepository ratings;
     private final AnswerValidationService validation;
     private final RevisionService revisionService;
+    private final ManifestImportService manifestImportService;
 
     public PracticeService(
             PracticeSessionRepository sessions,
@@ -46,13 +47,15 @@ public class PracticeService {
             QuestionAttemptRepository attempts,
             QuestionRatingRepository ratings,
             AnswerValidationService validation,
-            RevisionService revisionService) {
+            RevisionService revisionService,
+            ManifestImportService manifestImportService) {
         this.sessions = sessions;
         this.questions = questions;
         this.attempts = attempts;
         this.ratings = ratings;
         this.validation = validation;
         this.revisionService = revisionService;
+        this.manifestImportService = manifestImportService;
     }
 
     public PracticeSession createSession(String userId, CreateSessionRequest req) {
@@ -199,6 +202,24 @@ public class PracticeService {
                 || MODE_TEST.equals(mode);
     }
 
+    /** AI variant drills in practice mode do not affect marks or analytics. */
+    public static boolean countsForAnalytics(QuestionAttempt a, Question q) {
+        if (!countsForAnalytics(a)) {
+            return false;
+        }
+        if (q != null && isAiVariant(q) && MODE_PRACTICE.equals(a.getMode())) {
+            return false;
+        }
+        return true;
+    }
+
+    private int marksForAttempt(Question q, String sessionMode, boolean correct) {
+        if (isAiVariant(q) && MODE_PRACTICE.equals(sessionMode)) {
+            return 0;
+        }
+        return validation.marksForAttempt(correct);
+    }
+
     public PracticeSession requireSession(String userId, String sessionId) {
         PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
@@ -216,8 +237,12 @@ public class PracticeService {
     }
 
     public Question requireQuestion(String questionId) {
-        return questions.findByQuestionId(questionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
+        Question q =
+                questions
+                        .findByQuestionId(questionId)
+                        .orElseThrow(
+                                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
+        return manifestImportService.enrichVariantFromDisk(q);
     }
 
     /**
@@ -264,7 +289,7 @@ public class PracticeService {
 
         Question q = requireQuestion(req.questionId());
         boolean correct = validation.isCorrect(q.getAnswer(), req.selectedAnswer());
-        int marks = validation.marksForAttempt(correct);
+        int marks = marksForAttempt(q, session.getMode(), correct);
 
         QuestionAttempt attempt = new QuestionAttempt();
         attempt.setUserId(userId);
@@ -309,6 +334,31 @@ public class PracticeService {
         }
 
         return toSubmitResult(session, q, correct, marks, nextQuestionId);
+    }
+
+    /**
+     * Check an AI variant answer during practice without recording a session attempt.
+     * Session marks and analytics stay tied to the parent PYQ submit.
+     */
+    public VariantCheckResult checkVariantAnswer(String userId, String questionId, String selectedAnswer) {
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in required");
+        }
+        Question q = requireQuestion(questionId);
+        if (!isAiVariant(q)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only AI variant questions can be checked here");
+        }
+        boolean correct = validation.isCorrect(q.getAnswer(), selectedAnswer);
+        boolean hasSolution =
+                q.isHasSolution()
+                        || (q.getSolutionImageUrl() != null && !q.getSolutionImageUrl().isBlank())
+                        || (q.getSolutionTextPreview() != null && !q.getSolutionTextPreview().isBlank());
+        return new VariantCheckResult(
+                correct,
+                validation.normalize(q.getAnswer()),
+                hasSolution,
+                q.getSolutionImageUrl() != null ? q.getSolutionImageUrl() : "",
+                q.getSolutionTextPreview() != null ? q.getSolutionTextPreview() : "");
     }
 
     /** Practice returns full feedback; test omits answer/solution fields (exam simulation). */
@@ -400,8 +450,15 @@ public class PracticeService {
 
     public ProgressSummary progress(String userId) {
         List<QuestionAttempt> userAttempts = attempts.findByUserIdOrderByAnsweredAtDesc(userId);
+        Set<String> questionIds =
+                userAttempts.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
+        Map<String, Question> questionById = questions.findByQuestionIdIn(questionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+
         List<QuestionAttempt> analyticsAttempts =
-                userAttempts.stream().filter(PracticeService::countsForAnalytics).toList();
+                userAttempts.stream()
+                        .filter(a -> countsForAnalytics(a, questionById.get(a.getQuestionId())))
+                        .toList();
         long total = analyticsAttempts.size();
         long correct = analyticsAttempts.stream().filter(QuestionAttempt::isCorrect).count();
         List<PracticeSession> recent = sessions.findByUserIdOrderByStartedAtDesc(userId).stream()
@@ -410,18 +467,14 @@ public class PracticeService {
 
         Map<String, PackStats> byPack = new LinkedHashMap<>();
         Map<String, ChapterStats> byChapter = new LinkedHashMap<>();
-        Set<String> questionIds =
-                userAttempts.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
-        Map<String, Question> questionById = questions.findByQuestionIdIn(questionIds).stream()
-                .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
 
         for (QuestionAttempt a : userAttempts) {
-            if (!countsForAnalytics(a)) {
+            Question q = questionById.get(a.getQuestionId());
+            if (!countsForAnalytics(a, q)) {
                 continue;
             }
             byPack.computeIfAbsent(a.getPackId(), k -> new PackStats())
                     .add(a.isCorrect(), a.getMarksAwarded());
-            Question q = questionById.get(a.getQuestionId());
             if (q == null || q.getChapter() == null || q.getChapter().isBlank()) {
                 continue;
             }
@@ -452,7 +505,30 @@ public class PracticeService {
                                 e.getValue().correct,
                                 e.getValue().marks))
                         .toList(),
-                weakChapters);
+                weakChapters,
+                weeklyActivityCounts(analyticsAttempts));
+    }
+
+    /** Last 28 days — question counts per day (index 0 = oldest, 27 = today). */
+    private static List<Integer> weeklyActivityCounts(List<QuestionAttempt> attempts) {
+        int[] counts = new int[28];
+        long nowMs = Instant.now().toEpochMilli();
+        long dayMs = 86_400_000L;
+        for (QuestionAttempt a : attempts) {
+            Instant answered = a.getAnsweredAt();
+            if (answered == null) {
+                continue;
+            }
+            long diffDays = (nowMs - answered.toEpochMilli()) / dayMs;
+            if (diffDays >= 0 && diffDays < 28) {
+                counts[27 - (int) diffDays]++;
+            }
+        }
+        List<Integer> out = new ArrayList<>(28);
+        for (int c : counts) {
+            out.add(c);
+        }
+        return out;
     }
 
     public RatingView rateQuestion(String userId, String questionId, int score, String comment) {
@@ -524,7 +600,7 @@ public class PracticeService {
     }
 
     private List<Question> loadPool(CreateSessionRequest req) {
-        PageRequest pageable = PageRequest.of(0, 500, Sort.by("questionNo"));
+        PageRequest pageable = PageRequest.of(0, 2500, Sort.by("questionNo").and(Sort.by("variantNo")));
         if (req.subject() != null && !req.subject().isBlank()
                 && req.chapter() != null && !req.chapter().isBlank()) {
             return questions
@@ -541,24 +617,91 @@ public class PracticeService {
 
     private List<Question> filterPool(List<Question> pool, CreateSessionRequest req) {
         List<Question> list = new ArrayList<>(pool);
+        list = filterByQuestionSet(list, req.questionSet());
         if (req.topic() != null && !req.topic().isBlank()) {
             list = list.stream().filter(q -> req.topic().equals(q.getTopic())).toList();
         }
         if (req.difficulty() != null && !req.difficulty().isBlank()) {
-            int d = parseDifficulty(req.difficulty());
-            if (d > 0) {
-                list = list.stream().filter(q -> q.getDifficulty() == d).toList();
+            List<String> levels = parseDifficultyList(req.difficulty());
+            if (!levels.isEmpty()) {
+                list = list.stream().filter(q -> matchesAnyDifficulty(q.getDifficulty(), levels)).toList();
             }
         }
         return list;
     }
 
-    private int parseDifficulty(String label) {
-        return switch (label.toLowerCase()) {
-            case "easy" -> 1;
-            case "medium" -> 2;
-            case "hard" -> 3;
-            default -> 0;
+    private static List<Question> filterByQuestionSet(List<Question> pool, String questionSet) {
+        String set = normalizeQuestionSet(questionSet);
+        return switch (set) {
+            case "variants" -> dedupeVariantPool(pool.stream().filter(PracticeService::isAiVariant).toList());
+            case "all" -> dedupeMixedPool(pool);
+            default -> pool.stream().filter(q -> !isAiVariant(q)).toList();
+        };
+    }
+
+    private static List<Question> dedupeVariantPool(List<Question> variants) {
+        Map<String, Question> best = new LinkedHashMap<>();
+        for (Question q : variants) {
+            String parent = q.getParentQuestionId() != null ? q.getParentQuestionId() : "";
+            String key = parent + "#" + q.getVariantNo();
+            best.merge(key, q, AiVariantCatalog::preferCanonical);
+        }
+        return new ArrayList<>(best.values());
+    }
+
+    /** In mixed PYQ + variant sessions, keep one row per AI variant slot. */
+    private static List<Question> dedupeMixedPool(List<Question> pool) {
+        List<Question> pyqs = pool.stream().filter(q -> !isAiVariant(q)).toList();
+        List<Question> variants = dedupeVariantPool(pool.stream().filter(PracticeService::isAiVariant).toList());
+        List<Question> merged = new ArrayList<>(pyqs.size() + variants.size());
+        merged.addAll(pyqs);
+        merged.addAll(variants);
+        return merged;
+    }
+
+    private static boolean isAiVariant(Question q) {
+        return "ai_variant".equalsIgnoreCase(q.getSourceType());
+    }
+
+    private static String normalizeQuestionSet(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "pyq";
+        }
+        return switch (raw.trim().toLowerCase()) {
+            case "variants", "variant", "ai_variants" -> "variants";
+            case "all", "mixed", "both" -> "all";
+            default -> "pyq";
+        };
+    }
+
+    private static List<String> parseDifficultyList(String raw) {
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String p = part.trim().toLowerCase();
+            if (p.equals("easy") || p.equals("medium") || p.equals("hard")) {
+                if (!out.contains(p)) {
+                    out.add(p);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean matchesAnyDifficulty(int difficulty, List<String> levels) {
+        for (String level : levels) {
+            if (matchesDifficultyLevel(difficulty, level)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesDifficultyLevel(int difficulty, String level) {
+        return switch (level) {
+            case "easy" -> difficulty <= 1;
+            case "medium" -> difficulty == 2;
+            case "hard" -> difficulty >= 3;
+            default -> false;
         };
     }
 
@@ -568,6 +711,9 @@ public class PracticeService {
         if (req.chapter() != null) m.put("chapter", req.chapter());
         if (req.topic() != null) m.put("topic", req.topic());
         if (req.difficulty() != null) m.put("difficulty", req.difficulty());
+        if (req.questionSet() != null && !req.questionSet().isBlank()) {
+            m.put("questionSet", normalizeQuestionSet(req.questionSet()));
+        }
         return m;
     }
 
@@ -893,7 +1039,7 @@ public class PracticeService {
         List<WrongAttemptView> out = new ArrayList<>();
         for (QuestionAttempt a : wrong) {
             Question q = questionById.get(a.getQuestionId());
-            if (q == null) {
+            if (q == null || !countsForAnalytics(a, q)) {
                 continue;
             }
             if (subjectFilter != null
@@ -938,6 +1084,11 @@ public class PracticeService {
         Set<String> marked = s.getMarkedForReviewIds() != null
                 ? new java.util.HashSet<>(s.getMarkedForReviewIds())
                 : Set.of();
+        Map<String, Question> questionById = Map.of();
+        if (ids != null && !ids.isEmpty()) {
+            questionById = questions.findByQuestionIdIn(ids).stream()
+                    .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
+        }
         List<SessionQuestionTile> tiles = new ArrayList<>();
         if (ids != null) {
             for (int i = 0; i < ids.size(); i++) {
@@ -955,7 +1106,11 @@ public class PracticeService {
                 } else {
                     status = "unattempted";
                 }
-                tiles.add(new SessionQuestionTile(i + 1, qid, status));
+                Question q = questionById.get(qid);
+                int paperNo = q != null ? q.getQuestionNo() : 0;
+                int variantNo = q != null ? q.getVariantNo() : 0;
+                String sourceType = q != null && q.getSourceType() != null ? q.getSourceType() : "pyq";
+                tiles.add(new SessionQuestionTile(i + 1, qid, status, paperNo, variantNo, sourceType));
             }
         }
         return new SessionView(
@@ -992,9 +1147,16 @@ public class PracticeService {
             boolean adaptive,
             String startQuestionId,
             String mode,
-            Integer questionCount) {}
+            Integer questionCount,
+            String questionSet) {}
 
-    public record SessionQuestionTile(int number, String questionId, String status) {}
+    public record SessionQuestionTile(
+            int number,
+            String questionId,
+            String status,
+            int questionNo,
+            int variantNo,
+            String sourceType) {}
 
     public record WrongAttemptView(
             String attemptId,
@@ -1078,6 +1240,13 @@ public class PracticeService {
             String sessionStatus,
             String nextQuestionId) {}
 
+    public record VariantCheckResult(
+            boolean correct,
+            String correctAnswer,
+            boolean hasSolution,
+            String solutionImageUrl,
+            String solutionTextPreview) {}
+
     public record SessionView(
             String id,
             String packId,
@@ -1107,7 +1276,8 @@ public class PracticeService {
             int accuracyPercent,
             List<SessionView> recentSessions,
             List<PackProgress> byPack,
-            List<ChapterProgress> weakChapters) {}
+            List<ChapterProgress> weakChapters,
+            List<Integer> weeklyActivity) {}
 
     public record PackProgress(String packId, int attempts, int correct, int marks) {}
 

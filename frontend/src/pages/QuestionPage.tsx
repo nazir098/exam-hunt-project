@@ -3,16 +3,45 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "../components/BookmarkButton";
-import PracticeAiPanel from "../components/PracticeAiPanel";
+import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
+import AiMarkdown from "../components/AiMarkdown";
+import TextMcqQuestion from "../components/TextMcqQuestion";
+import VariantSwitchLoader from "../components/VariantSwitchLoader";
+import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
+import { hasDistinctSolution } from "../utils/questionSolution";
+import { formatVariantTypeLabel, VARIANT_SWITCH_IDLE, type VariantSwitchState } from "../utils/variantLabels";
 
 const OPTIONS = [
-  { label: "A", value: "1" },
-  { label: "B", value: "2" },
-  { label: "C", value: "3" },
-  { label: "D", value: "4" },
+  { label: "1", value: "1" },
+  { label: "2", value: "2" },
+  { label: "3", value: "3" },
+  { label: "4", value: "4" },
 ];
+
+function imageSrc(url: string, questionId: string) {
+  if (!url) return "";
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${encodeURIComponent(questionId)}`;
+}
+
+function usesTextVariantLayout(q: QuestionDetail) {
+  if (q.options && q.options.length > 0) return true;
+  if (q.questionDiagramSvg?.trim()) return true;
+  if (q.assertion?.trim() || q.reason?.trim()) return true;
+  if (q.statements && q.statements.length > 0) return true;
+  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
+  return false;
+}
+
+function isImageQuestion(q: QuestionDetail) {
+  return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
+}
+
+function optionLabel(value: string) {
+  return `Option ${value}`;
+}
 
 export default function QuestionPage() {
   const { questionId = "" } = useParams();
@@ -22,13 +51,19 @@ export default function QuestionPage() {
   const [siblings, setSiblings] = useState<QuestionPublic[]>([]);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
-  const [revealed, setRevealed] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [answerPeek, setAnswerPeek] = useState(false);
+  const [solutionOpen, setSolutionOpen] = useState(false);
+  const [variantSwitch, setVariantSwitch] = useState<VariantSwitchState>(VARIANT_SWITCH_IDLE);
   const returnQs = searchParams.toString();
 
   useEffect(() => {
     setQ(null);
     setError("");
-    setRevealed(false);
+    setChecked(false);
+    setAnswerPeek(false);
+    setSolutionOpen(false);
+    setVariantSwitch(VARIANT_SWITCH_IDLE);
     setSelected("");
     if (!questionId) return;
     let cancelled = false;
@@ -97,27 +132,66 @@ export default function QuestionPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [nav, goToQuestion]);
 
-  function imageSrc(url: string) {
-    if (!url) return "";
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}v=${encodeURIComponent(questionId)}`;
-  }
-
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
     return "/bank?exam=NEET";
   }
 
-  function checkAnswer() {
-    setRevealed(true);
-  }
+  const correctAnswer = q?.answer?.trim() ?? "";
+  const isCorrect = checked && selected === correctAnswer;
+  const isWrong = checked && selected !== "" && selected !== correctAnswer;
+  const showCorrect = (answerPeek || checked) && Boolean(correctAnswer);
+  const showWrong = checked && isWrong;
 
-  const correct = revealed && q?.answer && selected === q.answer.trim();
-  const similar = siblings.filter((s) => s.questionId !== questionId).slice(0, 2);
+  const hasSolution =
+    Boolean(q?.hasSolution) ||
+    Boolean(q?.solutionImageUrl?.trim()) ||
+    Boolean(q?.solutionTextPreview?.trim());
+  const distinctSolution = q ? hasDistinctSolution(q) : false;
+  const showSolutionPanel = solutionOpen && hasSolution && distinctSolution;
+
+  const assistantProps = {
+    questionId,
+    selectedAnswer: selected,
+    submitted: checked,
+    correct: checked ? isCorrect : null,
+    formulaRelevant: q?.formulaRelevant ?? true,
+    hasSolution: distinctSolution,
+  };
+
+  function renderImageOptions() {
+    return (
+      <section className="practice-run-options" aria-label="Answer options">
+        <p className="practice-run-options__label">Select one option</p>
+        <div className="practice-run-options__list">
+          {OPTIONS.map((opt) => {
+            const active = selected === opt.value;
+            const isOptCorrect = showCorrect && correctAnswer === opt.value;
+            const isOptWrong = showWrong && active;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={checked && isCorrect}
+                onClick={() => setSelected(opt.value)}
+                className={`practice-run-option${active ? " is-selected" : ""}${
+                  isOptCorrect ? " is-correct" : ""
+                }${isOptWrong ? " is-wrong" : ""}`}
+                aria-label={optionLabel(opt.label)}
+                aria-pressed={active}
+              >
+                <span className="practice-run-option__badge">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
 
   if (error) {
     return (
-      <main className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-24 pb-32">
+      <main className="solve-page pt-24">
         <p className="text-error">{error}</p>
         <Link to={backHref()} className="glass-card inline-block px-md py-sm rounded-xl mt-md">
           ← Back
@@ -128,26 +202,29 @@ export default function QuestionPage() {
 
   if (!q) {
     return (
-      <main className="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop pt-24 pb-32">
+      <main className="solve-page pt-24">
         <p className="text-outline">Loading question…</p>
       </main>
     );
   }
 
   const diff = difficultyLabel(q.difficulty);
+  const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
+  const imageMode = isImageQuestion(q);
 
   return (
-    <main className="px-margin-mobile lg:px-0 lg:pt-4 solve-page">
+    <main className="solve-page lg:pt-4">
       <ProductModeBanner mode="solve" />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg">
         <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
-          <Link to={backHref()} className="hover:text-primary cursor-pointer transition-colors">
+          <Link to={backHref()} className="hover:text-primary transition-colors">
             {q.subject}
           </Link>
           {q.chapter && (
             <>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
-              <span className="hover:text-primary cursor-pointer transition-colors">{q.chapter}</span>
+              <span>{q.chapter}</span>
             </>
           )}
           {q.topic && (
@@ -158,217 +235,224 @@ export default function QuestionPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-sm">
-          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-secondary flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-              history_edu
-            </span>
+          <span className="practice-run-chip">
             {examDisplayName(q.exam, q.year)} {q.year}
           </span>
-          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-error flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">trending_up</span>
-            {diff}
-          </span>
-          <span className="px-3 py-1 rounded-full bg-surface-container-high border border-white/10 text-caption text-on-surface-variant flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">analytics</span>
+          <span className="practice-run-chip">{diff}</span>
+          <span className="practice-run-chip practice-run-chip--muted">
             {marksLabel(q.difficulty, q.questionNo)}
           </span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-gutter">
-        <div className="space-y-lg">
-          <div className="glass-card rounded-xl p-lg">
-            <h1 className="text-headline-md font-headline-md text-on-surface mb-lg">
-              Question {q.questionNo}
-              {q.topic ? ` · ${q.topic}` : ""}
-            </h1>
-            <div className="exam-paper-image-frame mb-lg">
-              {q.questionImageUrl ? (
-                <img
-                  className="exam-paper-image"
-                  src={imageSrc(q.questionImageUrl)}
-                  alt={`Question ${q.questionNo}`}
-                />
-              ) : (
-                <p className="text-outline px-4 py-8">No question image</p>
-              )}
+      <div className="practice-run-layout">
+        <div className="practice-run-main">
+          <section key={questionId} className="practice-run-question glass-card">
+            <div className="practice-run-question__head">
+              <div className="practice-run-question__titles">
+                <p className="practice-run-question__eyebrow">Study mode · Question Bank</p>
+                <h1 className="practice-run-question__title">
+                  {isVariant
+                    ? `${formatVariantTypeLabel(q.variantType, q.variantNo)} · Paper Q${q.questionNo}`
+                    : `NEET Paper · Question ${q.questionNo}`}
+                  {q.topic ? ` · ${q.topic}` : ""}
+                </h1>
+              </div>
             </div>
-            <div className="flex items-center gap-md p-md bg-primary-container/10 border-l-4 border-primary rounded-r-lg">
-              <span className="material-symbols-outlined text-primary">info</span>
-              <p className="text-body-sm text-on-surface-variant">
-                Published exam images from your verified catalog.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex gap-md">
-            <button
-              type="button"
-              onClick={checkAnswer}
-              disabled={revealed && !!correct}
-              className={`flex-1 py-4 rounded-xl text-white font-headline-md hover:shadow-[0_0_20px_rgba(138,43,226,0.4)] transition-all active:scale-95 ${
-                revealed
-                  ? correct
-                    ? "success-glow-bg flex items-center justify-center gap-2"
-                    : "bg-surface-container-high"
-                  : "bg-[linear-gradient(135deg,#8A2BE2_0%,#4B0082_100%)]"
+            <QuestionVariantSwitcher
+              questionId={questionId}
+              onSelect={goToQuestion}
+              onSwitchStateChange={setVariantSwitch}
+            />
+
+            <div
+              className={`practice-run-question__media${
+                variantSwitch.active
+                  ? variantSwitch.mode === "ai"
+                    ? " practice-run-question__media--variant-generating"
+                    : " practice-run-question__media--variant-loading"
+                  : ""
               }`}
             >
-              {revealed && correct && (
-                <span className="material-symbols-outlined mr-2">check_circle</span>
+              {variantSwitch.active && variantSwitch.mode ? (
+                <VariantSwitchLoader mode={variantSwitch.mode} label={variantSwitch.label} />
+              ) : imageMode ? (
+                <img
+                  src={imageSrc(q.questionImageUrl, questionId)}
+                  alt={`Question ${q.questionNo}`}
+                  draggable={false}
+                />
+              ) : (
+                <TextMcqQuestion
+                  questionText={q.questionTextPreview || "No question text"}
+                  options={q.options ?? []}
+                  selected={selected}
+                  onSelect={setSelected}
+                  disabled={checked && isCorrect}
+                  correctAnswer={correctAnswer}
+                  showCorrect={showCorrect}
+                  showWrong={showWrong}
+                  questionFormat={q.questionFormat}
+                  variantType={q.variantType}
+                  assertion={q.assertion}
+                  reason={q.reason}
+                  statements={q.statements}
+                  questionImageUrl={q.questionImageUrl}
+                  questionDiagramSvg={q.questionDiagramSvg}
+                />
               )}
-              {revealed ? (correct ? "Correct Answer" : "View result") : "Check Answer"}
-            </button>
-            <BookmarkButton
-              questionId={questionId}
-              className="px-8 py-4 rounded-xl border border-white/10 glass-card text-on-surface hover:bg-white/5 transition-all active:scale-95 flex items-center gap-2"
-            />
-          </div>
-        </div>
+            </div>
+          </section>
 
-        <div className="space-y-md">
-          <div className="text-label-md text-on-surface-variant uppercase tracking-widest mb-sm">Select One Option</div>
-          <div className="space-y-sm">
-            {OPTIONS.map((opt) => {
-              const active = selected === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setSelected(opt.value)}
-                  className={`glass-card p-lg rounded-xl flex items-center gap-md w-full text-left transition-all border ${
-                    active
-                      ? "bg-primary/10 border-primary"
-                      : "border-transparent hover:bg-white/5"
-                  }`}
-                >
-                  <div
-                    className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold ${
-                      active
-                        ? "bg-primary text-on-primary border-primary"
-                        : "border-white/20 text-on-surface-variant"
-                    }`}
-                  >
-                    {opt.label}
-                  </div>
-                  <span className="text-body-md text-on-surface">Option {opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex lg:hidden flex-col gap-sm mt-lg">
+          {imageMode && renderImageOptions()}
+
+          <div className="solve-page__actions">
             <button
               type="button"
-              onClick={checkAnswer}
-              className="w-full py-4 rounded-xl bg-[linear-gradient(135deg,#8A2BE2_0%,#4B0082_100%)] text-white font-headline-md active:scale-95 transition-transform"
+              className={`practice-submit-btn solve-page__check-btn${
+                checked && isCorrect ? " practice-run-result--correct" : ""
+              }`}
+              disabled={!selected || (checked && isCorrect)}
+              onClick={() => setChecked(true)}
             >
-              Check Answer
+              <span className="material-symbols-outlined">
+                {checked && isCorrect ? "check_circle" : "done"}
+              </span>
+              {checked ? (isCorrect ? "Correct" : "Checked") : "Check answer"}
             </button>
+            <button
+              type="button"
+              className="practice-run-nav-btn solve-page__peek-btn"
+              onClick={() => setAnswerPeek((v) => !v)}
+              aria-pressed={answerPeek}
+            >
+              <span className="material-symbols-outlined">
+                {answerPeek ? "visibility_off" : "visibility"}
+              </span>
+              {answerPeek ? "Hide answer" : "Show answer"}
+            </button>
+            {distinctSolution && (
+              <button
+                type="button"
+                className="practice-run-nav-btn solve-page__peek-btn"
+                onClick={() => setSolutionOpen((v) => !v)}
+                aria-pressed={solutionOpen}
+              >
+                <span className="material-symbols-outlined">
+                  {solutionOpen ? "menu_book" : "auto_stories"}
+                </span>
+                {solutionOpen ? "Hide solution" : "View solution"}
+              </button>
+            )}
             <BookmarkButton
               questionId={questionId}
-              className="w-full py-4 rounded-xl border border-white/10 glass-card text-on-surface active:scale-95 flex justify-center items-center gap-2"
+              className="practice-run-nav-btn"
             />
           </div>
-        </div>
-      </div>
 
-      {q && (
-        <div className="mt-lg">
-          <PracticeAiPanel
-            questionId={questionId}
-            selectedAnswer={selected}
-            submitted={revealed}
-            correct={revealed ? selected === q.answer : null}
-            formulaRelevant={q.formulaRelevant}
-          />
-        </div>
-      )}
+          {answerPeek && !checked && correctAnswer && (
+            <p className="solve-page__answer-banner" role="status">
+              Correct answer: <strong>{optionLabel(correctAnswer)}</strong>
+            </p>
+          )}
 
-      <div
-        className={`mt-xxl transition-all duration-700 ${
-          revealed ? "opacity-100 translate-y-0" : "hidden opacity-0 translate-y-4"
-        }`}
-      >
-        <div className="mb-lg flex items-center gap-md">
-          <div className="h-px flex-1 bg-white/10" />
-          <h2 className="text-headline-md font-headline-md text-secondary">Step-by-Step Solution</h2>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-          <div className="lg:col-span-8 space-y-md">
-            <div className="glass-card p-lg rounded-xl space-y-lg">
-              <p className="text-body-md">
-                <strong>Correct option:</strong> {OPTIONS.find((o) => o.value === q.answer)?.label || q.answer || "—"}
-                {selected && (
-                  <>
-                    {" "}
-                    · You chose <strong>{OPTIONS.find((o) => o.value === selected)?.label || selected}</strong>
-                  </>
-                )}
-              </p>
-              {q.hasSolution && q.solutionImageUrl && (
-                <div className="exam-paper-image-frame">
+          {showSolutionPanel && (
+            <section className="solve-page__solution glass-card" aria-label="Official solution">
+              <div className="solve-page__solution-head">
+                <span className="material-symbols-outlined">menu_book</span>
+                <h2 className="solve-page__solution-title">Official solution</h2>
+              </div>
+              {q.solutionImageUrl?.trim() ? (
+                <div className="practice-run-question__media solve-page__solution-media">
                   <img
-                    className="exam-paper-image"
-                    src={imageSrc(q.solutionImageUrl)}
-                    alt={`Solution ${q.questionNo}`}
+                    src={imageSrc(q.solutionImageUrl, questionId)}
+                    alt={`Solution for question ${q.questionNo}`}
+                    draggable={false}
                   />
                 </div>
+              ) : q.solutionDiagramSvg?.trim() ? (
+                <div className="solve-page__solution-text text-mcq-paper">
+                  <div
+                    className="variant-diagram__svg"
+                    dangerouslySetInnerHTML={{ __html: q.solutionDiagramSvg }}
+                  />
+                </div>
+              ) : q.solutionTextPreview?.trim() ? (
+                <div className="solve-page__solution-text text-mcq-paper">
+                  <AiMarkdown text={q.solutionTextPreview} className="ai-markdown--paper" />
+                </div>
+              ) : (
+                <p className="muted">Solution is marked available but not loaded — try re-syncing the pack.</p>
               )}
-            </div>
-          </div>
-          <div className="lg:col-span-4">
-            <div className="glass-card rounded-xl p-lg sticky-below-header">
-              <div className="flex items-center justify-between mb-lg">
-                <h3 className="text-headline-md font-headline-md">Similar Problems</h3>
-                <span className="text-primary material-symbols-outlined">arrow_forward</span>
+            </section>
+          )}
+
+          {checked && (
+            <section
+              className={`practice-run-result practice-run-result--compact glass-card is-revealed${
+                isCorrect ? " practice-run-result--correct" : " practice-run-result--wrong"
+              }`}
+            >
+              <div className="practice-run-result__banner practice-run-result__banner--compact">
+                <span
+                  className="material-symbols-outlined practice-run-result__icon"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {isCorrect ? "check_circle" : "cancel"}
+                </span>
+                <div>
+                  <h2 className="practice-run-result__title">
+                    {isCorrect ? "Correct" : "Incorrect"}
+                  </h2>
+                  {!isCorrect && (
+                    <p className="practice-run-result__answer-line">
+                      Correct answer: {optionLabel(correctAnswer)}
+                    </p>
+                  )}
+                  {selected && (
+                    <p className="practice-run-result__answer-line muted">
+                      You chose {optionLabel(selected)}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-md overflow-x-auto hide-scrollbar">
-                {similar.length === 0 ? (
-                  <p className="text-caption text-outline">No similar questions in this filter.</p>
-                ) : (
-                  similar.map((s) => (
-                    <Link
-                      key={s.questionId}
-                      to={`/question/${s.questionId}?${returnQs}`}
-                      className="p-md rounded-lg bg-surface-deep/50 border border-white/5 hover:border-primary/20 transition-all cursor-pointer block"
-                    >
-                      <div className="text-caption text-secondary mb-2">
-                        {examDisplayName(s.exam, s.year)} {s.year}
-                      </div>
-                      <p className="text-body-sm line-clamp-2">
-                        Q{s.questionNo} — {s.chapter || s.subject}
-                      </p>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+            </section>
+          )}
+
+          <footer className="solve-page__footer-nav">
+            <button
+              type="button"
+              className="practice-run-nav-btn"
+              disabled={!nav.prev}
+              onClick={() => nav.prev && goToQuestion(nav.prev.questionId)}
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+              Previous
+            </button>
+            <span className="text-caption text-outline">
+              {nav.idx >= 0 ? nav.idx + 1 : q.questionNo} / {nav.total || "—"}
+            </span>
+            <button
+              type="button"
+              className="practice-run-nav-btn"
+              disabled={!nav.next}
+              onClick={() => nav.next && goToQuestion(nav.next.questionId)}
+            >
+              Next
+              <span className="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </footer>
         </div>
+
+        <aside className="practice-run-aside hidden lg:flex">
+          <PracticeStudyAssistant {...assistantProps} layout="sidebar" />
+        </aside>
       </div>
 
-      <footer className="flex items-center justify-between mt-xxl pt-lg border-t border-white/5">
-        <button
-          type="button"
-          className="px-md py-sm rounded-xl border border-white/10 glass-card text-on-surface disabled:opacity-40"
-          disabled={!nav.prev}
-          onClick={() => nav.prev && goToQuestion(nav.prev.questionId)}
-        >
-          ← Previous
-        </button>
-        <span className="text-caption text-outline">
-          {nav.idx >= 0 ? nav.idx + 1 : q.questionNo} / {nav.total || "—"}
-        </span>
-        <button
-          type="button"
-          className="px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold disabled:opacity-40"
-          disabled={!nav.next}
-          onClick={() => nav.next && goToQuestion(nav.next.questionId)}
-        >
-          Next →
-        </button>
-      </footer>
+      <div className="practice-run-ai-inline lg:hidden">
+        <PracticeStudyAssistant {...assistantProps} layout="inline" />
+      </div>
     </main>
   );
 }

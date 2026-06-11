@@ -256,7 +256,12 @@ export default function WrongAttemptsPage() {
               {expandedId === item.attemptId && (
                 <div className="wrong-review-item__explain">
                   {item.hasSolution && item.solutionImageUrl && (
-                    <img src={item.solutionImageUrl} alt="Solution" className="wrong-review-item__solution" />
+                    <img
+                      src={item.solutionImageUrl}
+                      alt="Solution"
+                      className="wrong-review-item__solution"
+                      draggable={false}
+                    />
                   )}
                   <PracticeStudyAssistant
                     questionId={item.questionId}

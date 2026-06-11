@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import type { PracticeSessionView } from "../api";
-import { buildWeeklyActivityCells } from "../utils/analyticsInsights";
+import {
+  buildWeeklyActivityCells,
+  weeklyCountsFromSessions,
+} from "../utils/analyticsInsights";
 import { WEEKDAY_LABELS } from "../utils/dashboardStats";
 
 function heatmapClass(level: number): string {
@@ -9,12 +12,21 @@ function heatmapClass(level: number): string {
 }
 
 type Props = {
-  sessions: PracticeSessionView[];
+  dailyCounts?: number[];
+  sessions?: PracticeSessionView[];
   totalQuestions?: number;
 };
 
-export default function WeeklyActivityPanel({ sessions, totalQuestions = 0 }: Props) {
-  const cells = useMemo(() => buildWeeklyActivityCells(sessions), [sessions]);
+export default function WeeklyActivityPanel({
+  dailyCounts,
+  sessions = [],
+  totalQuestions = 0,
+}: Props) {
+  const cells = useMemo(() => {
+    const counts =
+      dailyCounts?.length === 28 ? dailyCounts : weeklyCountsFromSessions(sessions);
+    return buildWeeklyActivityCells(counts);
+  }, [dailyCounts, sessions]);
   const hasActivity = cells.some((c) => c.questionCount > 0);
 
   return (

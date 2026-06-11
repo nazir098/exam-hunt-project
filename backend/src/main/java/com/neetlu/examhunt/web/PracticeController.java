@@ -43,7 +43,8 @@ public class PracticeController {
                         body.adaptive(),
                         body.startQuestionId(),
                         body.mode(),
-                        body.questionCount()));
+                        body.questionCount(),
+                        body.questionSet()));
         return practiceService.toView(session);
     }
 
@@ -93,6 +94,12 @@ public class PracticeController {
                 new PracticeService.SubmitRequest(body.sessionId(), body.questionId(), body.selectedAnswer()));
     }
 
+    @PostMapping("/variant-check")
+    public PracticeService.VariantCheckResult checkVariant(
+            @AuthenticationPrincipal String userId, @RequestBody VariantCheckBody body) {
+        return practiceService.checkVariantAnswer(userId, body.questionId(), body.selectedAnswer());
+    }
+
     @PostMapping("/skip")
     public PracticeService.SkipResult skip(
             @AuthenticationPrincipal String userId, @RequestBody SkipBody body) {
@@ -126,8 +133,9 @@ public class PracticeController {
     public SolutionRevealView practiceSolution(
             @AuthenticationPrincipal String userId, @PathVariable String questionId) {
         Question q = practiceService.requireQuestion(questionId);
-        return new SolutionRevealView(
-                q.isHasSolution(), q.isHasSolution() ? nullToEmpty(q.getSolutionImageUrl()) : "");
+        String imageUrl = q.isHasSolution() ? nullToEmpty(q.getSolutionImageUrl()) : "";
+        String textPreview = q.isHasSolution() ? nullToEmpty(q.getSolutionTextPreview()) : "";
+        return new SolutionRevealView(q.isHasSolution(), imageUrl, textPreview);
     }
 
     private static String nullToEmpty(String s) {
@@ -158,18 +166,23 @@ public class PracticeController {
             boolean adaptive,
             String startQuestionId,
             String mode,
-            Integer questionCount) {}
+            Integer questionCount,
+            String questionSet) {}
 
     public record RetakeTestBody(@NotBlank String filter) {}
 
     public record SubmitBody(
             @NotBlank String sessionId, @NotBlank String questionId, @NotBlank String selectedAnswer) {}
 
+    public record VariantCheckBody(@NotBlank String questionId, @NotBlank String selectedAnswer) {}
+
     public record SkipBody(@NotBlank String sessionId, @NotBlank String questionId) {}
 
     public record MarkReviewBody(@NotBlank String questionId) {}
 
     public record RateBody(@Min(1) @Max(5) int score, String comment) {}
+
+    public record McqOptionView(String id, String text) {}
 
     public record QuestionPracticeView(
             String questionId,
@@ -184,7 +197,20 @@ public class PracticeController {
             boolean hasSolution,
             boolean formulaRelevant,
             String questionImageUrl,
-            String questionTextPreview) {
+            String questionTextPreview,
+            String solutionTextPreview,
+            java.util.List<McqOptionView> options,
+            String sourceType,
+            String parentQuestionId,
+            int variantNo,
+            String variantType,
+            String questionFormat,
+            String assertion,
+            String reason,
+            java.util.List<McqOptionView> statements,
+            boolean hasDiagram,
+            String questionDiagramSvg,
+            String solutionDiagramSvg) {
         static QuestionPracticeView from(Question q) {
             return new QuestionPracticeView(
                     q.getQuestionId(),
@@ -199,9 +225,32 @@ public class PracticeController {
                     q.isHasSolution(),
                     FormulaEligibility.questionNeedsFormula(q),
                     q.getQuestionImageUrl(),
-                    q.getQuestionTextPreview());
+                    q.getQuestionTextPreview(),
+                    q.getSolutionTextPreview(),
+                    mapOptions(q),
+                    q.getSourceType() != null ? q.getSourceType() : "pyq",
+                    q.getParentQuestionId(),
+                    q.getVariantNo(),
+                    q.getVariantType(),
+                    QuestionVariantMapper.nullToEmpty(q.getQuestionFormat()),
+                    QuestionVariantMapper.nullToEmpty(q.getAssertion()),
+                    QuestionVariantMapper.nullToEmpty(q.getReason()),
+                    QuestionVariantMapper.mapStatementsForPractice(q),
+                    q.isHasDiagram(),
+                    QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
+                    QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()));
+        }
+
+        private static java.util.List<McqOptionView> mapOptions(Question q) {
+            if (q.getOptions() == null || q.getOptions().isEmpty()) {
+                return java.util.List.of();
+            }
+            return q.getOptions().stream()
+                    .map(o -> new McqOptionView(o.getId(), o.getText()))
+                    .toList();
         }
     }
 
-    public record SolutionRevealView(boolean hasSolution, String solutionImageUrl) {}
+    public record SolutionRevealView(
+            boolean hasSolution, String solutionImageUrl, String solutionTextPreview) {}
 }

@@ -4,18 +4,17 @@ import type { PackSummary } from "../api";
 import HintTooltip from "./HintTooltip";
 import { TEST_MODE_HINT } from "../navigation/modeHints";
 import {
+  DIFFICULTY_LEVELS,
+  difficultySelectionLabel,
+  toggleDifficultyLevel,
+  type DifficultyLevel,
+} from "../utils/difficultyFilter";
+import {
   clampPracticeQuestionCount,
   MAX_PRACTICE_QUESTIONS,
   MIN_PRACTICE_QUESTIONS,
   testTimingLabel,
 } from "../utils/practiceHub";
-
-const DIFFICULTY_OPTIONS = [
-  { value: "", label: "Mixed" },
-  { value: "easy", label: "Easy" },
-  { value: "medium", label: "Medium" },
-  { value: "hard", label: "Hard" },
-] as const;
 
 const COUNT_PRESETS = [45, 90, 180] as const;
 
@@ -23,10 +22,11 @@ type Props = {
   packId: string;
   subject: string;
   chapter: string;
-  difficulty: string;
+  difficulties: DifficultyLevel[];
   questionCount: number;
   sessionSize: number;
   poolMax: number;
+  poolLoading?: boolean;
   estMinutes: number;
   packs: PackSummary[];
   selectedPack: PackSummary | undefined;
@@ -35,7 +35,7 @@ type Props = {
   onPackId: (id: string) => void;
   onSubject: (v: string) => void;
   onChapter: (v: string) => void;
-  onDifficulty: (v: string) => void;
+  onDifficulties: (levels: DifficultyLevel[]) => void;
   onQuestionCount: (v: number) => void;
   onSubmit: (e: FormEvent) => void;
 };
@@ -44,10 +44,11 @@ export default function TestSessionBuilder({
   packId,
   subject,
   chapter,
-  difficulty,
+  difficulties,
   questionCount,
   sessionSize,
   poolMax,
+  poolLoading = false,
   estMinutes,
   packs,
   selectedPack,
@@ -56,11 +57,12 @@ export default function TestSessionBuilder({
   onPackId,
   onSubject,
   onChapter,
-  onDifficulty,
+  onDifficulties,
   onQuestionCount,
   onSubmit,
 }: Props) {
-  const inputMax = Math.min(MAX_PRACTICE_QUESTIONS, poolMax);
+  const inputMax = poolMax > 0 ? Math.min(MAX_PRACTICE_QUESTIONS, poolMax) : 0;
+  const noQuestions = !poolLoading && poolMax === 0;
 
   const subjectCount =
     subject && selectedPack?.facets?.subjects
@@ -83,8 +85,7 @@ export default function TestSessionBuilder({
     chapter || "All chapters",
   ].join(" · ");
 
-  const difficultyLabel =
-    DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? "Mixed";
+  const difficultyLabel = difficultySelectionLabel(difficulties);
 
   const previewMeta = [
     `${sessionSize} Questions`,
@@ -102,18 +103,24 @@ export default function TestSessionBuilder({
   }, [sessionSize, countFocused]);
 
   function stepCount(delta: number) {
+    if (poolMax <= 0) return;
     const next = clampPracticeQuestionCount(questionCount + delta, poolMax);
     onQuestionCount(next);
     setCountDraft(String(next));
   }
 
   function applyPreset(value: number) {
+    if (poolMax <= 0) return;
     const next = clampPracticeQuestionCount(value, poolMax);
     onQuestionCount(next);
     setCountDraft(String(next));
   }
 
   function commitCountDraft(raw: string) {
+    if (poolMax <= 0) {
+      setCountDraft("0");
+      return;
+    }
     const parsed = Number.parseInt(raw.trim(), 10);
     if (!Number.isFinite(parsed)) {
       const fallback = clampPracticeQuestionCount(sessionSize, poolMax);
@@ -238,20 +245,35 @@ export default function TestSessionBuilder({
 
           <div className="practice-advanced__field test-builder__field--wide">
             <span className="practice-advanced__label">Difficulty</span>
-            <div className="session-chip-row" role="radiogroup" aria-label="Difficulty">
-              {DIFFICULTY_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value || "mixed"}
-                  type="button"
-                  role="radio"
-                  aria-checked={difficulty === opt.value}
-                  className={`session-chip${difficulty === opt.value ? " is-active" : ""}`}
-                  onClick={() => onDifficulty(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="session-chip-row" role="group" aria-label="Difficulty levels">
+              <button
+                type="button"
+                aria-pressed={difficulties.length === 0}
+                className={`session-chip${difficulties.length === 0 ? " is-active" : ""}`}
+                onClick={() => onDifficulties([])}
+              >
+                Mixed
+              </button>
+              {DIFFICULTY_LEVELS.map((opt) => {
+                const active = difficulties.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    aria-pressed={active}
+                    className={`session-chip${active ? " is-active" : ""}`}
+                    onClick={() => onDifficulties(toggleDifficultyLevel(difficulties, opt.value))}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
+            <p className="practice-advanced__meta">
+              {difficulties.length === 0
+                ? "All difficulty levels"
+                : `Only ${difficultyLabel} questions`}
+            </p>
           </div>
         </div>
 
@@ -309,8 +331,11 @@ export default function TestSessionBuilder({
               </button>
             </div>
             <p className="practice-advanced__meta">
-              ~{estMinutes} min timed · {testTimingLabel(subject)} · {MIN_PRACTICE_QUESTIONS}–{inputMax}{" "}
-              allowed
+              {poolLoading
+                ? "Counting matching questions…"
+                : noQuestions
+                  ? "No questions match these filters"
+                  : `~${estMinutes} min timed · ${testTimingLabel(subject)} · ${MIN_PRACTICE_QUESTIONS}–${inputMax} allowed`}
             </p>
           </div>
         </div>
@@ -327,7 +352,7 @@ export default function TestSessionBuilder({
         <button
           type="submit"
           className="btn primary btn-block practice-advanced__start"
-          disabled={busy || !packId}
+          disabled={busy || !packId || noQuestions || poolLoading}
         >
           {busy ? "Building test…" : "Start NEET Test"}
           {!busy && <span className="material-symbols-outlined">arrow_forward</span>}

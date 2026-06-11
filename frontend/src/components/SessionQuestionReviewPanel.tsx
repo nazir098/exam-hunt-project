@@ -70,7 +70,11 @@ export default function SessionQuestionReviewPanel({ review, onClose }: Props) {
               {showSolution ? "Hide explanation" : "View explanation"}
             </button>
             {showSolution && (
-              <img src={imageSrc(review.solutionImageUrl, review.questionId)} alt="Solution" />
+              <img
+                src={imageSrc(review.solutionImageUrl, review.questionId)}
+                alt="Solution"
+                draggable={false}
+              />
             )}
           </div>
         )}

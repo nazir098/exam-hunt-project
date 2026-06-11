@@ -121,14 +121,17 @@ export default function TestSessionSummary({ recentTests = [], packs = [] }: Pro
   const visibleTests = listExpanded ? recentTests : recentTests.slice(0, RECENT_VISIBLE);
 
   return (
-    <aside className="test-summary glass-card" aria-label="Test expectations">
+    <aside className="test-summary glass-card" aria-label="Test hub">
       <div className="test-summary__inner">
         <header className="test-summary__head">
-          <p className="test-summary__eyebrow">
-            <span className="material-symbols-outlined">fact_check</span>
-            What to expect
-          </p>
-          <span className="test-summary__badge">Exam simulation</span>
+          <div className="test-summary__head-copy">
+            <p className="test-summary__eyebrow">
+              <span className="material-symbols-outlined">monitoring</span>
+              Test hub
+            </p>
+            <p className="test-summary__head-sub">Recent runs · rules · scoring</p>
+          </div>
+          <span className="test-summary__badge">Timed mode</span>
         </header>
 
         <section
@@ -188,7 +191,7 @@ export default function TestSessionSummary({ recentTests = [], packs = [] }: Pro
 
         <section className="test-summary__section" aria-labelledby="test-summary-during">
           <h3 id="test-summary-during" className="test-summary__section-label">
-            During the test
+            How it works
           </h3>
           <ol className="test-summary__steps">
             {TEST_STEPS.map((step, i) => (

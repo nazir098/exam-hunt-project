@@ -1,4 +1,10 @@
-import type { ChapterProgress, PackSummary, PracticeSessionView, ProgressSummary } from "../api";
+import type {
+  ChapterProgress,
+  PackSummary,
+  PracticeSessionView,
+  ProgressSummary,
+  QuestionSetMode,
+} from "../api";
 import { sessionRoute } from "../navigation/modes";
 import { meaningfulSessions } from "./dashboardStats";
 import { primaryWeakChapter } from "./weakChapters";
@@ -20,18 +26,27 @@ export function clampPracticeQuestionCount(value: number, poolMax?: number): num
 export function practicePoolMax(
   pack: PackSummary | null | undefined,
   subject?: string,
-  chapter?: string
+  chapter?: string,
+  questionSet: QuestionSetMode = "pyq"
 ): number {
   if (!pack) return MAX_PRACTICE_QUESTIONS;
+  const variantTotal = pack.facets?.variant_count ?? 0;
+  let pyqMax = pack.questionCount;
   if (subject && chapter && pack.facets?.chapters) {
     const ch = pack.facets.chapters.find((c) => c.subject === subject && c.chapter === chapter);
-    if (ch?.count) return ch.count;
-  }
-  if (subject && pack.facets?.subjects) {
+    if (ch?.count) pyqMax = ch.count;
+  } else if (subject && pack.facets?.subjects) {
     const sub = pack.facets.subjects.find((s) => s.name === subject);
-    if (sub?.count) return sub.count;
+    if (sub?.count) pyqMax = sub.count;
   }
-  return pack.questionCount;
+  if (questionSet === "variants") {
+    if (variantTotal > 0) return variantTotal;
+    return Math.min(MAX_PRACTICE_QUESTIONS, pyqMax * 3);
+  }
+  if (questionSet === "all") {
+    return pyqMax + (variantTotal > 0 ? variantTotal : 0);
+  }
+  return pyqMax;
 }
 
 export function estimatedDrillMinutes(questions = FOCUSED_DRILL_QUESTIONS): number {

@@ -7,6 +7,7 @@ import {
   DEMO_ATTEMPTS,
   DEMO_BAR_HEIGHTS,
   DEMO_CORRECT,
+  DEMO_HEATMAP,
   DEMO_SESSIONS,
   DEMO_STATS,
   DEMO_SUBJECTS,
@@ -182,6 +183,7 @@ export default function AnalyticsGuestPreview() {
           <div className="analytics-preview-panel-wrap">
             <InsightChartsPanel
               stats={DEMO_STATS}
+              progress={null}
               accuracy={DEMO_ACCURACY}
               attempts={DEMO_ATTEMPTS}
               subjects={DEMO_SUBJECTS.map((s) => ({ name: s.name, pct: s.pct }))}
@@ -246,10 +248,7 @@ export default function AnalyticsGuestPreview() {
 
         <aside className="analytics-side space-y-lg">
           <div className="analytics-preview-panel-wrap">
-            <WeeklyActivityPanel
-              heatmap={DEMO_STATS.heatmap}
-              caption={`${DEMO_ATTEMPTS} questions · sample study rhythm`}
-            />
+            <WeeklyActivityPanel dailyCounts={DEMO_HEATMAP} totalQuestions={DEMO_ATTEMPTS} />
             <SampleBadge />
           </div>
 

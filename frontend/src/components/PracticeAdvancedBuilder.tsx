@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { PackSummary } from "../api";
+import type { PackSummary, QuestionSetMode } from "../api";
 import HintTooltip from "./HintTooltip";
 import { PRACTICE_MODE_HINT } from "../navigation/modeHints";
 import {
@@ -15,6 +15,7 @@ type Props = {
   subject: string;
   chapter: string;
   adaptive: boolean;
+  questionSet: QuestionSetMode;
   questionCount: number;
   poolMax: number;
   sessionSize: number;
@@ -26,6 +27,7 @@ type Props = {
   onSubject: (v: string) => void;
   onChapter: (v: string) => void;
   onAdaptive: (v: boolean) => void;
+  onQuestionSet: (v: QuestionSetMode) => void;
   onQuestionCount: (v: number) => void;
   onStart: () => void;
 };
@@ -35,6 +37,7 @@ export default function PracticeAdvancedBuilder({
   subject,
   chapter,
   adaptive,
+  questionSet,
   questionCount,
   poolMax,
   sessionSize,
@@ -46,6 +49,7 @@ export default function PracticeAdvancedBuilder({
   onSubject,
   onChapter,
   onAdaptive,
+  onQuestionSet,
   onQuestionCount,
   onStart,
 }: Props) {
@@ -67,10 +71,20 @@ export default function PracticeAdvancedBuilder({
   const chapterOptions =
     selectedPack?.facets?.chapters?.filter((c) => c.subject === subject) ?? [];
 
+  const questionSetLabel =
+    questionSet === "variants"
+      ? "AI variants"
+      : questionSet === "all"
+        ? "PYQ + variants"
+        : "Original PYQ";
+
+  const variantCount = selectedPack?.facets?.variant_count ?? 0;
+
   const previewScope = [
     selectedPack ? `NEET ${selectedPack.year}` : "NEET",
     subject || "All subjects",
     chapter || "All chapters",
+    questionSetLabel,
   ].join(" · ");
 
   const previewMeta = [
@@ -159,31 +173,67 @@ export default function PracticeAdvancedBuilder({
           </div>
         </div>
 
+        <div className="practice-advanced__field">
+          <span className="practice-advanced__label">Question set</span>
+          <div className="practice-advanced__subject-pills" role="group" aria-label="Question set">
+            <button
+              type="button"
+              className={`practice-advanced__subject-pill${questionSet === "pyq" ? " is-active" : ""}`}
+              onClick={() => onQuestionSet("pyq")}
+            >
+              Original PYQ
+            </button>
+            <button
+              type="button"
+              className={`practice-advanced__subject-pill${questionSet === "variants" ? " is-active" : ""}`}
+              onClick={() => onQuestionSet("variants")}
+              disabled={variantCount === 0}
+            >
+              AI variants
+            </button>
+            <button
+              type="button"
+              className={`practice-advanced__subject-pill${questionSet === "all" ? " is-active" : ""}`}
+              onClick={() => onQuestionSet("all")}
+              disabled={variantCount === 0}
+            >
+              Both
+            </button>
+          </div>
+          <span className="practice-advanced__meta">
+            {variantCount > 0
+              ? `${variantCount} QC-accepted variants imported (up to 5 per PYQ)`
+              : "Re-import pack from Admin to load AI variants"}
+          </span>
+        </div>
+
         {selectedPack?.facets?.subjects && (
           <div className="practice-advanced__field">
-            <label className="practice-advanced__label" htmlFor="practice-subject">
-              Subject
-            </label>
-            <div className="practice-advanced__select-wrap">
-              <select
-                id="practice-subject"
-                className="practice-advanced__select"
-                value={subject}
-                onChange={(e) => onSubject(e.target.value)}
+            <span className="practice-advanced__label">Subject</span>
+            <div className="practice-advanced__subject-pills" role="group" aria-label="Subject filter">
+              <button
+                type="button"
+                className={`practice-advanced__subject-pill${subject === "" ? " is-active" : ""}`}
+                onClick={() => onSubject("")}
               >
-                <option value="">All subjects</option>
-                {selectedPack.facets.subjects.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <span className="practice-advanced__meta">
-                {subjectCount != null
-                  ? `${subjectCount} available`
-                  : `${selectedPack.questionCount} available`}
-              </span>
+                All
+              </button>
+              {selectedPack.facets.subjects.map((s) => (
+                <button
+                  key={s.name}
+                  type="button"
+                  className={`practice-advanced__subject-pill${subject === s.name ? " is-active" : ""}`}
+                  onClick={() => onSubject(s.name)}
+                >
+                  {s.name}
+                </button>
+              ))}
             </div>
+            <span className="practice-advanced__meta">
+              {subjectCount != null
+                ? `${subjectCount} questions in ${subject}`
+                : `${selectedPack.questionCount} questions · full paper`}
+            </span>
           </div>
         )}
 

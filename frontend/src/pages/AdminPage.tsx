@@ -3,12 +3,15 @@ import { Link, Navigate } from "react-router-dom";
 import {
   adminCleanupDemoPacks,
   adminCleanupLeaderboardDemo,
+  adminDeletePack,
   adminImportAll,
   adminImportFolder,
   adminImportNeet,
   adminSeedLeaderboardDemo,
   fetchAdminImportFolders,
+  fetchAdminPacks,
   type AdminActionResult,
+  type AdminPackRow,
   type ImportFolderOption,
 } from "../api";
 import AdminPlatformSettingsPanel from "../components/AdminPlatformSettings";
@@ -36,8 +39,26 @@ export default function AdminPage() {
   const [foldersLoading, setFoldersLoading] = useState(true);
   const [foldersError, setFoldersError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
+  const [installedPacks, setInstalledPacks] = useState<AdminPackRow[]>([]);
+  const [packsLoading, setPacksLoading] = useState(true);
   const [log, setLog] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const loadInstalledPacks = useCallback(() => {
+    setPacksLoading(true);
+    fetchAdminPacks()
+      .then((res) => {
+        const seen = new Set<string>();
+        const unique = res.packs.filter((p) => {
+          if (seen.has(p.packId)) return false;
+          seen.add(p.packId);
+          return true;
+        });
+        setInstalledPacks(unique);
+      })
+      .catch(() => setInstalledPacks([]))
+      .finally(() => setPacksLoading(false));
+  }, []);
 
   useEffect(() => {
     if (!user?.admin) return;
@@ -56,6 +77,11 @@ export default function AdminPage() {
       .finally(() => setFoldersLoading(false));
   }, [user?.admin]);
 
+  useEffect(() => {
+    if (!user?.admin) return;
+    loadInstalledPacks();
+  }, [user?.admin, loadInstalledPacks]);
+
   const runTask = useCallback(async (task: AdminTask) => {
     setBusyId(task.id);
     setError(null);
@@ -63,12 +89,34 @@ export default function AdminPage() {
     try {
       const result = await task.run();
       setLog(formatResult(result));
+      if (task.id.startsWith("import-") || task.id === "cleanup-demo") {
+        loadInstalledPacks();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [loadInstalledPacks]);
+
+  const deletePack = useCallback(
+    async (packId: string) => {
+      const taskId = `delete-pack-${packId}`;
+      setBusyId(taskId);
+      setError(null);
+      setLog(null);
+      try {
+        const result = await adminDeletePack(packId);
+        setLog(formatResult(result));
+        loadInstalledPacks();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [loadInstalledPacks]
+  );
 
   if (loading) {
     return (
@@ -151,6 +199,17 @@ export default function AdminPage() {
       <AdminPlatformSettingsPanel />
 
       <section className="admin-page__section">
+        <h2 className="admin-page__section-title">Question editor</h2>
+        <p className="admin-page__section-desc muted">
+          Preview how students see question text, options, and LaTeX. Fix content and override AI
+          assistant responses saved for future hits.
+        </p>
+        <Link to="/admin/questions" className="btn primary">
+          Open question editor
+        </Link>
+      </section>
+
+      <section className="admin-page__section">
         <h2 className="admin-page__section-title">Import / sync</h2>
         <div className="admin-page__folder">
           <label className="text-body-sm text-on-surface-variant" htmlFor="admin-folder">
@@ -181,46 +240,104 @@ export default function AdminPage() {
             </p>
           )}
         </div>
-        <div className="admin-page__grid">
-          {importTasks.map((task) => (
-            <article key={task.id} className="admin-card">
-              <h3 className="admin-card__title">{task.title}</h3>
-              <p className="admin-card__desc">{task.description}</p>
-              <button
-                type="button"
-                className="btn primary btn-block"
-                disabled={busyId !== null || (task.id === "import-folder" && !folderName.trim())}
-                onClick={() => runTask(task)}
-              >
-                {busyId === task.id ? "Running…" : "Run"}
-              </button>
-            </article>
-          ))}
+        <div className={"admin-page__grid" + (busyId ? " admin-page__grid--busy" : "")}>
+          {importTasks.map((task) => {
+            const running = busyId === task.id;
+            const blocked = busyId !== null && !running;
+            return (
+              <article key={task.id} className="admin-card">
+                <h3 className="admin-card__title">{task.title}</h3>
+                <p className="admin-card__desc">{task.description}</p>
+                <button
+                  type="button"
+                  className={"btn primary btn-block" + (running ? " admin-btn--busy" : "")}
+                  disabled={
+                    blocked || running || (task.id === "import-folder" && !folderName.trim())
+                  }
+                  onClick={() => runTask(task)}
+                >
+                  {running ? "Running…" : "Run"}
+                </button>
+              </article>
+            );
+          })}
         </div>
       </section>
 
       <section className="admin-page__section">
+        <h2 className="admin-page__section-title">Installed packs</h2>
+        <p className="admin-page__section-desc muted">
+          Packs currently in the database — these appear in Question Bank and Practice. Remove extras
+          you did not import.
+        </p>
+        {packsLoading ? (
+          <p className="muted">Loading packs…</p>
+        ) : installedPacks.length === 0 ? (
+          <p className="muted">No packs imported yet. Sync folder 2016 above.</p>
+        ) : (
+          <ul className="admin-pack-list">
+            {installedPacks.map((p) => {
+              const deleteId = `delete-pack-${p.packId}`;
+              const running = busyId === deleteId;
+              const blocked = busyId !== null && !running;
+              return (
+                <li key={p.packId} className="admin-pack-row">
+                  <div>
+                    <strong>
+                      <Link to={`/admin/questions?packId=${encodeURIComponent(p.packId)}&q=Q`}>
+                        {p.packId}
+                      </Link>
+                    </strong>
+                    <span className="admin-pack-row__meta muted">
+                      {p.exam} {p.year}
+                      {p.sourceFolder ? ` · folder ${p.sourceFolder}` : ""}
+                      {" · "}
+                      {p.questionCount} questions
+                      {p.demo ? " · demo" : ""}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={"btn danger" + (running ? " admin-btn--busy" : "")}
+                    disabled={blocked || running}
+                    onClick={() => deletePack(p.packId)}
+                  >
+                    {running ? "Removing…" : "Remove"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="admin-page__section">
         <h2 className="admin-page__section-title">Cleanup &amp; demo data</h2>
-        <div className="admin-page__grid">
-          {maintenanceTasks.map((task) => (
-            <article
-              key={task.id}
-              className={"admin-card" + (task.variant === "danger" ? " admin-card--danger" : "")}
-            >
-              <h3 className="admin-card__title">{task.title}</h3>
-              <p className="admin-card__desc">{task.description}</p>
-              <button
-                type="button"
-                className={
-                  task.variant === "danger" ? "btn danger btn-block" : "btn btn-block"
-                }
-                disabled={busyId !== null}
-                onClick={() => runTask(task)}
+        <div className={"admin-page__grid" + (busyId ? " admin-page__grid--busy" : "")}>
+          {maintenanceTasks.map((task) => {
+            const running = busyId === task.id;
+            const blocked = busyId !== null && !running;
+            return (
+              <article
+                key={task.id}
+                className={"admin-card" + (task.variant === "danger" ? " admin-card--danger" : "")}
               >
-                {busyId === task.id ? "Running…" : "Run"}
-              </button>
-            </article>
-          ))}
+                <h3 className="admin-card__title">{task.title}</h3>
+                <p className="admin-card__desc">{task.description}</p>
+                <button
+                  type="button"
+                  className={
+                    (task.variant === "danger" ? "btn danger btn-block" : "btn btn-block") +
+                    (running ? " admin-btn--busy" : "")
+                  }
+                  disabled={blocked || running}
+                  onClick={() => runTask(task)}
+                >
+                  {running ? "Running…" : "Run"}
+                </button>
+              </article>
+            );
+          })}
         </div>
       </section>
 

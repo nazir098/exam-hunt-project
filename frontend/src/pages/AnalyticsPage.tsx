@@ -42,7 +42,7 @@ export default function AnalyticsPage() {
   const barHeights = stats.bars.length ? stats.bars : [40, 55, 45, 60, 70, accuracy ?? 50];
 
   const subjects = useMemo(() => {
-    if (!progress?.byPack.length) return [...NEET_SUBJECT_MASTERY];
+    if (!progress?.byPack?.length) return [...NEET_SUBJECT_MASTERY];
     const base = accuracy ?? 70;
     return [
       { name: "Physics", pct: Math.min(99, base + 8) },
@@ -51,16 +51,16 @@ export default function AnalyticsPage() {
     ];
   }, [progress, accuracy]);
 
-  if (!user) {
-    return <AnalyticsGuestPreview />;
-  }
-
   if (loading) {
     return (
       <main className="analytics-page pt-4 lg:pt-8">
         <p className="analytics-loading">Loading analytics…</p>
       </main>
     );
+  }
+
+  if (!user) {
+    return <AnalyticsGuestPreview />;
   }
 
   return (
@@ -101,7 +101,11 @@ export default function AnalyticsPage() {
           subjects={subjects}
           barHeights={barHeights}
         />
-        <WeeklyActivityPanel sessions={stats.sessions} totalQuestions={attempts} />
+        <WeeklyActivityPanel
+          dailyCounts={progress?.weeklyActivity}
+          sessions={stats.sessions}
+          totalQuestions={attempts}
+        />
       </div>
     </main>
   );

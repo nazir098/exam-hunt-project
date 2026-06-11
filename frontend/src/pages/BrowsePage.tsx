@@ -60,15 +60,18 @@ export default function BrowsePage() {
   const bankPacks = useMemo(() => bankDisplayPacks(packs), [packs]);
   const subjectTiles = useMemo(() => buildSubjectTiles(bankPacks), [bankPacks]);
   const showComingSoon = examFilter !== "NEET" && selectedExam?.status !== "available";
-  const neetYears: YearCatalogEntry[] =
-    findExam(catalog, "NEET")?.years ||
-    packs.map((p) => ({
+  const neetYears: YearCatalogEntry[] = useMemo(() => {
+    const fromCatalog = findExam(catalog, "NEET")?.years ?? [];
+    const availableFromCatalog = fromCatalog.filter((y) => y.status === "available");
+    if (availableFromCatalog.length > 0) return availableFromCatalog;
+    return bankPacks.map((p) => ({
       year: p.year,
       status: "available" as const,
       packId: p.packId,
       questionCount: p.questionCount,
       message: null,
     }));
+  }, [catalog, bankPacks]);
 
   useEffect(() => {
     Promise.allSettled([fetchExams(), fetchPacks()]).then(([examsResult, packsResult]) => {

@@ -28,13 +28,28 @@ function tileLabel(
   return STATUS_LABELS[tile.status] ?? tile.status;
 }
 
+function paperNoLabel(tile: SessionQuestionTile): string {
+  return tile.questionNo && tile.questionNo > 0 ? `Paper Q${tile.questionNo}` : "";
+}
+
 function tileTooltip(
   tile: SessionQuestionTile,
   examMode: boolean,
   flagged: boolean,
   visited: boolean
 ): string {
-  return `Q${tile.number} · ${tileLabel(tile, examMode, flagged, visited)}`;
+  const paper = paperNoLabel(tile);
+  const status = tileLabel(tile, examMode, flagged, visited);
+  const variant =
+    tile.sourceType === "ai_variant" && tile.variantNo
+      ? `AI V${tile.variantNo}`
+      : "";
+  if (paper && variant) {
+    return `Session Q${tile.number} · ${paper} · ${variant} · ${status}`;
+  }
+  return paper
+    ? `Session Q${tile.number} · ${paper} · ${status}`
+    : `Session Q${tile.number} · ${status}`;
 }
 
 function examTileStatus(
@@ -50,6 +65,18 @@ function examTileStatus(
 
 function isAnsweredTile(tile: SessionQuestionTile): boolean {
   return tile.status === "correct" || tile.status === "wrong" || tile.status === "skipped";
+}
+
+/** Backend "current" is session pointer — UI current ring comes from activeQuestionId only. */
+function tileStatusClass(
+  tile: SessionQuestionTile,
+  examMode: boolean,
+  flagged: boolean,
+  visited: boolean
+): string {
+  const raw = examMode ? examTileStatus(tile, flagged, visited) : tile.status;
+  const normalized = raw === "current" ? "unattempted" : raw;
+  return ` session-qnav__tile--${normalized}`;
 }
 
 function previewCountForViewport(isDesktop: boolean): number {
@@ -124,6 +151,7 @@ export default function SessionQuestionNav({
 
   const activeTile = tiles.find((t) => t.questionId === activeQuestionId);
   const activeNumber = activeTile?.number ?? "?";
+  const activePaper = activeTile ? paperNoLabel(activeTile) : "";
   const answeredCount = tiles.filter(isAnsweredTile).length;
 
   function renderTile(tile: SessionQuestionTile) {
@@ -132,8 +160,7 @@ export default function SessionQuestionNav({
     const flagged = showMarked && markedIds.includes(tile.questionId) && !answered;
     const visited =
       examMode && visitedIds.includes(tile.questionId) && !answered && !flagged;
-    const baseStatus = examMode ? examTileStatus(tile, flagged, visited) : tile.status;
-    const statusClass = ` session-qnav__tile--${baseStatus}`;
+    const statusClass = tileStatusClass(tile, examMode, flagged, visited);
     const activeClass = isActive ? " session-qnav__tile--current" : "";
     const tooltip = tileTooltip(tile, examMode, flagged, visited);
     return (
@@ -146,7 +173,9 @@ export default function SessionQuestionNav({
         aria-label={tooltip}
         aria-current={isActive ? "step" : undefined}
       >
-        Q{tile.number}
+        {tile.sourceType === "ai_variant" && tile.variantNo
+          ? `V${tile.variantNo}`
+          : `Q${tile.number}`}
       </button>
     );
   }
@@ -169,7 +198,9 @@ export default function SessionQuestionNav({
         <span className="session-qnav__head-meta">
           {resultOverview
             ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
-            : `Q${activeNumber} · ${answeredCount}/${tiles.length}`}
+            : activePaper
+              ? `Session Q${activeNumber} · ${activePaper} · ${answeredCount}/${tiles.length}`
+              : `Session Q${activeNumber} · ${answeredCount}/${tiles.length}`}
         </span>
         {canExpand && (
           <button

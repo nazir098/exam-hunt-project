@@ -12,12 +12,12 @@ import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import PageLoadShell from "../components/PageLoadShell";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestResultRetakeActions from "../components/TestResultRetakeActions";
+import TestReviewAnswerCompare from "../components/TestReviewAnswerCompare";
 import { sessionResultRoute, testReviewRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
 import {
   filterReviews,
   filterTiles,
-  optionLabel,
   parseReviewFilter,
   reviewFilterCount,
   reviewFilterToRetakeFilter,
@@ -190,7 +190,7 @@ export default function TestReviewPage() {
               className={`test-review-filters__tab test-review-filters__tab--${f.id}${filter === f.id ? " is-active" : ""}${count === 0 ? " is-empty" : ""}`}
               onClick={() => setFilter(f.id)}
             >
-              {f.label}
+              <span className="test-review-filters__label">{f.label}</span>
               <span className="test-review-filters__count">{count}</span>
             </button>
           );
@@ -254,48 +254,24 @@ export default function TestReviewPage() {
                         <img
                           src={imageSrc(question.questionImageUrl, question.questionId)}
                           alt={`Question ${activeReview.questionNo}`}
+                          draggable={false}
                         />
                       ) : (
                         <p className="muted">{question.questionTextPreview || "No image"}</p>
                       )}
                     </div>
 
-                    {(activeReview.status === "wrong" || activeReview.status === "correct") && (
-                      <dl className="session-review-panel__facts test-review-question__facts">
-                        {activeReview.status === "wrong" && activeReview.selectedAnswer && (
-                          <div>
-                            <dt>Your answer</dt>
-                            <dd>{optionLabel(activeReview.selectedAnswer)}</dd>
-                          </div>
-                        )}
-                        <div>
-                          <dt>Correct answer</dt>
-                          <dd>{optionLabel(activeReview.correctAnswer)}</dd>
-                        </div>
-                      </dl>
-                    )}
-
-                    {activeReview.status === "skipped" && (
-                      <dl className="session-review-panel__facts test-review-question__facts">
-                        <div>
-                          <dt>Correct answer</dt>
-                          <dd>{optionLabel(activeReview.correctAnswer)}</dd>
-                        </div>
-                      </dl>
-                    )}
-
                     {activeReview.status === "unattempted" && (
-                      <>
-                        <p className="test-review-question__note muted">
-                          You did not submit an answer before the test ended.
-                        </p>
-                        <dl className="session-review-panel__facts test-review-question__facts">
-                          <div>
-                            <dt>Correct answer</dt>
-                            <dd>{optionLabel(activeReview.correctAnswer)}</dd>
-                          </div>
-                        </dl>
-                      </>
+                      <p className="test-review-question__note muted">
+                        You did not submit an answer before the test ended.
+                      </p>
+                    )}
+
+                    {(activeReview.status === "wrong" ||
+                      activeReview.status === "correct" ||
+                      activeReview.status === "skipped" ||
+                      activeReview.status === "unattempted") && (
+                      <TestReviewAnswerCompare review={activeReview} />
                     )}
 
                     {activeReview.hasSolution && activeReview.solutionImageUrl && (
@@ -311,6 +287,7 @@ export default function TestReviewPage() {
                           <img
                             src={imageSrc(activeReview.solutionImageUrl, activeReview.questionId)}
                             alt="Solution"
+                            draggable={false}
                           />
                         )}
                       </div>

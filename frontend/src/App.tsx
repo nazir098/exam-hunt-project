@@ -10,6 +10,7 @@ import PracticeQuestionPage from "./pages/PracticeQuestionPage";
 import QuestionPage from "./pages/QuestionPage";
 import RegisterPage from "./pages/RegisterPage";
 import AdminPage from "./pages/AdminPage";
+import AdminQuestionEditorPage from "./pages/AdminQuestionEditorPage";
 import RevisionPage from "./pages/RevisionPage";
 import TestCreatePage from "./pages/TestCreatePage";
 import WrongAttemptsPage from "./pages/WrongAttemptsPage";
@@ -40,6 +41,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/questions" element={<AdminQuestionEditorPage />} />
+        <Route path="/admin/questions/:questionId" element={<AdminQuestionEditorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

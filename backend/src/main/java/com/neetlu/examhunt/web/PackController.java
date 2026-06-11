@@ -3,6 +3,7 @@ package com.neetlu.examhunt.web;
 import com.neetlu.examhunt.model.ContentPack;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
+import com.neetlu.examhunt.service.ContentPackCatalog;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,15 +28,19 @@ public class PackController {
 
     @GetMapping
     public List<PackSummary> listPacks() {
-        return packRepository.findAllByOrderByYearDesc().stream()
-                .map(p -> new PackSummary(
-                        p.getPackId(),
-                        p.getExam(),
-                        p.getYear(),
-                        p.getSourceFolder(),
-                        questionRepository.countByPackId(p.getPackId()),
-                        p.getFacets()
-                ))
+        return ContentPackCatalog.dedupeByPackId(packRepository.findAllByOrderByYearDesc()).stream()
+                .filter(p -> !p.getPackId().startsWith("DEMO_"))
+                .map(p -> {
+                    long variants = questionRepository.countByPackIdAndSourceType(p.getPackId(), "ai_variant");
+                    long total = questionRepository.countByPackId(p.getPackId());
+                    return new PackSummary(
+                            p.getPackId(),
+                            p.getExam(),
+                            p.getYear(),
+                            p.getSourceFolder(),
+                            Math.max(0, total - variants),
+                            p.getFacets());
+                })
                 .toList();
     }
 

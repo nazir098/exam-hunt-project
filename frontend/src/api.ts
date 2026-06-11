@@ -21,6 +21,7 @@ export type PackSummary = {
   facets: {
     subjects?: { name: string; count: number }[];
     chapters?: { subject: string; chapter: string; count: number }[];
+    variant_count?: number;
   };
 };
 
@@ -39,6 +40,23 @@ export type QuestionPublic = {
   questionImageUrl: string;
   solutionImageUrl: string;
   questionTextPreview: string;
+  options?: McqOptionView[];
+  sourceType?: "pyq" | "ai_variant" | string;
+  parentQuestionId?: string | null;
+  variantNo?: number;
+  variantType?: string | null;
+  questionFormat?: string;
+  assertion?: string;
+  reason?: string;
+  statements?: McqOptionView[];
+  hasDiagram?: boolean;
+  questionDiagramSvg?: string;
+  solutionDiagramSvg?: string;
+};
+
+export type McqOptionView = {
+  id: string;
+  text: string;
 };
 
 export type QuestionDetail = QuestionPublic & {
@@ -95,7 +113,30 @@ export type SessionQuestionTile = {
   number: number;
   questionId: string;
   status: "current" | "correct" | "wrong" | "skipped" | "marked" | "unattempted";
+  /** Official NEET paper question number (1–180). */
+  questionNo?: number;
+  variantNo?: number;
+  sourceType?: string;
 };
+
+export type QuestionVariantRef = {
+  questionId: string;
+  variantNo: number;
+  variantType?: string | null;
+  difficulty: number;
+  hasSolution: boolean;
+  questionTextPreview: string;
+};
+
+export type QuestionFamily = {
+  parentQuestionId: string;
+  paperQuestionNo: number;
+  activeQuestionId: string;
+  pyq: QuestionPublic;
+  variants: QuestionVariantRef[];
+};
+
+export type QuestionSetMode = "pyq" | "variants" | "all";
 
 export type PracticeSessionView = {
   id: string;
@@ -213,6 +254,19 @@ export type PracticeQuestion = {
   formulaRelevant: boolean;
   questionImageUrl: string;
   questionTextPreview: string;
+  solutionTextPreview?: string;
+  options?: McqOptionView[];
+  sourceType?: string;
+  parentQuestionId?: string | null;
+  variantNo?: number;
+  variantType?: string | null;
+  questionFormat?: string;
+  assertion?: string;
+  reason?: string;
+  statements?: McqOptionView[];
+  hasDiagram?: boolean;
+  questionDiagramSvg?: string;
+  solutionDiagramSvg?: string;
 };
 
 export type SubmitResult = {
@@ -262,6 +316,8 @@ export type ProgressSummary = {
   recentSessions: PracticeSessionView[];
   byPack: { packId: string; attempts: number; correct: number; marks: number }[];
   weakChapters: ChapterProgress[];
+  /** Last 28 days — questions answered per day (index 0 oldest, 27 today). */
+  weeklyActivity: number[];
 };
 
 export type LeaderboardEntry = {
@@ -406,6 +462,10 @@ export function fetchQuestion(questionId: string) {
   return getJson<QuestionDetail>(`/api/questions/${encodeURIComponent(questionId)}`);
 }
 
+export function fetchQuestionFamily(questionId: string) {
+  return getJson<QuestionFamily>(`/api/questions/${encodeURIComponent(questionId)}/family`);
+}
+
 async function authRequest<T>(path: string, body: object): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -458,6 +518,25 @@ export function adminImportFolder(folderName: string) {
   });
 }
 
+export type AdminPackRow = {
+  packId: string;
+  exam: string;
+  year: number;
+  sourceFolder: string;
+  questionCount: number;
+  demo: boolean;
+};
+
+export function fetchAdminPacks() {
+  return request<{ packs: AdminPackRow[]; count: number }>("/api/admin/packs");
+}
+
+export function adminDeletePack(packId: string) {
+  return request<AdminActionResult>(`/api/admin/packs/${encodeURIComponent(packId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function adminCleanupDemoPacks() {
   return request<AdminActionResult>("/api/admin/seed/cleanup-demo", { method: "POST" });
 }
@@ -482,6 +561,8 @@ export function createPracticeSession(body: {
   startQuestionId?: string;
   mode?: "practice" | "test";
   questionCount?: number;
+  /** pyq = original paper only; variants = AI drills; all = both */
+  questionSet?: QuestionSetMode;
 }) {
   return request<PracticeSessionView>("/api/practice/sessions", {
     method: "POST",
@@ -585,9 +666,11 @@ export function fetchPracticeQuestion(questionId: string) {
 }
 
 export function fetchPracticeSolution(questionId: string) {
-  return request<{ hasSolution: boolean; solutionImageUrl: string }>(
-    `/api/practice/questions/${encodeURIComponent(questionId)}/solution`
-  );
+  return request<{
+    hasSolution: boolean;
+    solutionImageUrl: string;
+    solutionTextPreview: string;
+  }>(`/api/practice/questions/${encodeURIComponent(questionId)}/solution`);
 }
 
 export function submitPracticeAnswer(body: {
@@ -596,6 +679,25 @@ export function submitPracticeAnswer(body: {
   selectedAnswer: string;
 }) {
   return request<SubmitResult>("/api/practice/submit", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type VariantCheckResult = {
+  correct: boolean;
+  correctAnswer: string;
+  hasSolution: boolean;
+  solutionImageUrl: string;
+  solutionTextPreview: string;
+};
+
+/** Practice-only: check an AI variant without recording a session attempt. */
+export function checkVariantPracticeAnswer(body: {
+  questionId: string;
+  selectedAnswer: string;
+}) {
+  return request<VariantCheckResult>("/api/practice/variant-check", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -612,6 +714,8 @@ export function fetchProgress() {
   return request<ProgressSummary>("/api/practice/progress").then((p) => ({
     ...p,
     weakChapters: p.weakChapters ?? [],
+    byPack: p.byPack ?? [],
+    weeklyActivity: p.weeklyActivity ?? [],
   }));
 }
 
@@ -651,6 +755,7 @@ export type PracticeAiFeature =
   | "hint"
   | "formula"
   | "explain_basics"
+  | "pitfalls"
   | "weak_chapter_analysis"
   | "practice_from_weak"
   | "revision_notes"
@@ -793,6 +898,125 @@ export function aiTutorHint(body: { mode: string; questionId?: string }) {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export type AdminQuestionSearchRow = {
+  questionId: string;
+  packId: string;
+  questionNo: number;
+  exam: string;
+  year: number;
+  subject: string;
+  chapter: string;
+  questionTextPreview: string;
+  sourceType: string;
+  variantNo: number;
+};
+
+export type AdminFormulaCard = {
+  name: string;
+  formula: string;
+  description: string;
+};
+
+export type AdminQuestionDetail = QuestionDetail & {
+  variantType: string | null;
+  questionFormat: string;
+  assertion: string;
+  reason: string;
+  statements: McqOptionView[];
+  solutionDiagramSvg: string;
+  hints: string[];
+  formulaCards: AdminFormulaCard[];
+  conceptExplanation: string;
+  commonMistakes: string[];
+  practicePattern: string;
+  revisionNotes: string;
+  whyWrongByAnswer: Record<string, string>;
+  adminLockedFields: string[];
+};
+
+export type AdminAiPromptFeature = {
+  id: PracticeAiFeature;
+  label: string;
+  questionScoped: boolean;
+  userScoped: boolean;
+  usesSelectedAnswer: boolean;
+};
+
+export type AdminAiPromptView = {
+  feature: PracticeAiFeature;
+  label: string;
+  systemPrompt: string;
+  userPrompt: string;
+  notes: string;
+};
+
+export function adminSearchQuestions(params: { q: string; packId?: string; page?: number; size?: number }) {
+  const qs = new URLSearchParams({ q: params.q });
+  if (params.packId) qs.set("packId", params.packId);
+  if (params.page != null) qs.set("page", String(params.page));
+  if (params.size != null) qs.set("size", String(params.size));
+  return request<PageResponse<AdminQuestionSearchRow>>(`/api/admin/questions/search?${qs}`);
+}
+
+export function fetchAdminQuestion(questionId: string) {
+  return request<AdminQuestionDetail>(`/api/admin/questions/${encodeURIComponent(questionId)}`);
+}
+
+export function updateAdminQuestionContent(
+  questionId: string,
+  body: Partial<{
+    questionTextPreview: string;
+    solutionTextPreview: string;
+    answer: string;
+    options: McqOptionView[];
+    questionFormat: string;
+    assertion: string;
+    reason: string;
+    statements: McqOptionView[];
+    questionDiagramSvg: string;
+    solutionDiagramSvg: string;
+  }>
+) {
+  return request<AdminQuestionDetail>(`/api/admin/questions/${encodeURIComponent(questionId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminQuestionEnrichment(
+  questionId: string,
+  body: Partial<{
+    hints: string[];
+    revisionNotes: string;
+    conceptExplanation: string;
+    commonMistakes: string[];
+    practicePattern: string;
+    whyWrongByAnswer: Record<string, string>;
+    formulaCards: AdminFormulaCard[];
+    clearFeatures: PracticeAiFeature[];
+  }>
+) {
+  return request<AdminQuestionDetail>(`/api/admin/questions/${encodeURIComponent(questionId)}/enrichment`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchAdminAiPromptFeatures() {
+  return request<AdminAiPromptFeature[]>("/api/admin/practice-ai/prompt-features");
+}
+
+export function fetchAdminAiPrompt(params: {
+  feature: PracticeAiFeature;
+  questionId?: string;
+  selectedAnswer?: string;
+}) {
+  const qs = new URLSearchParams({ feature: params.feature });
+  if (params.questionId) qs.set("questionId", params.questionId);
+  if (params.selectedAnswer) qs.set("selectedAnswer", params.selectedAnswer);
+  return request<AdminAiPromptView>(`/api/admin/practice-ai/prompt?${qs}`);
 }
 
 export function adminSeedSampleBookmarks(limit = 8) {

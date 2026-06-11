@@ -62,6 +62,20 @@
   object-fit: contain;
 }
 
+/* Exam / practice content images — deter drag-out; not a security boundary */
+.exam-paper-image,
+.study-assistant-solution-modal__image,
+.practice-run-question__media img,
+.test-review-question__media img,
+.session-review-panel__solution img,
+.variant-diagram__img,
+.wrong-review-item__solution {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Scrollable bank results — 5 visible, scroll 5 more, then next set of 10 */
 .bank-results-feed {
   --bank-feed-visible: 5;

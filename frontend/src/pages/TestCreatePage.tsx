@@ -1,18 +1,22 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createPracticeSession, fetchExams, fetchPacks, PackSummary } from "../api";
+import { createPracticeSession, fetchExams, fetchPacks, fetchQuestions, PackSummary } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import ProductModeBanner from "../components/ProductModeBanner";
 import AppLoader from "../components/AppLoader";
 import TestSessionBuilder from "../components/TestSessionBuilder";
 import TestSessionSummary from "../components/TestSessionSummary";
 import {
+  formatDifficultyParam,
+  formatDifficultySessionParam,
+  type DifficultyLevel,
+} from "../utils/difficultyFilter";
+import {
   bankDisplayPacks,
   clampPracticeQuestionCount,
   estimatedTestMinutes,
   pickDefaultPack,
   recentTestSessions,
-  practicePoolMax,
 } from "../utils/practiceHub";
 import { sessionRoute } from "../navigation/modes";
 
@@ -24,8 +28,10 @@ export default function TestCreatePage() {
   const [packId, setPackId] = useState(searchParams.get("packId") || "");
   const [subject, setSubject] = useState(searchParams.get("subject") || "");
   const [chapter, setChapter] = useState(searchParams.get("chapter") || "");
-  const [difficulty, setDifficulty] = useState("");
+  const [difficulties, setDifficulties] = useState<DifficultyLevel[]>([]);
   const [questionCount, setQuestionCount] = useState(45);
+  const [poolMax, setPoolMax] = useState(0);
+  const [poolLoading, setPoolLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,14 +49,39 @@ export default function TestCreatePage() {
 
   const practicePacks = bankDisplayPacks(packs);
   const selectedPack = practicePacks.find((p) => p.packId === packId);
-  const poolMax = useMemo(
-    () => practicePoolMax(selectedPack, subject || undefined, chapter || undefined),
-    [selectedPack, subject, chapter]
-  );
-  const sessionSize = useMemo(
-    () => clampPracticeQuestionCount(questionCount, poolMax),
-    [questionCount, poolMax]
-  );
+
+  useEffect(() => {
+    if (!packId) {
+      setPoolMax(0);
+      return;
+    }
+    let cancelled = false;
+    setPoolLoading(true);
+    fetchQuestions(packId, {
+      subject: subject || undefined,
+      chapter: chapter || undefined,
+      difficulty: formatDifficultyParam(difficulties),
+      page: 0,
+      size: 1,
+    })
+      .then((res) => {
+        if (!cancelled) setPoolMax(res.totalElements);
+      })
+      .catch(() => {
+        if (!cancelled) setPoolMax(0);
+      })
+      .finally(() => {
+        if (!cancelled) setPoolLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [packId, subject, chapter, difficulties]);
+
+  const sessionSize = useMemo(() => {
+    if (poolMax <= 0) return 0;
+    return clampPracticeQuestionCount(questionCount, poolMax);
+  }, [questionCount, poolMax]);
   const estMinutes = useMemo(
     () => estimatedTestMinutes(sessionSize, subject || undefined),
     [sessionSize, subject]
@@ -61,6 +92,7 @@ export default function TestCreatePage() {
   );
 
   useEffect(() => {
+    if (poolMax <= 0) return;
     setQuestionCount((c) => clampPracticeQuestionCount(c, poolMax));
   }, [poolMax]);
 
@@ -74,6 +106,10 @@ export default function TestCreatePage() {
       setError("Select a pack to build your test.");
       return;
     }
+    if (poolMax <= 0 || sessionSize <= 0) {
+      setError("No questions match these filters. Try Mixed difficulty or broader scope.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -82,7 +118,7 @@ export default function TestCreatePage() {
         packId,
         subject: subject || undefined,
         chapter: chapter || undefined,
-        difficulty: difficulty || undefined,
+        difficulty: formatDifficultySessionParam(difficulties),
         adaptive: false,
         mode: "test",
         questionCount: sessionSize,
@@ -130,10 +166,11 @@ export default function TestCreatePage() {
           packId={packId}
           subject={subject}
           chapter={chapter}
-          difficulty={difficulty}
+          difficulties={difficulties}
           questionCount={questionCount}
           sessionSize={sessionSize}
           poolMax={poolMax}
+          poolLoading={poolLoading}
           estMinutes={estMinutes}
           packs={practicePacks}
           selectedPack={selectedPack}
@@ -142,7 +179,7 @@ export default function TestCreatePage() {
           onPackId={setPackId}
           onSubject={setSubject}
           onChapter={setChapter}
-          onDifficulty={setDifficulty}
+          onDifficulties={setDifficulties}
           onQuestionCount={setQuestionCount}
           onSubmit={startTest}
         />

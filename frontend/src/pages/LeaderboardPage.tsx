@@ -332,7 +332,7 @@ function LeaderboardEmptyState({
 
 export default function LeaderboardPage() {
   const { user, progress } = useAuth();
-  const [period, setPeriod] = useState<LeaderboardPeriod>("weekly");
+  const [period, setPeriod] = useState<LeaderboardPeriod>("monthly");
   const [search, setSearch] = useState("");
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [error, setError] = useState("");

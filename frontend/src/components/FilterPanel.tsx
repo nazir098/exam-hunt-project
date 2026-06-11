@@ -112,19 +112,15 @@ export default function FilterPanel({
               <div className="grid grid-cols-3 gap-2">
                 {neetYears.map((y) => {
                   const active = yearFilter === String(y.year);
-                  const soon = y.status === "coming_soon";
                   return (
                     <button
                       key={y.year}
                       type="button"
-                      disabled={soon}
-                      onClick={() => !soon && set("year", active ? "" : String(y.year))}
+                      onClick={() => set("year", active ? "" : String(y.year))}
                       className={
-                        soon
-                          ? "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant opacity-50"
-                          : active
-                            ? "text-caption py-2 rounded-lg bg-primary-container text-on-primary-container font-bold"
-                            : "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+                        active
+                          ? "text-caption py-2 rounded-lg bg-primary-container text-on-primary-container font-bold"
+                          : "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                       }
                     >
                       {y.year}
