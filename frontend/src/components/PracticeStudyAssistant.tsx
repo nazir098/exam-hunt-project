@@ -136,7 +136,7 @@ export default function PracticeStudyAssistant({
 }: Props) {
   const { user } = useAuth();
   const { settings, loading: settingsLoading } = usePlatformSettings();
-  const available = settings.aiSuggestEnabled;
+  const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
 
   const tabs = useMemo(
     () => buildTabs(formulaRelevant, submitted, correct),
@@ -476,8 +476,10 @@ export default function PracticeStudyAssistant({
           <p className="study-assistant__off-text">
             {!settings.aiLlmConfigured ? (
               <>
-                Start FreeLLMAPI on port <code>3001</code> and set <code>OPENAI_API_KEY</code> in{" "}
-                <code>.env</code>, then restart the backend.
+                Set a FreeLLMAPI <strong>client</strong> key as <code>OPENAI_API_KEY</code> on the exam-hunt
+                backend and point <code>OPENAI_BASE_URL</code> at your router (e.g.{" "}
+                <code>https://freellmapi-t1pm.onrender.com/v1</code>), then restart the API. Provider keys
+                (Groq, Cerebras, etc.) belong on the FreeLLMAPI service only.
               </>
             ) : (
               <>AI practice is turned off in platform settings.</>

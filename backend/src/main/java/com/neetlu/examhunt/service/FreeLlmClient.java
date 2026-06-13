@@ -9,6 +9,7 @@ import com.neetlu.examhunt.service.llm.LlmModelCapabilityRegistry;
 import com.neetlu.examhunt.service.llm.LlmResponseParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +43,7 @@ public class FreeLlmClient {
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final LlmModelCapabilityRegistry capabilityRegistry;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     public FreeLlmClient(
             AppProperties appProperties,
@@ -50,6 +52,11 @@ public class FreeLlmClient {
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.capabilityRegistry = capabilityRegistry;
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(30));
+        // Render free tier can cold-start FreeLLMAPI for ~50s on first request.
+        factory.setReadTimeout(Duration.ofSeconds(120));
+        this.restTemplate = new RestTemplate(factory);
     }
 
     public boolean isConfigured() {

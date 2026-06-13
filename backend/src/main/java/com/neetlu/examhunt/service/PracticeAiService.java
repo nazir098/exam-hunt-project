@@ -179,11 +179,14 @@ public class PracticeAiService {
 
     public StatusView status() {
         var settings = platformSettingsService.requireSettings();
+        boolean platformEnabled = settings.isAiSuggestEnabled();
+        boolean llmConfigured = llm.isConfigured();
+        boolean serverEnabled = llm.isEnabled();
         return new StatusView(
-                settings.isAiSuggestEnabled(),
-                llm.isConfigured(),
-                settings.isAiSuggestEnabled(),
-                llm.isEnabled());
+                platformEnabled && serverEnabled,
+                llmConfigured,
+                platformEnabled,
+                serverEnabled);
     }
 
     public AssistResponse assist(String userId, AssistRequest req) {

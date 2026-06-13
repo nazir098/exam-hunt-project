@@ -42,7 +42,7 @@ export default function PracticeAiPanel({
   const [result, setResult] = useState<PracticeAiAssistResponse | null>(null);
   const [statusOk, setStatusOk] = useState<boolean | null>(null);
 
-  const available = settings.aiSuggestEnabled;
+  const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
 
   useEffect(() => {
     setResult(null);
