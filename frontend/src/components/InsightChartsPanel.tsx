@@ -18,7 +18,6 @@ type Props = {
 export default function InsightChartsPanel({
   stats,
   progress,
-  accuracy,
   attempts,
   subjects,
   barHeights,
