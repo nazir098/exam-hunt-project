@@ -1,5 +1,6 @@
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { QuestionPublic } from "../api";
+import { MODES } from "../navigation/modes";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import { subjectIcon } from "../utils/subjectIcon";
 import BookmarkButton from "./BookmarkButton";
@@ -14,18 +15,21 @@ type OutletCtx = {
   practiceBusy?: boolean;
 };
 
+function testCreateHref(packId: string, subject: string, searchParams: URLSearchParams): string {
+  const next = new URLSearchParams();
+  next.set("packId", packId);
+  if (subject) next.set("subject", subject);
+  const chapter = searchParams.get("chapter");
+  if (chapter) next.set("chapter", chapter);
+  return `/test/create?${next.toString()}`;
+}
+
 export default function QuestionCard({ question: q, packId }: Props) {
   const [searchParams] = useSearchParams();
   const outlet = useOutletContext<OutletCtx | undefined>();
   const diff = difficultyLabel(q.difficulty);
   const isJee = q.exam?.toUpperCase().includes("JEE");
-  const practiceQs = (() => {
-    const next = new URLSearchParams(searchParams);
-    next.set("fromPack", packId);
-    const s = next.toString();
-    return s ? `?${s}` : "";
-  })();
-  const questionHref = `/question/${q.questionId}${practiceQs}`;
+  const solveHref = `/solve/${q.questionId}?${new URLSearchParams(searchParams).toString()}`;
   const title =
     q.questionTextPreview?.slice(0, 200) ||
     `Question ${q.questionNo} — ${q.chapter || q.subject}`;
@@ -36,26 +40,28 @@ export default function QuestionCard({ question: q, packId }: Props) {
 
   return (
     <div className="glass-card glass-card--bank p-lg rounded-xl relative group overflow-hidden">
-      <div className="absolute top-0 right-0 p-4">
-        <span className={badgeClass}>
+      <div className="flex items-start justify-between gap-3 mb-sm">
+        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-surface-container-highest flex items-center justify-center shrink-0">
+            <span className={`material-symbols-outlined ${isJee ? "text-secondary" : "text-primary"}`}>
+              {subjectIcon(q.subject)}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-label-md text-secondary">{q.subject}</span>
+              <span className="text-outline text-[12px]">•</span>
+              <span className="text-label-md text-on-surface-variant line-clamp-2">
+                {q.chapter || q.topic || "General"}
+              </span>
+            </div>
+          </div>
+        </div>
+        <span className={`${badgeClass} shrink-0 self-start`}>
           {examDisplayName(q.exam, q.year)} {q.year}
         </span>
       </div>
-      <div className="flex items-start gap-4 mb-md">
-        <div className="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center shrink-0">
-          <span className={`material-symbols-outlined ${isJee ? "text-secondary" : "text-primary"}`}>
-            {subjectIcon(q.subject)}
-          </span>
-        </div>
-        <div className="space-y-1 flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-label-md text-secondary">{q.subject}</span>
-            <span className="text-outline text-[12px]">•</span>
-            <span className="text-label-md text-on-surface-variant">{q.chapter || q.topic || "General"}</span>
-          </div>
-          <h2 className="text-body-lg font-semibold leading-snug pr-20">{title}</h2>
-        </div>
-      </div>
+      <h2 className="text-body-lg font-semibold leading-snug mb-md">{title}</h2>
       <div className="flex flex-wrap gap-4 items-center justify-between mt-xl pt-md border-t border-white/5">
         <div className="flex gap-2">
           <span className="flex items-center gap-1 text-caption text-outline">
@@ -67,23 +73,32 @@ export default function QuestionCard({ question: q, packId }: Props) {
             {marksLabel(q.difficulty, q.questionNo)}
           </span>
         </div>
-        <div className="flex gap-3 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-end items-center">
           <BookmarkButton questionId={q.questionId} variant="icon" className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2" />
+          <Link
+            to={solveHref}
+            className="bank-mode-btn bank-mode-btn--solve"
+            title={MODES.solve.tooltip}
+          >
+            {MODES.solve.button}
+          </Link>
           {outlet?.startPracticeFromBank && (
             <button
               type="button"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 text-primary"
+              className="bank-mode-btn bank-mode-btn--practice"
               disabled={outlet.practiceBusy}
+              title={MODES.practice.tooltip}
               onClick={() => outlet.startPracticeFromBank?.(q.questionId, packId)}
             >
-              Practice
+              {MODES.practice.button}
             </button>
           )}
           <Link
-            to={questionHref}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-[#8A2BE2] to-[#4B0082] rounded-lg text-white font-bold ai-glow hover:scale-[1.02] active:scale-95 transition-all"
+            to={testCreateHref(packId, q.subject, searchParams)}
+            className="bank-mode-btn bank-mode-btn--test"
+            title={MODES.test.tooltip}
           >
-            <span className="text-label-md">Solve</span>
+            Prepare Test
           </Link>
         </div>
       </div>

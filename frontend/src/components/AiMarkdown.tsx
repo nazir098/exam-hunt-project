@@ -97,10 +97,6 @@ function normalizeMathContent(text: string): string {
   return t.trim();
 }
 
-function normalizeFormulaLatex(text: string): string {
-  return normalizeMathContent(text);
-}
-
 /** Manifest / JSON double-escaping: \\frac → \frac */
 function collapseOverEscapedBackslashes(text: string): string {
   let t = text;

@@ -25,6 +25,16 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
 
     long countByPackId(String packId);
 
+    long countByPackIdAndSourceType(String packId, String sourceType);
+
+    List<Question> findByParentQuestionIdOrderByVariantNoAsc(String parentQuestionId);
+
+    List<Question> findByParentQuestionIdAndPackIdOrderByVariantNoAsc(
+            String parentQuestionId, String packId);
+
+    List<Question> findByParentQuestionIdAndPackIdAndVariantNo(
+            String parentQuestionId, String packId, int variantNo);
+
     void deleteByPackId(String packId);
 
     @Query(

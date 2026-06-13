@@ -1,3 +1,9 @@
+import { useMemo } from "react";
+import type { PracticeSessionView } from "../api";
+import {
+  buildWeeklyActivityCells,
+  weeklyCountsFromSessions,
+} from "../utils/analyticsInsights";
 import { WEEKDAY_LABELS } from "../utils/dashboardStats";
 
 function heatmapClass(level: number): string {
@@ -6,26 +12,53 @@ function heatmapClass(level: number): string {
 }
 
 type Props = {
-  heatmap: number[];
-  caption?: string;
+  dailyCounts?: number[];
+  sessions?: PracticeSessionView[];
+  totalQuestions?: number;
 };
 
-export default function WeeklyActivityPanel({ heatmap, caption }: Props) {
+export default function WeeklyActivityPanel({
+  dailyCounts,
+  sessions = [],
+  totalQuestions = 0,
+}: Props) {
+  const cells = useMemo(() => {
+    const counts =
+      dailyCounts?.length === 28 ? dailyCounts : weeklyCountsFromSessions(sessions);
+    return buildWeeklyActivityCells(counts);
+  }, [dailyCounts, sessions]);
+  const hasActivity = cells.some((c) => c.questionCount > 0);
+
   return (
     <section className="analytics-card glass-card">
       <h3 className="analytics-side-title">Weekly activity</h3>
-      {caption && <p className="analytics-activity-caption">{caption}</p>}
-      <div className="analytics-heatmap" role="img" aria-label="Practice activity by day">
-        {heatmap.map((level, idx) => (
-          <div key={idx} className={heatmapClass(level)} />
-        ))}
-      </div>
-      <div className="analytics-heatmap-days">
-        {WEEKDAY_LABELS.map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </div>
-      <p className="analytics-heatmap-legend">Last 4 weeks · darker = more sessions that day</p>
+      {hasActivity ? (
+        <>
+          <p className="analytics-activity-caption">
+            Last 4 weeks · darker = more questions solved
+            {totalQuestions > 0 && ` · ${totalQuestions} total answered`}
+          </p>
+          <div className="analytics-heatmap" role="img" aria-label="Practice activity by day">
+            {cells.map((cell, idx) => (
+              <div
+                key={idx}
+                className={heatmapClass(cell.level)}
+                title={cell.tooltip}
+              />
+            ))}
+          </div>
+          <div className="analytics-heatmap-days">
+            {WEEKDAY_LABELS.map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+          <p className="analytics-heatmap-legend">Hover a cell for daily question count</p>
+        </>
+      ) : (
+        <p className="analytics-empty analytics-empty--compact">
+          No activity yet. Complete one practice session to see your streak.
+        </p>
+      )}
     </section>
   );
 }

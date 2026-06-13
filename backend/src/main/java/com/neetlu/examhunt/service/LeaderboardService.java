@@ -84,8 +84,13 @@ public class LeaderboardService {
 
     private PeriodTotals aggregatePeriodTotals(Instant since) {
         List<AggregationOperation> ops = new ArrayList<>();
+        List<Criteria> criteria = new ArrayList<>();
         if (since != null) {
-            ops.add(Aggregation.match(Criteria.where("answeredAt").gte(since)));
+            criteria.add(Criteria.where("answeredAt").gte(since));
+        }
+        criteria.add(practiceModeCriteria());
+        if (!criteria.isEmpty()) {
+            ops.add(Aggregation.match(new Criteria().andOperator(criteria.toArray(Criteria[]::new))));
         }
         ops.add(Aggregation.group()
                 .sum("marksAwarded")
@@ -111,9 +116,12 @@ public class LeaderboardService {
 
     private List<ActivityItem> recentActivity(Instant since, int limit, Map<String, UserAccount> knownAccounts) {
         Query q = new Query().with(Sort.by(Sort.Direction.DESC, "answeredAt")).limit(limit);
+        List<Criteria> criteria = new ArrayList<>();
         if (since != null) {
-            q.addCriteria(Criteria.where("answeredAt").gte(since));
+            criteria.add(Criteria.where("answeredAt").gte(since));
         }
+        criteria.add(practiceModeCriteria());
+        q.addCriteria(new Criteria().andOperator(criteria.toArray(Criteria[]::new)));
         List<QuestionAttempt> attempts = mongo.find(q, QuestionAttempt.class);
         if (attempts.isEmpty()) {
             return List.of();
@@ -183,11 +191,23 @@ public class LeaderboardService {
         };
     }
 
+    /** Leaderboard ranks practice-mode attempts only (legacy rows without mode count as practice). */
+    private static Criteria practiceModeCriteria() {
+        return new Criteria()
+                .orOperator(
+                        Criteria.where("mode").is("practice"),
+                        Criteria.where("mode").exists(false),
+                        Criteria.where("mode").isNull());
+    }
+
     private List<UserAggRow> aggregateRanked(Instant since) {
         List<AggregationOperation> ops = new ArrayList<>();
+        List<Criteria> criteria = new ArrayList<>();
         if (since != null) {
-            ops.add(Aggregation.match(Criteria.where("answeredAt").gte(since)));
+            criteria.add(Criteria.where("answeredAt").gte(since));
         }
+        criteria.add(practiceModeCriteria());
+        ops.add(Aggregation.match(new Criteria().andOperator(criteria.toArray(Criteria[]::new))));
         ops.add(Aggregation.group("userId")
                 .sum("marksAwarded")
                 .as("totalMarks")

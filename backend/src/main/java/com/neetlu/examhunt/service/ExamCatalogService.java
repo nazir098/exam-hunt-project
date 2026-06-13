@@ -40,12 +40,16 @@ public class ExamCatalogService {
     }
 
     public List<ExamCatalogEntry> getCatalog() {
-        List<ContentPack> neetPacks = packRepository.findByExamIgnoreCaseOrderByYearDesc("NEET").stream()
-                .filter(p -> !p.getPackId().startsWith("DEMO_"))
-                .toList();
+        List<ContentPack> neetPacks =
+                ContentPackCatalog.dedupeByPackId(
+                                packRepository.findByExamIgnoreCaseOrderByYearDesc("NEET"))
+                        .stream()
+                        .filter(p -> !p.getPackId().startsWith("DEMO_"))
+                        .toList();
 
         Map<Integer, ContentPack> packByYear = neetPacks.stream()
-                .collect(Collectors.toMap(ContentPack::getYear, p -> p, (a, b) -> a, LinkedHashMap::new));
+                .collect(Collectors.toMap(
+                        ContentPack::getYear, p -> p, ContentPackCatalog::preferCanonical, LinkedHashMap::new));
 
         List<ExamCatalogEntry> out = new ArrayList<>();
         for (ExamDefinition def : EXAMS) {

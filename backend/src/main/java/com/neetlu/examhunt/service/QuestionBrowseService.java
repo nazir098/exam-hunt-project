@@ -33,6 +33,11 @@ public class QuestionBrowseService {
     ) {
         List<Criteria> filters = new ArrayList<>();
         filters.add(Criteria.where("packId").is(packId));
+        filters.add(new Criteria().orOperator(
+                Criteria.where("sourceType").exists(false),
+                Criteria.where("sourceType").is("pyq"),
+                Criteria.where("sourceType").isNull()
+        ));
 
         if (subject != null && !subject.isBlank()) {
             filters.add(exactField("subject", subject));
@@ -68,11 +73,29 @@ public class QuestionBrowseService {
     }
 
     private static Criteria difficultyCriteria(String difficulty) {
-        return switch (difficulty.trim()) {
-            case "Easy" -> Criteria.where("difficulty").lte(1);
-            case "Medium" -> Criteria.where("difficulty").is(2);
-            case "Hard" -> Criteria.where("difficulty").gte(3);
-            default -> Criteria.where("difficulty").gte(0);
+        String[] parts = difficulty.split(",");
+        List<Criteria> ors = new ArrayList<>();
+        for (String part : parts) {
+            Criteria c = singleDifficultyCriteria(part.trim());
+            if (c != null) {
+                ors.add(c);
+            }
+        }
+        if (ors.isEmpty()) {
+            return Criteria.where("difficulty").gte(0);
+        }
+        if (ors.size() == 1) {
+            return ors.get(0);
+        }
+        return new Criteria().orOperator(ors.toArray(Criteria[]::new));
+    }
+
+    private static Criteria singleDifficultyCriteria(String difficulty) {
+        return switch (difficulty) {
+            case "Easy", "easy" -> Criteria.where("difficulty").lte(1);
+            case "Medium", "medium" -> Criteria.where("difficulty").is(2);
+            case "Hard", "hard" -> Criteria.where("difficulty").gte(3);
+            default -> null;
         };
     }
 }

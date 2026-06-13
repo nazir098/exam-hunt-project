@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     touchSessionActivity();
     try {
       setUser(await fetchMe());
-      await refreshProgress();
+      void refreshProgress();
     } catch {
       logout();
     }

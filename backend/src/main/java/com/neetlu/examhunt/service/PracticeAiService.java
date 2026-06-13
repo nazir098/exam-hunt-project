@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neetlu.examhunt.service.llm.LlmCompletionOptions;
 import com.neetlu.examhunt.service.llm.LlmJsonSchemas;
 import com.neetlu.examhunt.service.llm.LlmResponseParser;
+import com.neetlu.examhunt.model.FormulaCard;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import org.springframework.data.domain.PageRequest;
@@ -15,11 +16,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -125,7 +129,30 @@ public class PracticeAiService {
             ...
             """;
 
+    private static final String SYSTEM_PITFALLS =
+            """
+            You are a NEET UG exam coach.
+
+            HARD OUTPUT RULES:
+            - Line 1 must be exactly: ### Common mistakes
+            - No preamble before the first heading
+            - Maximum 120 words total
+
+            Exactly two sections in this order:
+            ### Common mistakes
+            (3–4 bullet lines starting with -)
+
+            ### Practice pattern
+            One short paragraph: the recurring NEET trick or solution pattern for this topic type.
+
+            Prohibited:
+            - Do not reveal the correct MCQ option
+            - Do not perform final calculations
+            - Do not echo prompts or metadata headers
+            """;
+
     private static final int BASICS_MAX_WORDS = 150;
+    private static final int PITFALLS_MAX_WORDS = 120;
 
     private static final Pattern META_PREAMBLE =
             Pattern.compile(
@@ -152,24 +179,25 @@ public class PracticeAiService {
 
     public StatusView status() {
         var settings = platformSettingsService.requireSettings();
+        boolean platformEnabled = settings.isAiSuggestEnabled();
+        boolean llmConfigured = llm.isConfigured();
+        boolean serverEnabled = llm.isEnabled();
         return new StatusView(
-                settings.isAiSuggestEnabled(),
-                llm.isConfigured(),
-                settings.isAiSuggestEnabled(),
-                llm.isEnabled());
+                platformEnabled && serverEnabled,
+                llmConfigured,
+                platformEnabled,
+                serverEnabled);
     }
 
     public AssistResponse assist(String userId, AssistRequest req) {
         requirePlatformEnabled();
         String feature = normalizeFeature(req.feature());
         return switch (feature) {
-            case "why_wrong" -> {
-                requireLlmAvailable();
-                yield whyWrong(req);
-            }
+            case "why_wrong" -> whyWrong(req);
             case "hint" -> hint(req);
             case "formula" -> formula(req);
             case "explain_basics" -> explainBasics(req);
+            case "pitfalls" -> pitfalls(req);
             case "weak_chapter_analysis" -> {
                 requireLlmAvailable();
                 yield weakChapterAnalysis(userId);
@@ -178,10 +206,7 @@ public class PracticeAiService {
                 requireLlmAvailable();
                 yield practiceFromWeak(userId);
             }
-            case "revision_notes" -> {
-                requireLlmAvailable();
-                yield revisionNotes(req);
-            }
+            case "revision_notes" -> revisionNotes(req);
             case "mentor" -> {
                 requireLlmAvailable();
                 yield mentor(userId);
@@ -196,6 +221,11 @@ public class PracticeAiService {
         if (req.selectedAnswer() == null || req.selectedAnswer().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "selectedAnswer is required for why_wrong");
         }
+        String cached = lookupWhyWrongExplanation(q, req.selectedAnswer());
+        if (cached != null) {
+            return new AssistResponse("why_wrong", cached, false, List.of(), null);
+        }
+        requireLlmAvailable();
         String prompt =
                 """
                 Mode: WHY WRONG
@@ -213,6 +243,7 @@ public class PracticeAiService {
                         .formatted(questionBlock(q), q.getAnswer(), req.selectedAnswer());
 
         String text = AiTextNormalizer.normalize(llm.complete(SYSTEM_NEET, prompt, 0.35, 450));
+        persistWhyWrongExplanation(q, req.selectedAnswer(), text);
         return new AssistResponse("why_wrong", text, true, List.of(), null);
     }
 
@@ -226,13 +257,19 @@ public class PracticeAiService {
             List<String> steps = sanitizeHintSteps(prebakedHintSteps(q));
             return new AssistResponse("hint", steps.get(0), false, List.of(), null, steps);
         }
-        requireLlmAvailable();
+        if (!llm.isEnabled()) {
+            List<String> steps = sanitizeHintSteps(buildFallbackHints(q));
+            return new AssistResponse("hint", steps.get(0), false, List.of(), null, steps);
+        }
         List<String> steps = sanitizeHintSteps(fetchHintSteps(q));
-        if (!hintsAreUsable(steps)) {
+        boolean fromLlm = hintsAreUsable(steps);
+        if (!fromLlm) {
             steps = sanitizeHintSteps(buildFallbackHints(q));
+        } else {
+            persistHintEnrichment(q, steps);
         }
         String first = steps.get(0);
-        return new AssistResponse("hint", first, true, List.of(), null, steps);
+        return new AssistResponse("hint", first, fromLlm, List.of(), null, steps);
     }
 
     private static List<String> sanitizeHintSteps(List<String> steps) {
@@ -400,7 +437,19 @@ public class PracticeAiService {
         if (formulasAreUsable(prebaked)) {
             return new AssistResponse("formula", formulaToMarkdown(prebaked), false, List.of(), null);
         }
-        requireLlmAvailable();
+        if (!llm.isEnabled()) {
+            return new AssistResponse(
+                    "formula",
+                    """
+                    No pre-imported formula cards for this question yet.
+
+                    Try **Basics** or **Hint** — re-sync the pack from Admin if enrichment is missing.
+                    """
+                            .strip(),
+                    false,
+                    List.of(),
+                    null);
+        }
         String prompt =
                 """
                 %s
@@ -410,12 +459,18 @@ public class PracticeAiService {
                 """
                         .formatted(formulaSubjectBlock(q));
 
-        List<FormulaEntry> entries = fetchFormulaEntries(prompt, q);
+        List<FormulaEntry> entries = fetchFormulaEntriesFromLlm(prompt);
+        boolean fromLlm = formulasAreUsable(entries);
+        if (!fromLlm) {
+            entries = buildFallbackFormulaEntries(q);
+        } else {
+            persistFormulaEnrichment(q, entries);
+        }
         String markdown = formulaToMarkdown(entries);
-        return new AssistResponse("formula", markdown, true, List.of(), null);
+        return new AssistResponse("formula", markdown, fromLlm, List.of(), null);
     }
 
-    private List<FormulaEntry> fetchFormulaEntries(String prompt, Question q) {
+    private List<FormulaEntry> fetchFormulaEntriesFromLlm(String prompt) {
         String json =
                 llm.completeJson(
                         SYSTEM_FORMULA,
@@ -424,11 +479,6 @@ public class PracticeAiService {
                         "formula_list",
                         LlmJsonSchemas.FORMULAS);
         List<FormulaEntry> entries = parseFormulaJson(json);
-        if (formulasAreUsable(entries)) {
-            return entries;
-        }
-
-        entries = buildFallbackFormulaEntries(q);
         return formulasAreUsable(entries) ? entries : List.of();
     }
 
@@ -575,7 +625,14 @@ public class PracticeAiService {
         if (hasPrebakedBasics(q)) {
             return new AssistResponse("explain_basics", AiTextNormalizer.normalize(buildBasicsFromPrebaked(q)), false, List.of(), null);
         }
-        requireLlmAvailable();
+        if (!llm.isEnabled()) {
+            return new AssistResponse(
+                    "explain_basics",
+                    AiTextNormalizer.normalize(buildBasicsFromPrebaked(q)),
+                    false,
+                    List.of(),
+                    null);
+        }
         boolean afterSubmit = hasSubmittedAnswer(req);
         String studentState =
                 afterSubmit
@@ -617,8 +674,50 @@ public class PracticeAiService {
                                         : "",
                                 BASICS_MAX_WORDS);
 
-        String text = fetchBasicsText(prompt);
-        return new AssistResponse("explain_basics", AiTextNormalizer.normalize(text), true, List.of(), null);
+        String text = AiTextNormalizer.normalize(fetchBasicsText(prompt));
+        persistBasicsEnrichment(q, text);
+        return new AssistResponse("explain_basics", text, true, List.of(), null);
+    }
+
+    private AssistResponse pitfalls(AssistRequest req) {
+        Question q = requireQuestion(req.questionId());
+        if (hasPrebakedPitfalls(q)) {
+            return new AssistResponse(
+                    "pitfalls", AiTextNormalizer.normalize(buildPitfallsFromPrebaked(q)), false, List.of(), null);
+        }
+        if (!llm.isEnabled()) {
+            return new AssistResponse(
+                    "pitfalls",
+                    """
+                    No imported pitfalls or practice pattern for this question yet.
+
+                    Re-sync the pack from Admin, or enable the LLM to generate them on first use.
+                    """
+                            .strip(),
+                    false,
+                    List.of(),
+                    null);
+        }
+        String prompt =
+                """
+                Question context:
+                %s
+
+                Subject: %s | Chapter: %s | Topic: %s
+
+                List typical NEET mistakes students make on this PYQ type and the recurring practice pattern.
+                Start with ### Common mistakes. Max %d words.
+                """
+                        .formatted(
+                                questionPreviewText(q),
+                                nullToEmpty(q.getSubject()),
+                                nullToEmpty(q.getChapter()),
+                                nullToEmpty(q.getTopic()),
+                                PITFALLS_MAX_WORDS);
+        String text = AiTextNormalizer.normalize(
+                llm.complete(SYSTEM_PITFALLS, prompt, LlmCompletionOptions.text(0.2, 320)));
+        persistPitfallsEnrichment(q, text);
+        return new AssistResponse("pitfalls", text, true, List.of(), null);
     }
 
     private String fetchBasicsText(String prompt) {
@@ -758,13 +857,26 @@ public class PracticeAiService {
     }
 
     private static String questionPreviewText(Question q) {
+        StringBuilder sb = new StringBuilder();
         if (q.getQuestionTextPreview() != null && !q.getQuestionTextPreview().isBlank()) {
-            return q.getQuestionTextPreview();
+            sb.append(q.getQuestionTextPreview().strip());
+        } else if (q.isHasDiagram() || q.isHasEquation()) {
+            sb.append(
+                    "(text preview unavailable — question is mainly image/diagram; infer from chapter, topic, and figure labels)");
+        } else {
+            sb.append("(no text preview — use chapter/topic/concepts)");
         }
-        if (q.isHasDiagram() || q.isHasEquation()) {
-            return "(text preview unavailable — question is mainly image/diagram; infer from chapter, topic, and figure labels)";
+        if (q.getOptions() != null && !q.getOptions().isEmpty()) {
+            sb.append("\n\nOptions:");
+            for (var opt : q.getOptions()) {
+                String id = nullToEmpty(opt.getId()).strip();
+                String text = nullToEmpty(opt.getText()).strip();
+                if (!id.isBlank() && !text.isBlank()) {
+                    sb.append("\n(").append(id).append(") ").append(text);
+                }
+            }
         }
-        return "(no text preview — use chapter/topic/concepts)";
+        return sb.toString().strip();
     }
 
     private AssistResponse weakChapterAnalysis(String userId) {
@@ -848,6 +960,12 @@ public class PracticeAiService {
                 ? requireQuestion(req.questionId())
                 : null;
 
+        if (q != null && hasRevisionNotes(q)) {
+            return new AssistResponse("revision_notes", q.getRevisionNotes().strip(), false, List.of(), null);
+        }
+
+        requireLlmAvailable();
+
         String prompt;
         if (q != null) {
             prompt =
@@ -879,6 +997,9 @@ public class PracticeAiService {
         }
 
         String text = AiTextNormalizer.normalize(llm.complete(SYSTEM_REVISION, prompt, 0.3, 420));
+        if (q != null) {
+            persistRevisionNotes(q, text);
+        }
         return new AssistResponse("revision_notes", text, true, List.of(), null);
     }
 
@@ -909,10 +1030,6 @@ public class PracticeAiService {
     }
 
     private String resolveSimilarIntroText(Question q, int similarCount) {
-        Optional<String> pattern = lookupPracticePattern(q);
-        if (pattern.isPresent()) {
-            return pattern.get();
-        }
         if (similarCount == 0) {
             return syllabusScopeLabel(q)
                     + " — no other PYQs matched in the bank yet. Try the chapter filter in Question Bank.";
@@ -925,9 +1042,35 @@ public class PracticeAiService {
                 .strip();
     }
 
-    private Optional<String> lookupPracticePattern(Question q) {
+    private static boolean hasPrebakedPitfalls(Question q) {
+        if (!nullToEmpty(q.getPracticePattern()).strip().isBlank()) {
+            return true;
+        }
+        return q.getCommonMistakes() != null
+                && q.getCommonMistakes().stream().anyMatch(m -> !nullToEmpty(m).strip().isBlank());
+    }
+
+    private String buildPitfallsFromPrebaked(Question q) {
+        StringBuilder sb = new StringBuilder();
+        List<String> mistakes = q.getCommonMistakes();
+        boolean hasMistakes =
+                mistakes != null && mistakes.stream().anyMatch(m -> !nullToEmpty(m).strip().isBlank());
+        if (hasMistakes) {
+            sb.append("### Common mistakes\n\n");
+            for (String mistake : mistakes) {
+                String text = nullToEmpty(mistake).strip();
+                if (!text.isBlank()) {
+                    sb.append("- ").append(AiTextNormalizer.sanitizeEnrichmentText(text)).append("\n");
+                }
+            }
+            sb.append("\n");
+        }
         String pattern = nullToEmpty(q.getPracticePattern()).strip();
-        return pattern.isBlank() ? Optional.empty() : Optional.of(pattern);
+        if (!pattern.isBlank()) {
+            sb.append("### Practice pattern\n\n");
+            sb.append(AiTextNormalizer.sanitizeEnrichmentText(pattern)).append("\n");
+        }
+        return sb.toString().strip();
     }
 
     private static String syllabusScopeLabel(Question q) {
@@ -1076,7 +1219,12 @@ public class PracticeAiService {
     }
 
     private static boolean hasPrebakedBasics(Question q) {
-        return !nullToEmpty(q.getConceptExplanation()).strip().isBlank();
+        if (!nullToEmpty(q.getConceptExplanation()).strip().isBlank()) {
+            return true;
+        }
+        return hasPrebakedHints(q)
+                || (q.getCommonMistakes() != null
+                        && q.getCommonMistakes().stream().anyMatch(m -> !nullToEmpty(m).strip().isBlank()));
     }
 
     private List<FormulaEntry> prebakedFormulaEntries(Question q) {
@@ -1108,9 +1256,19 @@ public class PracticeAiService {
 
     private String buildBasicsFromPrebaked(Question q) {
         StringBuilder sb = new StringBuilder();
-        sb.append("### Concept\n\n")
-                .append(AiTextNormalizer.sanitizeEnrichmentText(q.getConceptExplanation().strip()))
-                .append("\n\n");
+        sb.append("### Concept\n\n");
+        String concept = nullToEmpty(q.getConceptExplanation()).strip();
+        if (!concept.isBlank()) {
+            sb.append(AiTextNormalizer.sanitizeEnrichmentText(concept)).append("\n\n");
+        } else if (q.getChapter() != null && !q.getChapter().isBlank()) {
+            sb.append("Core idea from **")
+                    .append(q.getChapter())
+                    .append("**")
+                    .append(q.getTopic() != null && !q.getTopic().isBlank() ? " · " + q.getTopic() : "")
+                    .append(" — use the hints below to work through this PYQ.\n\n");
+        } else {
+            sb.append("Work through the hints and formulas for this chapter before picking an option.\n\n");
+        }
 
         sb.append("### Key Formula(s)\n\n");
         List<FormulaEntry> formulas = prebakedFormulaEntries(q);
@@ -1146,18 +1304,6 @@ public class PracticeAiService {
         }
         sb.append("\n");
 
-        sb.append("### Common Mistake\n\n");
-        List<String> mistakes = q.getCommonMistakes();
-        if (mistakes != null && !mistakes.isEmpty()) {
-            for (String mistake : mistakes) {
-                String text = nullToEmpty(mistake).strip();
-                if (!text.isBlank()) {
-                    sb.append("- ").append(text).append("\n");
-                }
-            }
-        } else {
-            sb.append("- Rushing to an option without checking units, signs, or given conditions.\n");
-        }
         return sb.toString().strip();
     }
 
@@ -1203,6 +1349,170 @@ public class PracticeAiService {
         return sb.toString();
     }
 
+    private static boolean hasRevisionNotes(Question q) {
+        return !nullToEmpty(q.getRevisionNotes()).strip().isBlank();
+    }
+
+    private static String lookupWhyWrongExplanation(Question q, String selectedAnswer) {
+        if (q.getWhyWrongByAnswer() == null || q.getWhyWrongByAnswer().isEmpty()) {
+            return null;
+        }
+        String key = selectedAnswer.strip();
+        String text = q.getWhyWrongByAnswer().get(key);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        return text.strip();
+    }
+
+    private void persistHintEnrichment(Question q, List<String> steps) {
+        if (!hintsAreUsable(steps) || AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.HINTS)) {
+            return;
+        }
+        q.setHints(new ArrayList<>(steps.subList(0, 3)));
+        saveQuestionEnrichment(q);
+    }
+
+    private void persistFormulaEnrichment(Question q, List<FormulaEntry> entries) {
+        if (!formulasAreUsable(entries)
+                || AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.FORMULA_CARDS)) {
+            return;
+        }
+        List<FormulaCard> cards = new ArrayList<>();
+        for (FormulaEntry entry : entries) {
+            FormulaCard card = new FormulaCard();
+            card.setName(entry.name());
+            card.setFormula(AiTextNormalizer.normalizeFormulaLatex(entry.equation()));
+            card.setDescription(entry.whenToUse());
+            cards.add(card);
+        }
+        q.setFormulaCards(cards);
+        saveQuestionEnrichment(q);
+    }
+
+    private void persistPitfallsEnrichment(Question q, String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return;
+        }
+        boolean changed = false;
+        List<String> mistakes = extractBulletLines(extractMarkdownSection(markdown, "Common mistakes"));
+        if (!mistakes.isEmpty()
+                && !AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.COMMON_MISTAKES)) {
+            q.setCommonMistakes(mistakes);
+            changed = true;
+        }
+        String pattern = extractMarkdownSection(markdown, "Practice pattern");
+        if (!pattern.isBlank() && !AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.PRACTICE_PATTERN)) {
+            q.setPracticePattern(AiTextNormalizer.sanitizeEnrichmentText(pattern));
+            changed = true;
+        }
+        if (changed) {
+            saveQuestionEnrichment(q);
+        }
+    }
+
+    private void persistBasicsEnrichment(Question q, String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return;
+        }
+        boolean changed = false;
+        String concept = extractMarkdownSection(markdown, "Concept");
+        if (!concept.isBlank()
+                && !AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.CONCEPT_EXPLANATION)) {
+            q.setConceptExplanation(AiTextNormalizer.sanitizeEnrichmentText(concept));
+            changed = true;
+        }
+        List<String> mistakes = extractBulletLines(extractMarkdownSection(markdown, "Common Mistake"));
+        if (!mistakes.isEmpty()
+                && !AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.COMMON_MISTAKES)) {
+            q.setCommonMistakes(mistakes);
+            changed = true;
+        }
+        if (!hasPrebakedHints(q) && !AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.HINTS)) {
+            List<String> approach =
+                    extractNumberedLines(extractMarkdownSection(markdown, "How to Approach This Question"));
+            if (approach.size() >= 3) {
+                q.setHints(new ArrayList<>(approach.subList(0, 3)));
+                changed = true;
+            }
+        }
+        if (changed) {
+            saveQuestionEnrichment(q);
+        }
+    }
+
+    private void persistRevisionNotes(Question q, String text) {
+        if (text == null
+                || text.isBlank()
+                || AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.REVISION_NOTES)) {
+            return;
+        }
+        q.setRevisionNotes(text.strip());
+        saveQuestionEnrichment(q);
+    }
+
+    private void persistWhyWrongExplanation(Question q, String selectedAnswer, String text) {
+        if (text == null
+                || text.isBlank()
+                || AdminQuestionPreserve.isLocked(q, AdminQuestionPreserve.WHY_WRONG)) {
+            return;
+        }
+        Map<String, String> map =
+                q.getWhyWrongByAnswer() != null ? new LinkedHashMap<>(q.getWhyWrongByAnswer()) : new LinkedHashMap<>();
+        map.put(selectedAnswer.strip(), text.strip());
+        q.setWhyWrongByAnswer(map);
+        saveQuestionEnrichment(q);
+    }
+
+    private void saveQuestionEnrichment(Question q) {
+        questions.save(q);
+    }
+
+    private static String extractMarkdownSection(String markdown, String heading) {
+        Pattern pattern =
+                Pattern.compile(
+                        "(?is)###\\s*" + Pattern.quote(heading) + "\\s*\\n+(.*?)(?=\\n###\\s|$)");
+        Matcher matcher = pattern.matcher(markdown);
+        if (!matcher.find()) {
+            return "";
+        }
+        return matcher.group(1).strip();
+    }
+
+    private static List<String> extractBulletLines(String body) {
+        if (body == null || body.isBlank()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String line : body.split("\n")) {
+            String trimmed = line.strip();
+            if (trimmed.startsWith("-") || trimmed.startsWith("•")) {
+                String item = trimmed.replaceFirst("^[-•]\\s*", "").strip();
+                if (!item.isBlank()) {
+                    out.add(item);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static List<String> extractNumberedLines(String body) {
+        if (body == null || body.isBlank()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String line : body.split("\n")) {
+            String trimmed = line.strip();
+            if (trimmed.matches("^\\d+\\.\\s+.+")) {
+                String item = trimmed.replaceFirst("^\\d+\\.\\s*", "").strip();
+                if (!item.isBlank()) {
+                    out.add(item);
+                }
+            }
+        }
+        return out;
+    }
+
     private static String normalizeFeature(String feature) {
         if (feature == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "feature is required");
@@ -1217,6 +1527,320 @@ public class PracticeAiService {
     private static String urlEncode(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
+
+    /** Admin: catalog of AI features with prompt templates for manual ChatGPT review. */
+    public List<PromptFeatureInfo> listPromptFeatures() {
+        return List.of(
+                new PromptFeatureInfo("why_wrong", "Why is my answer wrong?", true, false, true),
+                new PromptFeatureInfo("hint", "Give me a hint", true, false, false),
+                new PromptFeatureInfo("formula", "Key formulas", true, false, false),
+                new PromptFeatureInfo("explain_basics", "Explain from basics", true, false, true),
+                new PromptFeatureInfo("pitfalls", "Common mistakes & pattern", true, false, false),
+                new PromptFeatureInfo("revision_notes", "Revision notes", true, false, false),
+                new PromptFeatureInfo("similar_questions", "Similar questions", true, false, false),
+                new PromptFeatureInfo("weak_chapter_analysis", "Weak chapter analysis", false, true, false),
+                new PromptFeatureInfo("practice_from_weak", "Practice from weak areas", false, true, false),
+                new PromptFeatureInfo("mentor", "AI mentor", false, true, false));
+    }
+
+    public PromptView resolvePrompt(String userId, String feature, String questionId, String selectedAnswer) {
+        String normalized = normalizeFeature(feature);
+        return switch (normalized) {
+            case "why_wrong" -> resolveWhyWrongPrompt(questionId, selectedAnswer);
+            case "hint" -> resolveHintPrompt(questionId);
+            case "formula" -> resolveFormulaPrompt(questionId);
+            case "explain_basics" -> resolveBasicsPrompt(questionId, selectedAnswer);
+            case "pitfalls" -> resolvePitfallsPrompt(questionId);
+            case "revision_notes" -> resolveRevisionNotesPrompt(questionId);
+            case "similar_questions" -> resolveSimilarQuestionsPrompt(questionId);
+            case "weak_chapter_analysis" -> resolveWeakChapterPrompt(userId);
+            case "practice_from_weak" -> resolvePracticeFromWeakPrompt(userId);
+            case "mentor" -> resolveMentorPrompt(userId);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown feature: " + feature);
+        };
+    }
+
+    private PromptView resolveWhyWrongPrompt(String questionId, String selectedAnswer) {
+        Question q = requireQuestion(questionId);
+        String chosen = selectedAnswer != null && !selectedAnswer.isBlank() ? selectedAnswer.strip() : "2";
+        String userPrompt =
+                """
+                Mode: WHY WRONG
+                The student already submitted and got this wrong.
+
+                Question context:
+                %s
+
+                Correct answer key: %s
+                Student chose: %s
+
+                Explain the likely misconception and the correct reasoning path. Name the concept tested.
+                Do not be harsh; be specific to this question.
+                """
+                        .formatted(questionBlock(q), q.getAnswer(), chosen);
+        return new PromptView(
+                "why_wrong",
+                "Why is my answer wrong?",
+                SYSTEM_NEET,
+                userPrompt,
+                "Cached per wrong option in whyWrongByAnswer. Override in Admin enrichment.");
+    }
+
+    private PromptView resolveHintPrompt(String questionId) {
+        Question q = requireQuestion(questionId);
+        var caps = llm.capabilitiesForConfiguredModel();
+        boolean structured = caps.supportsJsonMode() || caps.supportsJsonSchema();
+        String system = structured ? SYSTEM_HINT_JSON : SYSTEM_HINT_PLAIN;
+        String userPrompt = buildHintUserPrompt(q, structured);
+        return new PromptView(
+                "hint",
+                "Give me a hint",
+                system,
+                userPrompt,
+                "Cached as hints[3] on the question document after first LLM hit.");
+    }
+
+    private PromptView resolveFormulaPrompt(String questionId) {
+        Question q = requireQuestion(questionId);
+        String userPrompt =
+                """
+                %s
+
+                List the 1–2 most important formulas needed for this PYQ.
+                The student has NOT submitted the answer.
+                """
+                        .formatted(formulaSubjectBlock(q));
+        String notes =
+                FormulaEligibility.questionNeedsFormula(q)
+                        ? "Cached as formulaCards after first LLM hit."
+                        : "This question is marked concept-based — formula feature returns a static message to students.";
+        return new PromptView("formula", "Key formulas", SYSTEM_FORMULA, userPrompt, notes);
+    }
+
+    private PromptView resolveBasicsPrompt(String questionId, String selectedAnswer) {
+        Question q = requireQuestion(questionId);
+        boolean afterSubmit = selectedAnswer != null && !selectedAnswer.isBlank();
+        String studentState =
+                afterSubmit
+                        ? """
+                        Student answer submitted: %s (correct key: %s).
+                        You may reference their choice when explaining, but still teach the concept — do not only give the key.
+                        """
+                                .formatted(selectedAnswer.strip(), q.getAnswer())
+                        : """
+                        Student is still attempting.
+                        Do not reveal the final answer or option number.
+                        """;
+        boolean incompletePreview = isIncompleteQuestionPreview(q);
+        String userPrompt =
+                """
+                %s
+
+                Question context:
+                %s
+
+                Question preview:
+                %s
+                %s
+
+                Explain this PYQ for the student. Follow your output rules: start with ### Concept, max %d words.
+                """
+                        .formatted(
+                                studentState.strip(),
+                                questionMetadataBlock(q),
+                                questionPreviewText(q),
+                                incompletePreview
+                                        ? """
+
+                                        Preview status: INCOMPLETE (diagram/OCR may be missing).
+                                        """
+                                                .strip()
+                                        : "",
+                                BASICS_MAX_WORDS);
+        return new PromptView(
+                "explain_basics",
+                "Explain from basics",
+                SYSTEM_BASICS,
+                userPrompt,
+                "Cached as conceptExplanation, commonMistakes, and hints after first LLM hit.");
+    }
+
+    private PromptView resolvePitfallsPrompt(String questionId) {
+        Question q = requireQuestion(questionId);
+        String userPrompt =
+                """
+                Question context:
+                %s
+
+                Subject: %s | Chapter: %s | Topic: %s
+
+                List typical NEET mistakes students make on this PYQ type and the recurring practice pattern.
+                Start with ### Common mistakes. Max %d words.
+                """
+                        .formatted(
+                                questionPreviewText(q),
+                                nullToEmpty(q.getSubject()),
+                                nullToEmpty(q.getChapter()),
+                                nullToEmpty(q.getTopic()),
+                                PITFALLS_MAX_WORDS);
+        return new PromptView(
+                "pitfalls",
+                "Common mistakes & pattern",
+                SYSTEM_PITFALLS,
+                userPrompt,
+                "Cached as commonMistakes and practicePattern after first LLM hit.");
+    }
+
+    private PromptView resolveRevisionNotesPrompt(String questionId) {
+        if (questionId == null || questionId.isBlank()) {
+            String userPrompt =
+                    """
+                    The student is revising bookmarked NEET PYQs.
+                    Give a checklist for effective same-day revision (active recall, error log, timed re-attempt)
+                    in under 120 words. Use short bullets only — no preamble.
+                    """;
+            return new PromptView(
+                    "revision_notes",
+                    "Revision notes",
+                    SYSTEM_REVISION,
+                    userPrompt,
+                    "Global revision mode when no questionId is passed to assist().");
+        }
+        Question q = requireQuestion(questionId);
+        String userPrompt =
+                """
+                Question context:
+                %s
+
+                Correct answer key: %s
+
+                Write revision notes with exactly these sections:
+
+                ### Key facts
+                - bullets; inline math as $I=\\frac{1}{2}MR^2$
+
+                ### Common mistakes
+                - bullets
+
+                ### Memory hook
+                One short memorable line.
+                """
+                        .formatted(questionBlock(q), q.getAnswer());
+        return new PromptView(
+                "revision_notes",
+                "Revision notes",
+                SYSTEM_REVISION,
+                userPrompt,
+                "Cached as revisionNotes after first LLM hit.");
+    }
+
+    private PromptView resolveSimilarQuestionsPrompt(String questionId) {
+        Question q = requireQuestion(questionId);
+        return new PromptView(
+                "similar_questions",
+                "Similar questions",
+                "",
+                "No LLM prompt — server queries the question bank by exam/subject/chapter/topic/subtopic.\n\n"
+                        + "Anchor: "
+                        + q.getQuestionId()
+                        + " · "
+                        + q.getSubject()
+                        + " · "
+                        + q.getChapter()
+                        + " · "
+                        + q.getTopic(),
+                "Returns related PYQ links from MongoDB, not generated text.");
+    }
+
+    private PromptView resolveWeakChapterPrompt(String userId) {
+        var progress = practiceService.progress(userId);
+        String data =
+                progress.weakChapters().stream()
+                        .limit(5)
+                        .map(w -> w.subject()
+                                + " · "
+                                + w.chapter()
+                                + " — "
+                                + w.accuracyPercent()
+                                + "% ("
+                                + w.attempts()
+                                + " attempts, "
+                                + w.marks()
+                                + " marks)")
+                        .collect(Collectors.joining("\n"));
+        String userPrompt =
+                """
+                Mode: WEAK CHAPTER ANALYSIS
+                Student NEET practice stats (weakest first):
+                %s
+
+                Overall accuracy: %d%% on %d attempts.
+
+                Prioritize what to fix first, why it matters for NEET, and a 3-step drill plan for this week.
+                """
+                        .formatted(data, progress.accuracyPercent(), progress.totalAttempts());
+        return new PromptView(
+                "weak_chapter_analysis",
+                "Weak chapter analysis",
+                SYSTEM_NEET,
+                userPrompt,
+                "Uses live student progress — not cached on a question.");
+    }
+
+    private PromptView resolvePracticeFromWeakPrompt(String userId) {
+        var progress = practiceService.progress(userId);
+        PracticeService.ChapterProgress top = progress.weakChapters().isEmpty()
+                ? null
+                : progress.weakChapters().get(0);
+        String userPrompt =
+                top == null
+                        ? "(No weak chapter data yet — student needs more attempts.)"
+                        : """
+                        Mode: PRACTICE FROM WEAK AREAS
+                        Weakest chapter: %s · %s — %d%% accuracy (%d attempts).
+
+                        In 3–4 sentences, tell the student how to use a focused 20-question adaptive session on this chapter.
+                        """
+                                .formatted(
+                                        top.subject(),
+                                        top.chapter(),
+                                        top.accuracyPercent(),
+                                        top.attempts());
+        return new PromptView(
+                "practice_from_weak",
+                "Practice from weak areas",
+                SYSTEM_NEET,
+                userPrompt,
+                "Uses live student progress — not cached on a question.");
+    }
+
+    private PromptView resolveMentorPrompt(String userId) {
+        var progress = practiceService.progress(userId);
+        String userPrompt =
+                """
+                Mode: AI MENTOR (weekly study coach, not open-ended chat)
+                Attempts: %d | Accuracy: %d%% | Recent sessions: %d
+
+                Give a motivating weekly plan: daily question target, when to review mistakes, and one habit to keep.
+                Keep it actionable for a NEET repeater/first-timer.
+                """
+                        .formatted(
+                                progress.totalAttempts(),
+                                progress.accuracyPercent(),
+                                progress.recentSessions().size());
+        return new PromptView(
+                "mentor",
+                "AI mentor",
+                SYSTEM_NEET,
+                userPrompt,
+                "Uses live student progress — not cached on a question.");
+    }
+
+    public record PromptFeatureInfo(
+            String id, String label, boolean questionScoped, boolean userScoped, boolean usesSelectedAnswer) {}
+
+    public record PromptView(
+            String feature, String label, String systemPrompt, String userPrompt, String notes) {}
 
     public record StatusView(
             boolean available, boolean llmConfigured, boolean platformEnabled, boolean serverEnabled) {}

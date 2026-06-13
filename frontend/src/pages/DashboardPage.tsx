@@ -5,16 +5,48 @@ import { useAuth } from "../auth/AuthContext";
 import DashboardGuestView from "../components/DashboardGuestView";
 import DashboardPerformanceSnapshot from "../components/DashboardPerformanceSnapshot";
 import DashboardRecommendations from "../components/DashboardRecommendations";
-import { STITCH_ANALYTICS_HERO } from "../design/stitchAssets";
+import DashboardResumeHero from "../components/DashboardResumeHero";
+import RevisionQueueCard from "../components/RevisionQueueCard";
 import { buildDashboardStats, computeStreakDays } from "../utils/dashboardStats";
+import { sessionResumeUrl } from "../utils/practiceHub";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { buildPlatformStats } from "../utils/platformStats";
+import {
+  BANK_MODE_HINT,
+  LEADERBOARD_MODE_HINT,
+  PRACTICE_MODE_HINT,
+} from "../navigation/modeHints";
 
 const QUICK_ACTIONS = [
-  { to: "/practice", icon: "bolt", title: "Practice", desc: "Scored adaptive sessions", primary: true },
-  { to: "/bank?exam=NEET", icon: "menu_book", title: "Question Bank", desc: "PYQs with solutions" },
-  { to: "/analytics", icon: "insights", title: "Analytics", desc: "Trends & heatmaps" },
-  { to: "/leaderboard", icon: "emoji_events", title: "Leaderboard", desc: "Your rank vs peers" },
+  {
+    to: "/practice",
+    icon: "bolt",
+    title: "Practice",
+    desc: "Scored adaptive sessions",
+    hint: PRACTICE_MODE_HINT,
+    primary: true,
+  },
+  {
+    to: "/bank?exam=NEET",
+    icon: "menu_book",
+    title: "Question Bank",
+    desc: "PYQs with solutions",
+    hint: BANK_MODE_HINT,
+  },
+  {
+    to: "/analytics",
+    icon: "insights",
+    title: "Analytics",
+    desc: "Trends & heatmaps",
+    hint: "Accuracy trends, weak chapters, heatmaps, and AI coaching from your sessions.",
+  },
+  {
+    to: "/leaderboard",
+    icon: "emoji_events",
+    title: "Leaderboard",
+    desc: "Your rank vs peers",
+    hint: LEADERBOARD_MODE_HINT,
+  },
 ] as const;
 
 export default function DashboardPage() {
@@ -75,37 +107,15 @@ export default function DashboardPage() {
     leaderboardRank != null ? `#${leaderboardRank}` : attempts > 0 ? "Unranked" : "—";
   const topTier = accuracy >= 80;
 
-  const practiceCta = stats.activeSession?.currentQuestionId
-    ? `/practice/${stats.activeSession.id}/${stats.activeSession.currentQuestionId}`
-    : "/practice";
-  const practiceLabel = stats.activeSession ? "Resume practice" : "Start practice";
-
   return (
     <main className="dashboard-page pt-4 lg:pt-8 space-y-lg lg:space-y-xl">
-      <section className="dashboard-hero glass-card">
-        <div className="dashboard-hero__body">
-          <span className="dashboard-badge">Welcome back</span>
-          <h1 className="dashboard-hero__title">
-            {topTier ? (
-              <>
-                {name}, you&apos;re on fire — <span className="text-primary">top tier</span> accuracy.
-              </>
-            ) : (
-              <>Hi {name}, let&apos;s sharpen your edge today.</>
-            )}
-          </h1>
-          <p className="dashboard-hero__lead">
-            Your marks, streak, and rank live here. Pick up a session or drill weak chapters.
-          </p>
-          <Link to={practiceCta} className="btn primary dashboard-hero__cta-inline">
-            <span className="material-symbols-outlined">bolt</span>
-            {practiceLabel}
-          </Link>
-        </div>
-        <div className="dashboard-hero__visual dashboard-hero__visual--compact">
-          <img alt="" className="dashboard-hero__image" src={STITCH_ANALYTICS_HERO} />
-        </div>
-      </section>
+      <DashboardResumeHero
+        name={name}
+        topTier={topTier}
+        session={stats.activeSession}
+        packs={packs}
+        progress={progress}
+      />
 
       <DashboardPerformanceSnapshot
         accuracy={accuracy}
@@ -115,9 +125,15 @@ export default function DashboardPage() {
         progress={progress}
       />
 
+      <RevisionQueueCard />
+
       <DashboardRecommendations
         activeSession={stats.activeSession}
-        practiceCta={practiceCta}
+        practiceCta={
+          stats.activeSession
+            ? sessionResumeUrl(stats.activeSession) ?? "/practice"
+            : "/practice"
+        }
         progress={progress}
       />
 
@@ -126,7 +142,8 @@ export default function DashboardPage() {
           <Link
             key={action.to}
             to={action.to}
-            className={`dashboard-action-card glass-card ${"primary" in action && action.primary ? "dashboard-action-card--primary" : ""}`}
+            className={`dashboard-action-card glass-card hover-hint ${"primary" in action && action.primary ? "dashboard-action-card--primary" : ""}`}
+            data-tooltip={action.hint}
           >
             <span className="material-symbols-outlined dashboard-action-card__icon">{action.icon}</span>
             <strong>{action.title}</strong>
@@ -136,7 +153,11 @@ export default function DashboardPage() {
       </section>
 
       {attempts > 0 && (
-        <Link to="/analytics" className="dashboard-teaser glass-card">
+        <Link
+          to="/analytics"
+          className="dashboard-teaser glass-card hover-hint"
+          data-tooltip="See accuracy over time, subject breakdowns, practice heatmaps, and session history."
+        >
           <div className="dashboard-teaser__icon">
             <span className="material-symbols-outlined">trending_up</span>
           </div>

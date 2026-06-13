@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   fetchPracticeAiStatus,
+  fetchPracticeSolution,
   practiceAiAssist,
   type PracticeAiAssistResponse,
   type PracticeAiFeature,
@@ -9,12 +10,14 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import AiMarkdown from "./AiMarkdown";
+import AiStreamingMarkdown from "./AiStreamingMarkdown";
 
 type TabDef = {
   id: PracticeAiFeature;
   label: string;
   short: string;
   icon: string;
+  tier: "primary" | "secondary";
 };
 
 type Props = {
@@ -24,48 +27,78 @@ type Props = {
   correct?: boolean | null;
   prominent?: boolean;
   layout: "sidebar" | "inline";
+  /** Nested inside test sidebar — no outer card chrome. */
+  embedded?: boolean;
   /** Hide Formula tab when the PYQ is concept-only (no LLM call needed). */
   formulaRelevant?: boolean;
+  /** Whether an official solution image exists for the full-solution step. */
+  hasSolution?: boolean;
+  /** Parent can open a tab (e.g. from result card actions). */
+  triggerFeature?: PracticeAiFeature | null;
+  onTriggerConsumed?: () => void;
+  /** Hide tools during an active test — results unlock after final submission. */
+  examLocked?: boolean;
+  /** Study bank — allow solution without stepping through all hints. */
+  directSolutionReveal?: boolean;
+  /** Preloaded from question detail (avoids extra API round-trip). */
+  prefetchedSolutionImage?: string;
+  prefetchedSolutionText?: string;
 };
 
-const FORMULA_TAB: TabDef = { id: "formula", label: "Formula", short: "Formula", icon: "functions" };
+export type PracticeStudyAssistantProps = Props;
 
-const BEFORE_TABS_BASE: TabDef[] = [
-  { id: "hint", label: "Hint", short: "Hint", icon: "lightbulb" },
-  { id: "explain_basics", label: "Basics", short: "Basics", icon: "school" },
-  { id: "similar_questions", label: "Similar Questions", short: "Similar", icon: "library_books" },
+/** Study tools — enrichment from DB when imported; LLM generates once then caches; explain after submit. */
+const CORE_TABS: TabDef[] = [
+  { id: "hint", label: "Hint", short: "Hint", icon: "lightbulb", tier: "primary" },
+  { id: "formula", label: "Formula", short: "Formula", icon: "functions", tier: "primary" },
+  { id: "explain_basics", label: "Basics", short: "Basics", icon: "school", tier: "primary" },
+  {
+    id: "pitfalls",
+    label: "Mistakes & Pattern",
+    short: "Pitfalls",
+    icon: "error_outline",
+    tier: "primary",
+  },
+  {
+    id: "similar_questions",
+    label: "Similar Questions",
+    short: "Similar",
+    icon: "library_books",
+    tier: "primary",
+  },
 ];
 
-function buildTabs(includeFormula: boolean, submitted: boolean, correct: boolean | null | undefined): TabDef[] {
-  const formula = includeFormula ? [FORMULA_TAB] : [];
+function buildTabs(_includeFormula: boolean, submitted: boolean, correct: boolean | null | undefined): TabDef[] {
   if (!submitted) {
-    return [
-      BEFORE_TABS_BASE[0],
-      BEFORE_TABS_BASE[1],
-      ...formula,
-      BEFORE_TABS_BASE[2],
-    ];
+    return CORE_TABS;
   }
   if (correct === false) {
     return [
-      { id: "why_wrong", label: "AI Explanation", short: "Explain", icon: "psychology" },
-      BEFORE_TABS_BASE[1],
-      ...formula,
-      BEFORE_TABS_BASE[2],
+      { id: "why_wrong", label: "Explain", short: "Explain", icon: "psychology", tier: "primary" },
+      ...CORE_TABS,
     ];
   }
   return [
-    { id: "revision_notes", label: "AI Explanation", short: "Explain", icon: "psychology" },
-    BEFORE_TABS_BASE[1],
-    ...formula,
-    BEFORE_TABS_BASE[2],
+    { id: "revision_notes", label: "Explain", short: "Explain", icon: "psychology", tier: "primary" },
+    ...CORE_TABS,
   ];
 }
 
+export function explainFeatureForResult(correct: boolean): PracticeAiFeature {
+  return correct ? "revision_notes" : "why_wrong";
+}
+
 const HINT_STEP_COUNT = 3;
-/** Fake delay before revealing cached hint steps 2 & 3 */
-const HINT_REVEAL_MS_MIN = 1200;
-const HINT_REVEAL_MS_MAX = 1800;
+
+function imageSrc(url: string) {
+  return url;
+}
+
+function nextHintButtonLabel(currentStep: number): string {
+  if (currentStep === 1) return "Hint 2";
+  if (currentStep === 2) return "Hint 3";
+  return `Hint ${currentStep + 1}`;
+}
 
 function resolveHintSteps(res: PracticeAiAssistResponse): string[] {
   const raw = res.hintSteps?.map((s) => s.trim()).filter(Boolean) ?? [];
@@ -84,10 +117,6 @@ function resolveHintSteps(res: PracticeAiAssistResponse): string[] {
   return res.text?.trim() ? [res.text.trim()] : [];
 }
 
-function hintRevealDelayMs() {
-  return HINT_REVEAL_MS_MIN + Math.floor(Math.random() * (HINT_REVEAL_MS_MAX - HINT_REVEAL_MS_MIN));
-}
-
 export default function PracticeStudyAssistant({
   questionId,
   selectedAnswer,
@@ -96,11 +125,18 @@ export default function PracticeStudyAssistant({
   prominent = false,
   layout,
   formulaRelevant = true,
+  hasSolution = false,
+  triggerFeature = null,
+  onTriggerConsumed,
+  examLocked = false,
+  embedded = false,
+  directSolutionReveal = false,
+  prefetchedSolutionImage = "",
+  prefetchedSolutionText = "",
 }: Props) {
   const { user } = useAuth();
   const { settings, loading: settingsLoading } = usePlatformSettings();
-  const available = settings.aiSuggestEnabled;
-  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
 
   const tabs = useMemo(
     () => buildTabs(formulaRelevant, submitted, correct),
@@ -115,7 +151,15 @@ export default function PracticeStudyAssistant({
   const [results, setResults] = useState<Partial<Record<PracticeAiFeature, PracticeAiAssistResponse>>>({});
   const [statusOk, setStatusOk] = useState<boolean | null>(null);
   const [hintStep, setHintStep] = useState(1);
-  const [hintRevealing, setHintRevealing] = useState(false);
+  const [hintAnimate, setHintAnimate] = useState(true);
+  const [streamComplete, setStreamComplete] = useState(false);
+  const [streamEpoch, setStreamEpoch] = useState(0);
+  const [solutionRevealed, setSolutionRevealed] = useState(false);
+  const [solutionImageUrl, setSolutionImageUrl] = useState("");
+  const [solutionText, setSolutionText] = useState("");
+  const [solutionBusy, setSolutionBusy] = useState(false);
+  const [solutionError, setSolutionError] = useState("");
+  const [solutionExpanded, setSolutionExpanded] = useState(false);
 
   useEffect(() => {
     setResults({});
@@ -124,7 +168,13 @@ export default function PracticeStudyAssistant({
     setPanelOpen(false);
     setCollapsed(!prominent);
     setHintStep(1);
-    setHintRevealing(false);
+    setHintAnimate(true);
+    setStreamComplete(false);
+    setSolutionRevealed(false);
+    setSolutionImageUrl("");
+    setSolutionText("");
+    setSolutionError("");
+    setSolutionExpanded(false);
   }, [questionId, submitted, correct, prominent]);
 
   useEffect(() => {
@@ -139,13 +189,6 @@ export default function PracticeStudyAssistant({
       setCollapsed(false);
     }
   }, [prominent]);
-
-  useEffect(
-    () => () => {
-      if (revealTimer.current) clearTimeout(revealTimer.current);
-    },
-    []
-  );
 
   const checkStatus = useCallback(async () => {
     try {
@@ -167,8 +210,13 @@ export default function PracticeStudyAssistant({
       setPanelOpen(true);
       if (feature !== "hint") {
         setHintStep(1);
-        setHintRevealing(false);
+        setSolutionRevealed(false);
+        setSolutionImageUrl("");
+        setSolutionText("");
+        setSolutionError("");
       }
+      setStreamComplete(false);
+      setStreamEpoch((e) => e + 1);
       if (results[feature]) return;
 
       setBusy(feature);
@@ -183,7 +231,13 @@ export default function PracticeStudyAssistant({
         setResults((prev) => ({ ...prev, [feature]: res }));
         if (feature === "hint") {
           setHintStep(1);
+          setHintAnimate(true);
+          setSolutionRevealed(false);
+          setSolutionImageUrl("");
+          setSolutionText("");
+          setSolutionError("");
         }
+        setStreamComplete(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "AI request failed");
       } finally {
@@ -194,39 +248,190 @@ export default function PracticeStudyAssistant({
   );
 
   const revealNextHint = useCallback(() => {
-    const cached = results.hint;
-    if (!cached || hintStep >= HINT_STEP_COUNT) return;
-    const steps = resolveHintSteps(cached);
-    if (hintStep >= steps.length) return;
+    if (hintStep >= HINT_STEP_COUNT) return;
+    setHintAnimate(true);
+    setStreamComplete(false);
+    setStreamEpoch((e) => e + 1);
+    setHintStep((s) => Math.min(s + 1, HINT_STEP_COUNT));
+  }, [hintStep]);
 
-    setHintRevealing(true);
-    if (revealTimer.current) clearTimeout(revealTimer.current);
-    revealTimer.current = setTimeout(() => {
-      setHintStep((s) => Math.min(s + 1, HINT_STEP_COUNT));
-      setHintRevealing(false);
-      revealTimer.current = null;
-    }, hintRevealDelayMs());
-  }, [results.hint, hintStep]);
+  const goToHint = useCallback((step: number, maxSteps: number) => {
+    if (step < 1 || step > maxSteps) return;
+    setHintAnimate(false);
+    setHintStep(step);
+    setStreamComplete(true);
+    setStreamEpoch((e) => e + 1);
+  }, []);
+
+  const revealFullSolution = useCallback(async () => {
+    if (!hasSolution || solutionRevealed) return;
+    const prefetchedImage = prefetchedSolutionImage?.trim() ?? "";
+    const prefetchedText = prefetchedSolutionText?.trim() ?? "";
+    if (prefetchedImage) {
+      setSolutionImageUrl(prefetchedImage);
+      setSolutionText("");
+      setSolutionRevealed(true);
+      return;
+    }
+    if (prefetchedText) {
+      setSolutionText(prefetchedText);
+      setSolutionImageUrl("");
+      setSolutionRevealed(true);
+      return;
+    }
+    setSolutionBusy(true);
+    setSolutionError("");
+    try {
+      const res = await fetchPracticeSolution(questionId);
+      if (!res.hasSolution) {
+        setSolutionError("No official solution is available for this question.");
+        return;
+      }
+      if (res.solutionImageUrl?.trim()) {
+        setSolutionImageUrl(res.solutionImageUrl);
+        setSolutionText("");
+        setSolutionRevealed(true);
+        return;
+      }
+      if (res.solutionTextPreview?.trim()) {
+        setSolutionText(res.solutionTextPreview);
+        setSolutionImageUrl("");
+        setSolutionRevealed(true);
+        return;
+      }
+      setSolutionError("No official solution is available for this question.");
+    } catch (e) {
+      setSolutionError(e instanceof Error ? e.message : "Could not load solution");
+    } finally {
+      setSolutionBusy(false);
+    }
+  }, [
+    hasSolution,
+    questionId,
+    solutionRevealed,
+    prefetchedSolutionImage,
+    prefetchedSolutionText,
+  ]);
+
+  useEffect(() => {
+    if (!triggerFeature) return;
+    void runTab(triggerFeature).finally(() => onTriggerConsumed?.());
+  }, [triggerFeature, onTriggerConsumed, runTab]);
+
+  const renderTab = (tab: TabDef) => {
+    const isActive = activeTab === tab.id && panelOpen;
+    const isLoading = busy === tab.id;
+    return (
+      <button
+        key={`${tab.id}-${tab.short}-${tab.tier}`}
+        type="button"
+        role="tab"
+        aria-selected={isActive}
+        className={[
+          "study-assistant__tab",
+          tab.tier === "primary" ? "study-assistant__tab--primary" : "study-assistant__tab--secondary",
+          isActive ? "is-active" : "",
+          isLoading ? "is-loading" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={() => runTab(tab.id)}
+      >
+        <span className="material-symbols-outlined">{tab.icon}</span>
+        <span>{tab.short}</span>
+      </button>
+    );
+  };
 
   const activeResult = activeTab ? results[activeTab] : null;
   const activeTabMeta = tabs.find((t) => t.id === activeTab);
   const isHintTab = activeTab === "hint";
   const hintSteps = isHintTab && activeResult ? resolveHintSteps(activeResult) : [];
+  const effectiveHintCount = Math.min(hintSteps.length, HINT_STEP_COUNT);
   const displayedHint =
-    isHintTab && hintSteps.length > 0 ? hintSteps[Math.min(hintStep, hintSteps.length) - 1] : null;
-  const showLoading = busy === activeTab || (isHintTab && hintRevealing);
+    isHintTab && hintSteps.length > 0
+      ? hintSteps[Math.min(hintStep, hintSteps.length) - 1]
+      : null;
+  const streamText =
+    isHintTab && displayedHint ? displayedHint : activeResult?.text ?? "";
+  const streamKey = `${activeTab ?? "none"}-${isHintTab ? hintStep : 0}-${questionId}-${streamEpoch}`;
+  const showLoading = busy === activeTab;
   const loadingLabel =
-    isHintTab && hintRevealing
-      ? `Preparing hint ${hintStep + 1} of ${HINT_STEP_COUNT}…`
-      : isHintTab && busy === "hint"
-        ? "Generating hints…"
-        : "Generating response…";
+    isHintTab && busy === "hint" ? "Generating hints…" : "Generating response…";
+  const allHintsShown =
+    isHintTab && !!activeResult && streamComplete && hintStep >= effectiveHintCount && effectiveHintCount > 0;
   const canShowNextHint =
     isHintTab &&
     !!activeResult &&
     !showLoading &&
-    hintStep < hintSteps.length &&
-    hintStep < HINT_STEP_COUNT;
+    streamComplete &&
+    hintStep < effectiveHintCount;
+
+  const renderOfficialSolution = (compact?: boolean) => (
+    <>
+      {solutionError && <p className="study-assistant__error">{solutionError}</p>}
+      {solutionRevealed && solutionText && !solutionImageUrl && (
+        <div className="study-assistant__solution study-assistant__solution--text">
+          <div className="study-assistant__solution-head">
+            <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
+              Official solution
+            </span>
+          </div>
+          <div className="study-assistant__solution-text">
+            <AiMarkdown text={solutionText} />
+          </div>
+        </div>
+      )}
+      {solutionRevealed && solutionImageUrl && (
+        <div className="study-assistant__solution">
+          <div className="study-assistant__solution-head">
+            <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
+              Official solution
+            </span>
+            <div className="study-assistant__solution-actions">
+              <button
+                type="button"
+                className="study-assistant__solution-action"
+                onClick={() => setSolutionExpanded(true)}
+              >
+                <span className="material-symbols-outlined">fullscreen</span>
+                Enlarge
+              </button>
+              <a
+                href={imageSrc(solutionImageUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="study-assistant__solution-action"
+              >
+                <span className="material-symbols-outlined">open_in_new</span>
+                Open
+              </a>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="study-assistant__solution-viewport"
+            onClick={() => setSolutionExpanded(true)}
+            aria-label="Enlarge official solution"
+          >
+            <div className="exam-paper-image-frame study-assistant__solution-frame">
+              <img
+                className="exam-paper-image study-assistant__solution-image"
+                src={imageSrc(solutionImageUrl)}
+                alt="Official solution"
+                draggable={false}
+              />
+            </div>
+          </button>
+          {!compact && (
+            <p className="study-assistant__hint-done">
+              Official published solution — tap image to enlarge.
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
 
   if (settingsLoading) {
     return (
@@ -247,16 +452,40 @@ export default function PracticeStudyAssistant({
           <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
           <h3 className="study-assistant__title">AI Study Assistant</h3>
         </div>
-        <p className="study-assistant__off-text">
-          {!settings.aiLlmConfigured ? (
-            <>
-              Start FreeLLMAPI on port <code>3001</code> and set <code>OPENAI_API_KEY</code> in{" "}
-              <code>.env</code>, then restart the backend.
-            </>
-          ) : (
-            <>AI practice is turned off in platform settings.</>
-          )}
-        </p>
+        {hasSolution ? (
+          <div className="study-assistant__content study-assistant__content--solution-only">
+            {!solutionRevealed ? (
+              <button
+                type="button"
+                className="study-assistant__show-solution"
+                disabled={solutionBusy}
+                onClick={() => void revealFullSolution()}
+              >
+                <span className="material-symbols-outlined">menu_book</span>
+                {solutionBusy ? "Loading solution…" : "Show official solution"}
+              </button>
+            ) : null}
+            {renderOfficialSolution(true)}
+            <p className="study-assistant__off-text study-assistant__off-text--muted">
+              {!settings.aiLlmConfigured
+                ? "AI hints need FreeLLMAPI — official paper solutions still work."
+                : "AI hints are off in settings — official paper solutions still work."}
+            </p>
+          </div>
+        ) : (
+          <p className="study-assistant__off-text">
+            {!settings.aiLlmConfigured ? (
+              <>
+                Set a FreeLLMAPI <strong>client</strong> key as <code>OPENAI_API_KEY</code> on the exam-hunt
+                backend and point <code>OPENAI_BASE_URL</code> at your router (e.g.{" "}
+                <code>https://freellmapi-t1pm.onrender.com/v1</code>), then restart the API. Provider keys
+                (Groq, Cerebras, etc.) belong on the FreeLLMAPI service only.
+              </>
+            ) : (
+              <>AI practice is turned off in platform settings.</>
+            )}
+          </p>
+        )}
       </aside>
     );
   }
@@ -272,6 +501,31 @@ export default function PracticeStudyAssistant({
         <Link to="/login" className="study-assistant__signin">
           Sign in
         </Link>
+      </aside>
+    );
+  }
+
+  if (examLocked) {
+    return (
+      <aside
+        className={[
+          "study-assistant",
+          "study-assistant--off",
+          "study-assistant--exam-locked",
+          `study-assistant--${layout}`,
+          embedded ? "study-assistant--embedded" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <div className="study-assistant__head">
+          <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
+          <div>
+            <h3 className="study-assistant__title">AI Study Assistant</h3>
+            <p className="study-assistant__subtitle">Exam simulation</p>
+          </div>
+        </div>
+        <p className="study-assistant__off-text">Available after test submission.</p>
       </aside>
     );
   }
@@ -293,7 +547,9 @@ export default function PracticeStudyAssistant({
           <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
           <div>
             <h3 className="study-assistant__title">AI Study Assistant</h3>
-            <p className="study-assistant__subtitle">Focused coaching · not open chat</p>
+            <p className="study-assistant__subtitle">
+              Hint, formula, basics &amp; pitfalls from bank · explain after submit
+            </p>
           </div>
         </div>
         <button
@@ -310,24 +566,25 @@ export default function PracticeStudyAssistant({
       </div>
 
       <div className="study-assistant__tabs" role="tablist" aria-label="AI study tools">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id && panelOpen;
-          const isLoading = busy === tab.id || (tab.id === "hint" && isActive && hintRevealing);
-          return (
-            <button
-              key={`${tab.id}-${tab.short}`}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`study-assistant__tab${isActive ? " is-active" : ""}${isLoading ? " is-loading" : ""}`}
-              onClick={() => runTab(tab.id)}
-            >
-              <span className="material-symbols-outlined">{tab.icon}</span>
-              <span>{tab.short}</span>
-            </button>
-          );
-        })}
+        <div className="study-assistant__tabs-row study-assistant__tabs-row--uniform">
+          {tabs.map((tab) => renderTab({ ...tab, tier: "primary" }))}
+        </div>
+        {directSolutionReveal && hasSolution && !solutionRevealed && (
+          <button
+            type="button"
+            className="study-assistant__show-solution study-assistant__show-solution--toolbar"
+            disabled={solutionBusy}
+            onClick={() => void revealFullSolution()}
+          >
+            <span className="material-symbols-outlined">menu_book</span>
+            {solutionBusy ? "Loading…" : "Official solution"}
+          </button>
+        )}
       </div>
+
+      {directSolutionReveal && solutionRevealed && (solutionText || solutionImageUrl) && (
+        <div className="study-assistant__solution-standalone">{renderOfficialSolution(true)}</div>
+      )}
 
       <div
         className={`study-assistant__panel${panelOpen ? " is-open" : ""}`}
@@ -363,45 +620,59 @@ export default function PracticeStudyAssistant({
             {activeResult && !showLoading && (
               <div className="study-assistant__content">
                 {isHintTab && (
-                  <div className="study-assistant__hint-progress" aria-label={`Hint ${hintStep} of ${hintSteps.length}`}>
-                    {Array.from({ length: Math.min(hintSteps.length, HINT_STEP_COUNT) }, (_, i) => (
-                      <span
-                        key={i}
-                        className={`study-assistant__hint-dot${i < hintStep ? " is-done" : ""}${i === hintStep - 1 ? " is-current" : ""}`}
-                      />
-                    ))}
+                  <div
+                    className="study-assistant__hint-progress"
+                    role="tablist"
+                    aria-label={`Hint ${Math.min(hintStep, effectiveHintCount)} of ${effectiveHintCount}`}
+                  >
+                    {Array.from({ length: effectiveHintCount }, (_, i) => {
+                      const step = i + 1;
+                      const isCurrent = step === hintStep;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          role="tab"
+                          aria-selected={isCurrent}
+                          aria-label={`Hint ${step}`}
+                          className={`study-assistant__hint-dot${step < hintStep ? " is-done" : ""}${
+                            isCurrent ? " is-current" : ""
+                          }`}
+                          onClick={() => goToHint(step, effectiveHintCount)}
+                        />
+                      );
+                    })}
                     <span className="study-assistant__hint-step-label">
-                      Hint {hintStep} of {Math.max(hintSteps.length, 1)}
+                      Hint {Math.min(hintStep, effectiveHintCount)} of {effectiveHintCount}
                     </span>
                   </div>
                 )}
 
                 <div className="study-assistant__text study-assistant__text--reveal">
-                  <AiMarkdown
-                    text={
-                      isHintTab && displayedHint
-                        ? displayedHint
-                        : activeResult.text
-                    }
+                  <AiStreamingMarkdown
+                    key={streamKey}
+                    text={streamText}
+                    animate={!isHintTab || hintAnimate}
+                    onComplete={() => setStreamComplete(true)}
                   />
                 </div>
 
                 {canShowNextHint && (
                   <button type="button" className="study-assistant__next-hint" onClick={revealNextHint}>
                     <span className="material-symbols-outlined">lightbulb</span>
-                    Next hint ({hintStep + 1}/{HINT_STEP_COUNT})
+                    {nextHintButtonLabel(hintStep)}
                   </button>
                 )}
 
-                {isHintTab && hintStep >= hintSteps.length && hintSteps.length > 0 && (
+                {isHintTab && allHintsShown && (
                   <p className="study-assistant__hint-done">All hints shown — try solving, then submit.</p>
                 )}
 
-                {!isHintTab && activeResult.similarQuestions.length > 0 && (
+                {!isHintTab && streamComplete && activeResult.similarQuestions.length > 0 && (
                   <ul className="study-assistant__similar">
                     {activeResult.similarQuestions.map((s) => (
                       <li key={s.questionId}>
-                        <Link to={`/question/${s.questionId}`}>
+                        <Link to={`/solve/${s.questionId}`}>
                           Q{s.questionNo} · {s.chapter || s.subject}
                           {s.questionTextPreview ? ` — ${s.questionTextPreview.slice(0, 72)}…` : ""}
                         </Link>
@@ -409,7 +680,7 @@ export default function PracticeStudyAssistant({
                     ))}
                   </ul>
                 )}
-                {!isHintTab && activeResult.actionUrl && (
+                {!isHintTab && streamComplete && activeResult.actionUrl && (
                   <Link to={activeResult.actionUrl} className="study-assistant__cta">
                     Open in bank →
                   </Link>
@@ -419,6 +690,38 @@ export default function PracticeStudyAssistant({
           </div>
         )}
       </div>
+
+      {solutionExpanded && solutionImageUrl && (
+        <div
+          className="study-assistant-solution-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Official solution enlarged"
+          onClick={() => setSolutionExpanded(false)}
+        >
+          <div
+            className="study-assistant-solution-modal__inner"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="study-assistant-solution-modal__close"
+              onClick={() => setSolutionExpanded(false)}
+              aria-label="Close enlarged solution"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+            <div className="study-assistant-solution-modal__frame">
+              <img
+                className="study-assistant-solution-modal__image"
+                src={imageSrc(solutionImageUrl)}
+                alt="Official solution enlarged"
+                draggable={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {layout === "inline" && panelOpen && (
         <div

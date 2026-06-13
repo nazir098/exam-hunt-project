@@ -36,6 +36,7 @@ Neetlu frontend (public browse, study / practice modes)
 
    - `MONGODB_URI` — Atlas connection string with database name, e.g. `...mongodb.net/neetlu?retryWrites=true&w=majority`
    - `EXTRACTOR_ROOT` — absolute path to your `pdf-qa-extractor` repo
+   - `OPENAI_BASE_URL` — OpenAI-compatible FreeLLMAPI endpoint, e.g. `https://freellmapi-t1pm.onrender.com/v1`
    - Optional `ADMIN_IMPORT_KEY` — if set, import endpoints require header `X-Admin-Key`
 
 3. Load env when starting the API (Spring does not read `.env` automatically):

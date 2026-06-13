@@ -47,7 +47,10 @@ public class AdminImportController {
         return ResponseEntity.ok(Map.of(
                 "packId", result.packId(),
                 "questionsImported", result.questionsImported(),
-                "message", "Imported " + result.questionsImported() + " questions from " + folderName));
+                "variantsImported", result.variantsImported(),
+                "message",
+                "Imported " + result.questionsImported() + " PYQs + " + result.variantsImported()
+                        + " AI variants from " + folderName));
     }
 
     @PostMapping("/neet")
@@ -57,13 +60,15 @@ public class AdminImportController {
             throws IOException {
         adminAuthorization.requireAdminAccess(userId, adminKey);
         var result = importService.importNeetFolders();
+        int variants = result.variantsImported();
         return ResponseEntity.ok(Map.of(
                 "packsProcessed", result.packsProcessed(),
                 "questionsImported", result.questionsImported(),
+                "variantsImported", variants,
                 "packIds",
                 result.details().stream().map(ManifestImportService.ImportResult::packId).toList(),
                 "message",
-                "Imported " + result.questionsImported() + " NEET questions across "
+                "Imported " + result.questionsImported() + " PYQs + " + variants + " AI variants across "
                         + result.packsProcessed() + " pack(s)"));
     }
 

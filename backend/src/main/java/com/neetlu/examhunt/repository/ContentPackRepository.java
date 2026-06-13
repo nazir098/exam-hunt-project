@@ -10,6 +10,8 @@ public interface ContentPackRepository extends MongoRepository<ContentPack, Stri
 
     Optional<ContentPack> findByPackId(String packId);
 
+    List<ContentPack> findAllByPackId(String packId);
+
     List<ContentPack> findAllByOrderByYearDesc();
 
     List<ContentPack> findByExamIgnoreCaseOrderByYearDesc(String exam);

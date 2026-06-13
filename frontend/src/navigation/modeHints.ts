@@ -1,6 +1,13 @@
+import { MODES } from "./modes";
+
 /** Short copy for hover hints (nav + page headers). */
-export const PRACTICE_MODE_HINT =
-  "Submit each answer to save marks (+4 / −1). Updates analytics & adaptive level.";
+export const PRACTICE_MODE_HINT = MODES.practice.helper;
 
 export const BANK_MODE_HINT =
-  "Study mode: Check answer is local only — marks and analytics are not saved.";
+  "Question bank: Solve to learn, Practice for ranked scoring, or Prepare Test for exam simulation.";
+
+export const TEST_MODE_HINT = MODES.test.helper;
+
+export const SOLVE_MODE_HINT = MODES.solve.helper;
+
+export const LEADERBOARD_MODE_HINT = "Rankings use Practice Mode scores only (+4 / −1).";

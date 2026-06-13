@@ -11,13 +11,12 @@ import {
   QuestionPublic,
   YearCatalogEntry,
 } from "../api";
-import BankPagination from "../components/BankPagination";
+import BankResultsFeed, { BANK_PAGE_SIZE } from "../components/BankResultsFeed";
 import BankSearchSection from "../components/BankSearchSection";
 import BankSubjectGrid from "../components/BankSubjectGrid";
-import { buildSubjectTiles } from "../utils/bankSubjects";
 import ComingSoon from "../components/ComingSoon";
 import FilterPanel, { activeFilterCount } from "../components/FilterPanel";
-import QuestionCard from "../components/QuestionCard";
+import { buildSubjectTiles } from "../utils/bankSubjects";
 import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { primaryWeakChapter } from "../utils/weakChapters";
@@ -38,7 +37,7 @@ export default function BrowsePage() {
   const difficulty = searchParams.get("difficulty") || "";
   const qSearch = (searchParams.get("q") || "").toLowerCase();
   const page = Number(searchParams.get("page") || "0");
-  const pageSize = Math.min(100, Math.max(12, Number(searchParams.get("size") || "24") || 24));
+  const pageSize = BANK_PAGE_SIZE;
 
   const [catalog, setCatalog] = useState<ExamCatalogEntry[]>([]);
   const [packs, setPacks] = useState<PackSummary[]>([]);
@@ -61,15 +60,18 @@ export default function BrowsePage() {
   const bankPacks = useMemo(() => bankDisplayPacks(packs), [packs]);
   const subjectTiles = useMemo(() => buildSubjectTiles(bankPacks), [bankPacks]);
   const showComingSoon = examFilter !== "NEET" && selectedExam?.status !== "available";
-  const neetYears: YearCatalogEntry[] =
-    findExam(catalog, "NEET")?.years ||
-    packs.map((p) => ({
+  const neetYears: YearCatalogEntry[] = useMemo(() => {
+    const fromCatalog = findExam(catalog, "NEET")?.years ?? [];
+    const availableFromCatalog = fromCatalog.filter((y) => y.status === "available");
+    if (availableFromCatalog.length > 0) return availableFromCatalog;
+    return bankPacks.map((p) => ({
       year: p.year,
       status: "available" as const,
       packId: p.packId,
       questionCount: p.questionCount,
       message: null,
     }));
+  }, [catalog, bankPacks]);
 
   useEffect(() => {
     Promise.allSettled([fetchExams(), fetchPacks()]).then(([examsResult, packsResult]) => {
@@ -170,31 +172,11 @@ export default function BrowsePage() {
       return;
     }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [page, pageSize, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
+  }, [page, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
 
   function goToPage(nextPage: number) {
     updateParam("page", String(Math.max(0, nextPage)));
   }
-
-  function changePageSize(nextSize: number) {
-    const next = new URLSearchParams(searchParams);
-    next.set("size", String(nextSize));
-    next.set("page", "0");
-    setSearchParams(next);
-  }
-
-  const pagination =
-    resolvedPackId && totalPages > 0 ? (
-      <BankPagination
-        page={page}
-        totalPages={totalPages}
-        totalElements={totalElements}
-        pageSize={pageSize}
-        loading={loading}
-        onPageChange={goToPage}
-        onPageSizeChange={changePageSize}
-      />
-    ) : null;
 
   const subjects = pack?.facets?.subjects || [];
   const chapters = (pack?.facets?.chapters || []).filter(
@@ -376,41 +358,6 @@ export default function BrowsePage() {
           </div>
         )}
 
-        {neetYears.some((y) => y.status === "coming_soon") && (
-          <section className="neet-roadmap" aria-label="NEET years">
-            <p className="neet-roadmap-title">NEET previous years</p>
-            <div className="neet-roadmap-grid">
-              {neetYears.map((y) =>
-                y.status === "available" && y.packId ? (
-                  <Link
-                    key={y.year}
-                    to={`/pack/${y.packId}?exam=NEET&year=${y.year}`}
-                    className="neet-year-chip available"
-                  >
-                    <strong>{y.year}</strong>
-                    <span>{y.questionCount} Qs</span>
-                  </Link>
-                ) : (
-                  <span key={y.year} className="neet-year-chip soon" title={y.message || undefined}>
-                    <strong>{y.year}</strong>
-                    <span>Soon</span>
-                  </span>
-                )
-              )}
-            </div>
-          </section>
-        )}
-
-            <div
-              id="bank-results"
-              ref={resultsRef}
-              className="bank-results-anchor bank-results-count"
-            >
-              <strong className="text-on-surface">{totalShown.toLocaleString()}</strong> questions
-              {pack ? ` · NEET ${pack.year}` : ""}
-              {filterCount > 0 && <span className="text-primary"> · {filterCount} filters</span>}
-            </div>
-
         {activeChips.length > 0 && (
           <div className="flex flex-wrap gap-sm mb-md">
             {activeChips.map((chip) => (
@@ -433,14 +380,20 @@ export default function BrowsePage() {
         {error && <p className="error-text">{error}</p>}
         {loading && neetAvailable && <p className="muted state-msg">Loading questions…</p>}
 
-        {!loading && neetAvailable && resolvedPackId && (
-          <>
-            {pagination}
-            {questions.map((q) => (
-              <QuestionCard key={q.questionId} question={q} packId={resolvedPackId} />
-            ))}
-            {pagination}
-          </>
+        {!loading && neetAvailable && resolvedPackId && questions.length > 0 && (
+          <BankResultsFeed
+            ref={resultsRef}
+            questions={questions}
+            packId={resolvedPackId}
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            packLabel={pack ? `NEET ${pack.year}` : undefined}
+            filterCount={filterCount}
+            loading={loading}
+            onNextPage={() => goToPage(page + 1)}
+            onPrevPage={() => goToPage(page - 1)}
+          />
         )}
 
         {!loading && questions.length === 0 && resolvedPackId && neetAvailable && (

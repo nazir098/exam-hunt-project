@@ -1,4 +1,4 @@
-import { BANK_MODE_HINT, PRACTICE_MODE_HINT } from "./modeHints";
+import { BANK_MODE_HINT, PRACTICE_MODE_HINT, TEST_MODE_HINT } from "./modeHints";
 
 export type SiteNavItem = {
   to: string;
@@ -16,7 +16,8 @@ export const SITE_NAV: SiteNavItem[] = [
     to: "/bank?exam=NEET",
     label: "Question Bank",
     icon: "menu_book",
-    match: (p) => p === "/bank" || p.startsWith("/pack/") || p.startsWith("/question/"),
+    match: (p) =>
+      p === "/bank" || p.startsWith("/pack/") || p.startsWith("/question/") || p.startsWith("/solve/"),
     hint: BANK_MODE_HINT,
   },
   {
@@ -25,6 +26,13 @@ export const SITE_NAV: SiteNavItem[] = [
     icon: "bolt",
     match: (p) => p === "/practice" || !!p.match(/^\/practice\/[^/]+\//),
     hint: PRACTICE_MODE_HINT,
+  },
+  {
+    to: "/test/create",
+    label: "Test",
+    icon: "assignment",
+    match: (p) => p === "/test/create" || !!p.match(/^\/test\/session\//),
+    hint: TEST_MODE_HINT,
   },
   { to: "/analytics", label: "Analytics", icon: "insights", match: (p) => p === "/analytics" },
   {

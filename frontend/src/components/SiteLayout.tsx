@@ -7,6 +7,7 @@ import {
   fetchQuestions,
 } from "../api";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
+import { clampPracticeQuestionCount } from "../utils/practiceHub";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
 import StitchShell from "./StitchShell";
@@ -56,6 +57,10 @@ export default function SiteLayout() {
         navigate(browsePathFromPack(packId, searchParams.toString()));
         return;
       }
+      const rawCount = searchParams.get("count");
+      const questionCount = rawCount
+        ? clampPracticeQuestionCount(Number(rawCount))
+        : undefined;
       const session = await createPracticeSession({
         exam: searchParams.get("exam") || "NEET",
         packId,
@@ -64,7 +69,9 @@ export default function SiteLayout() {
         topic: searchParams.get("topic") || undefined,
         difficulty: searchParams.get("difficulty") || undefined,
         adaptive: true,
+        mode: "practice",
         startQuestionId: startQuestionId || undefined,
+        questionCount,
       });
       const qId = startQuestionId || session.currentQuestionId;
       if (!qId) throw new Error("No questions");
@@ -79,7 +86,8 @@ export default function SiteLayout() {
   const hideMobileChrome =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
-    !!pathname.match(/^\/practice\/[^/]+\//);
+    !!pathname.match(/^\/practice\/[^/]+\//) ||
+    !!pathname.match(/^\/test\/session\//);
 
   const outlet = <Outlet context={{ startPracticeFromBank, practiceBusy }} />;
 

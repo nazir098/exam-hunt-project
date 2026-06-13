@@ -83,7 +83,7 @@ export default function BankSearchSection({ onOpenFilters }: Props) {
         <button
           type="button"
           onClick={onOpenFilters}
-          className="flex items-center gap-2 bg-surface-container-high px-6 py-4 rounded-xl border border-white/10 hover:bg-surface-container-highest transition-all text-on-surface shrink-0"
+          className="flex items-center gap-2 bg-surface-container-high px-6 py-4 rounded-xl border border-white/10 hover:bg-surface-container-highest transition-all text-on-surface shrink-0 lg:hidden"
         >
           <span className="material-symbols-outlined">tune</span>
           <span className="font-label-md">Filter</span>

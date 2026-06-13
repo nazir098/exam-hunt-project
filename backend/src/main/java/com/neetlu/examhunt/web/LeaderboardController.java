@@ -20,7 +20,7 @@ public class LeaderboardController {
     @GetMapping
     public LeaderboardService.LeaderboardResponse leaderboard(
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "weekly") String period,
+            @RequestParam(defaultValue = "monthly") String period,
             @AuthenticationPrincipal String userId) {
         return leaderboardService.leaderboard(limit, period, userId);
     }
