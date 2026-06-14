@@ -56,4 +56,12 @@ jobs:
             'sudo systemctl restart exam-hunt && sudo systemctl status exam-hunt --no-pager'
 
       - name: Verify health
-        run: curl -fsS https://api.techmuzzle.in/actuator/health
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS https://api.techmuzzle.in/actuator/health; then
+              exit 0
+            fi
+            echo "Backend not ready yet, retrying ($attempt/30)..."
+            sleep 2
+          done
+          exit 1
