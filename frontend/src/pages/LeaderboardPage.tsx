@@ -28,6 +28,7 @@ import {
   podiumSlots,
   showTrendUp,
 } from "../utils/leaderboardDisplay";
+import AppLoader from "../components/AppLoader";
 
 const PERIODS: { id: LeaderboardPeriod; label: string }[] = [
   { id: "weekly", label: "Weekly" },
@@ -404,7 +405,12 @@ export default function LeaderboardPage() {
 
       {loading && (
         <div className="lb-skeleton glass-card" aria-busy="true">
-          <p className="leaderboard-loading">Loading arena data…</p>
+          <AppLoader
+            variant="inline"
+            label="Loading arena data…"
+            hint="Fetching scholar rankings"
+            icon="emoji_events"
+          />
         </div>
       )}
       {error && <p className="error-text">{error}</p>}
