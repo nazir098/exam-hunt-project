@@ -30,10 +30,18 @@ jobs:
         run: mvn clean package
 
       - name: Prepare SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          if [ -n "$EC2_SSH_KEY_B64" ]; then
+            printf '%s' "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/ec2_key
+          else
+            printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
+          fi
           chmod 600 ~/.ssh/ec2_key
+          ssh-keygen -y -f ~/.ssh/ec2_key > /dev/null
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Upload JAR
