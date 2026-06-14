@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 @Service
@@ -142,19 +143,35 @@ public class ManifestImportService {
     }
 
     private JsonNode loadManifestFromDisk(String folderName) throws IOException {
-        Path manifestPath = resolveOutputRoot()
-                .resolve(folderName)
-                .resolve("published")
-                .resolve("manifest.json");
-        if (!Files.isRegularFile(manifestPath)) {
-            String baseUrl = appProperties.extractorManifestBaseUrl();
-            if (baseUrl != null && !baseUrl.isBlank()) {
-                String url = baseUrl.replaceAll("/$", "") + "/" + folderName + "/manifest";
-                return objectMapper.readTree(restTemplate.getForObject(url, String.class));
-            }
-            throw new IOException("manifest.json not found: " + manifestPath);
+        Path manifestPath = resolveOutputRootOptional()
+                .map(root -> root
+                    .resolve(folderName)
+                    .resolve("published")
+                    .resolve("manifest.json"))
+                .orElse(null);
+        if (manifestPath != null && Files.isRegularFile(manifestPath)) {
+            return objectMapper.readTree(manifestPath.toFile());
         }
-        return objectMapper.readTree(manifestPath.toFile());
+
+        String baseUrl = appProperties.extractorManifestBaseUrl();
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            String normalizedBaseUrl = baseUrl.replaceAll("/$", "");
+            for (String suffix : List.of("/manifest", "/manifest.json")) {
+                try {
+                    String body = restTemplate.getForObject(normalizedBaseUrl + "/" + folderName + suffix, String.class);
+                    if (body != null && !body.isBlank()) {
+                        return objectMapper.readTree(body);
+                    }
+                } catch (Exception ignored) {
+                    // Try the next supported manifest name.
+                }
+            }
+        }
+
+        Path expected = manifestPath != null
+                ? manifestPath
+                : Path.of("<EXTRACTOR_ROOT>", "output", folderName, "published", "manifest.json");
+        throw new IOException("manifest.json not found: " + expected);
     }
 
     private Path resolveOutputRoot() {
@@ -163,6 +180,14 @@ public class ManifestImportService {
             throw new IllegalStateException("Set EXTRACTOR_ROOT to your pdf-qa-extractor project path");
         }
         return Path.of(root).resolve("output");
+    }
+
+    private Optional<Path> resolveOutputRootOptional() {
+        String root = appProperties.extractorRoot();
+        if (root == null || root.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(root).resolve("output"));
     }
 
     public RemovePackResult removePack(String packId) {
@@ -672,7 +697,7 @@ public class ManifestImportService {
                         return questionRepository.save(doc);
                     })
                     .orElse(doc);
-        } catch (IOException ex) {
+        } catch (IOException | IllegalStateException ex) {
             return doc;
         }
     }
