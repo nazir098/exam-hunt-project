@@ -1,0 +1,18 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#111125"/>
+  <rect x="72" y="68" width="1056" height="494" rx="34" fill="#19162D" stroke="#40316C" stroke-width="3"/>
+  <circle cx="170" cy="158" r="48" fill="#7C2DFF"/>
+  <path d="M149 158h42M170 137v42" stroke="#F7F3FF" stroke-width="12" stroke-linecap="round"/>
+  <text x="240" y="150" fill="#F7F3FF" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="800">EduMaster AI</text>
+  <text x="240" y="205" fill="#C9B9FF" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="600">NEET PYQ Practice • Mock Tests • AI Study Analytics</text>
+  <rect x="120" y="286" width="280" height="128" rx="18" fill="#211D39" stroke="#493A76" stroke-width="2"/>
+  <text x="148" y="340" fill="#F7F3FF" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Question Bank</text>
+  <text x="148" y="382" fill="#B8ADCF" font-family="Inter, Arial, sans-serif" font-size="22">Chapter-wise PYQs</text>
+  <rect x="460" y="286" width="280" height="128" rx="18" fill="#211D39" stroke="#493A76" stroke-width="2"/>
+  <text x="488" y="340" fill="#F7F3FF" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Mock Tests</text>
+  <text x="488" y="382" fill="#B8ADCF" font-family="Inter, Arial, sans-serif" font-size="22">Timed exam practice</text>
+  <rect x="800" y="286" width="280" height="128" rx="18" fill="#211D39" stroke="#493A76" stroke-width="2"/>
+  <text x="828" y="340" fill="#F7F3FF" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">AI Coach</text>
+  <text x="828" y="382" fill="#B8ADCF" font-family="Inter, Arial, sans-serif" font-size="22">Weak-area insights</text>
+  <text x="120" y="500" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700">Practice smarter for NEET with previous year questions.</text>
+</svg>

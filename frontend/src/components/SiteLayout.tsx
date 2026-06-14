@@ -10,6 +10,7 @@ import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practic
 import { clampPracticeQuestionCount } from "../utils/practiceHub";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
+import Seo from "./Seo";
 import StitchShell from "./StitchShell";
 import StitchViewport from "./StitchViewport";
 
@@ -94,6 +95,7 @@ export default function SiteLayout() {
   if (hideMobileChrome) {
     return (
       <StitchViewport>
+        <Seo />
         <div className="flex flex-col min-h-[100dvh] stitch-shell stitch-shell--no-mobile-chrome">
           <DesktopSiteHeader />
           <div className="flex-1 flex flex-col min-h-0">
@@ -107,6 +109,7 @@ export default function SiteLayout() {
 
   return (
     <StitchViewport>
+      <Seo />
       <StitchShell>{outlet}</StitchShell>
     </StitchViewport>
   );

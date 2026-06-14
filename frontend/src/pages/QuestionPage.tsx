@@ -10,6 +10,7 @@ import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
 import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
+import { applySeoConfig } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
 import { formatVariantTypeLabel, VARIANT_SWITCH_IDLE, type VariantSwitchState } from "../utils/variantLabels";
@@ -42,6 +43,15 @@ function isImageQuestion(q: QuestionDetail) {
 
 function optionLabel(value: string) {
   return `Option ${value}`;
+}
+
+function seoExcerpt(text?: string | null) {
+  const clean = (text || "")
+    .replace(/\s+/g, " ")
+    .replace(/[{}\\]/g, "")
+    .trim();
+  if (!clean) return "";
+  return clean.length > 135 ? `${clean.slice(0, 132)}...` : clean;
 }
 
 export default function QuestionPage() {
@@ -106,6 +116,26 @@ export default function QuestionPage() {
       cancelled = true;
     };
   }, [q?.packId, returnQs]);
+
+  useEffect(() => {
+    if (!q) return;
+    const exam = examDisplayName(q.exam, q.year);
+    const topic = q.topic || q.chapter || q.subject || "NEET";
+    const variantLabel = isVariant
+      ? `${formatVariantTypeLabel(q.variantType, q.variantNo)}`
+      : `Question ${q.questionNo}`;
+    const title = `${exam} ${q.subject} ${variantLabel} - ${topic} Solution | EduMaster AI`;
+    const preview = seoExcerpt(q.questionTextPreview);
+    const description =
+      preview ||
+      `Practice ${exam} ${q.subject} question ${q.questionNo} from ${topic} with answer checking, solution support, and AI study guidance.`;
+    applySeoConfig({
+      title,
+      description,
+      path: `/solve/${questionId}`,
+      type: "article",
+    });
+  }, [q, questionId]);
 
   const goToQuestion = useCallback(
     (id: string) => {

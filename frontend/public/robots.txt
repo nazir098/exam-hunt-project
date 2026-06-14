@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /register
+Disallow: /practice/
+Disallow: /test/result
+Disallow: /test/session
+Disallow: /review/
+
+Sitemap: https://www.techmuzzle.in/sitemap.xml
