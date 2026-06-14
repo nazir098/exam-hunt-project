@@ -92,15 +92,41 @@ Open http://127.0.0.1:5173 — dev server proxies `/api` to the backend.
 - **Practice mode** — submit choice, then show correct answer
 - **Payments** — not in v1
 
-## Deploy (outline)
+## Production deployment
 
-1. **MongoDB Atlas** — cluster in Mumbai; IP allowlist or VPC; rotate credentials if exposed.
-2. **API** — e.g. Railway / Render / Fly / AWS Mumbai: set `MONGODB_URI`, `EXTRACTOR_ROOT` or use `EXTRACTOR_MANIFEST_BASE_URL` pointing at extractor publish API, `CORS_ORIGINS` = production frontend URL.
-3. **Frontend** — build with `VITE_API_BASE_URL=https://your-api.example.com`, host on Vercel/Netlify/Cloudflare Pages (or serve static from same host).
+Current production shape:
+
+- **Frontend** — Cloudflare Pages: `https://www.techmuzzle.in`
+- **Fallback frontend** — Cloudflare Pages: `https://exam-hunt-project.pages.dev`
+- **API** — AWS EC2 + Nginx + Let's Encrypt: `https://api.techmuzzle.in`
+- **Spring Boot service** — `exam-hunt` systemd service on local port `8081`
+
+Cloudflare Pages build settings:
+
+| Setting | Value |
+|---------|-------|
+| Root directory | `frontend` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Production env | `VITE_API_BASE_URL=https://api.techmuzzle.in` |
+
+Backend production env must include:
+
+```env
+CORS_ORIGINS=https://www.techmuzzle.in,https://exam-hunt-project.pages.dev,http://localhost:8080,http://localhost:5173
+OPENAI_BASE_URL=https://freellmapi-t1pm.onrender.com/v1
+OPENAI_CHAT_MODEL=auto
+AI_PRACTICE_ENABLED=true
+LEADERBOARD_DEMO_SEED=false
+```
+
+See [docs/deployment.md](docs/deployment.md) for the EC2/Nginx/Certbot runbook and verification commands.
+
+## Build locally
 
 ```bash
+cd backend && mvn test
 cd frontend && npm run build
-# dist/ → static hosting
 ```
 
 ## Security
@@ -108,3 +134,5 @@ cd frontend && npm run build
 - Do not commit `.env` or Mongo passwords.
 - Restrict admin import in production (`ADMIN_IMPORT_KEY` + network rules).
 - Image URLs come from your R2/public CDN as stored in the manifest.
+- Keep EC2 port `8081` closed publicly; expose the API through Nginx on HTTPS only.
+- Rotate provider/client keys if they are ever pasted into a chat, ticket, log, or screenshot.
