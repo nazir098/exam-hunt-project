@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://www.techmuzzle.in";
-const SITE_NAME = "EduMaster AI";
-const DEFAULT_TITLE = "EduMaster AI - NEET PYQ Practice, Mock Tests and AI Study Coach";
+const PRODUCT_NAME = "EduMaster AI";
+const OWNER_NAME = "Techmuzzle";
+const SITE_NAME = "EduMaster AI by Techmuzzle";
+const DEFAULT_TITLE = "EduMaster AI by Techmuzzle - NEET PYQ Practice and Mock Tests";
 const DEFAULT_DESCRIPTION =
   "Practice NEET previous year questions by chapter, take mock tests, review solutions, and improve faster with AI-powered study analytics.";
 const SOCIAL_IMAGE = `${SITE_URL}/og-image.svg`;
@@ -63,10 +65,10 @@ export function applySeoConfig(seo: SeoConfig) {
   upsertMeta('meta[property="og:image"]', "property", "og:image", SOCIAL_IMAGE);
   upsertMeta(
     'meta[property="og:image:alt"]',
-    "property",
-    "og:image:alt",
-    "EduMaster AI NEET question bank and practice dashboard",
-  );
+      "property",
+      "og:image:alt",
+      "EduMaster AI by Techmuzzle NEET question bank and practice dashboard",
+    );
   upsertMeta('meta[name="twitter:card"]', "name", "twitter:card", "summary_large_image");
   upsertMeta('meta[name="twitter:title"]', "name", "twitter:title", seo.title);
   upsertMeta('meta[name="twitter:description"]', "name", "twitter:description", seo.description);
@@ -76,18 +78,20 @@ export function applySeoConfig(seo: SeoConfig) {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "EducationalOrganization",
-        "@id": `${SITE_URL}/#organization`,
-        name: SITE_NAME,
-        url: SITE_URL,
-        logo: `${SITE_URL}/favicon.svg`,
-        description: DEFAULT_DESCRIPTION,
-      },
-      {
-        "@type": "WebSite",
-        "@id": `${SITE_URL}/#website`,
-        name: SITE_NAME,
-        url: SITE_URL,
+          "@type": "EducationalOrganization",
+          "@id": `${SITE_URL}/#organization`,
+          name: OWNER_NAME,
+          alternateName: SITE_NAME,
+          url: SITE_URL,
+          logo: `${SITE_URL}/favicon.svg`,
+          description: DEFAULT_DESCRIPTION,
+        },
+        {
+          "@type": "WebSite",
+          "@id": `${SITE_URL}/#website`,
+          name: SITE_NAME,
+          alternateName: PRODUCT_NAME,
+          url: SITE_URL,
         publisher: { "@id": `${SITE_URL}/#organization` },
         potentialAction: {
           "@type": "SearchAction",
@@ -110,7 +114,7 @@ export function applySeoConfig(seo: SeoConfig) {
 function getSeoConfig(pathname: string): SeoConfig {
   if (pathname === "/bank") {
     return {
-      title: "NEET Question Bank - PYQ Practice by Chapter | EduMaster AI",
+      title: "NEET Question Bank - PYQ Practice by Chapter | EduMaster AI by Techmuzzle",
       description:
         "Browse NEET previous year questions by subject, chapter, topic, and difficulty. Practice PYQs with solutions and AI recommendations.",
       path: "/bank",
@@ -120,7 +124,7 @@ function getSeoConfig(pathname: string): SeoConfig {
   if (pathname.startsWith("/pack/")) {
     const packName = decodeURIComponent(pathname.split("/")[2] || "NEET").replace(/_/g, " ");
     return {
-      title: `${packName} PYQ Question Bank | EduMaster AI`,
+      title: `${packName} PYQ Question Bank | EduMaster AI by Techmuzzle`,
       description:
         "Solve NEET previous year questions from this paper with chapter filters, solutions, practice mode, and performance tracking.",
       path: pathname,
@@ -129,7 +133,7 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname.startsWith("/solve/") || pathname.startsWith("/question/")) {
     return {
-      title: "NEET PYQ Solution and AI Practice | EduMaster AI",
+      title: "NEET PYQ Solution and AI Practice | EduMaster AI by Techmuzzle",
       description:
         "Review a NEET previous year question with answer options, solution guidance, and AI-powered practice support.",
       path: pathname,
@@ -139,7 +143,7 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname === "/practice") {
     return {
-      title: "NEET Practice Arena - Adaptive PYQ Practice | EduMaster AI",
+      title: "NEET Practice Arena - Adaptive PYQ Practice | EduMaster AI by Techmuzzle",
       description:
         "Start adaptive NEET practice sessions from PYQs, get instant feedback, and strengthen weak chapters with AI coaching.",
       path: "/practice",
@@ -148,7 +152,7 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname === "/test/create") {
     return {
-      title: "NEET Mock Test Builder - PYQ Test Practice | EduMaster AI",
+      title: "NEET Mock Test Builder - PYQ Test Practice | EduMaster AI by Techmuzzle",
       description:
         "Create NEET mock tests from previous year questions and review your score, solutions, and weak topics after submission.",
       path: "/test/create",
@@ -157,7 +161,7 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname === "/analytics") {
     return {
-      title: "NEET Study Analytics - Track Weak Chapters | EduMaster AI",
+      title: "NEET Study Analytics - Track Weak Chapters | EduMaster AI by Techmuzzle",
       description:
         "Track NEET practice accuracy, weak subjects, revision priorities, and study progress with AI-powered analytics.",
       path: "/analytics",
@@ -166,7 +170,7 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname === "/leaderboard") {
     return {
-      title: "NEET Practice Leaderboard | EduMaster AI",
+      title: "NEET Practice Leaderboard | EduMaster AI by Techmuzzle",
       description:
         "Compete on the EduMaster AI NEET leaderboard and turn PYQ practice into a focused, measurable study habit.",
       path: "/leaderboard",

@@ -18,3 +18,5 @@ export const STITCH_ANALYTICS_HERO =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuAfh97y3WIVoitf-99pghkcpq_f6kyLV3jcv6EcHJV-0mpGrKlMyOv3jtpXQcJ9n0wrdjFfXeBw9F2BujIgOqhmBY0nUiF1zt241CF-ldxkPR6aoynrznGqgA_WnHaIDcCsadVCIDXEPOGoQ_Xe3JOqaKyEWTAssvBAAT6RnEZTQlzE8f-GpQZFJkrlw9XcLtJo_xI-jhHMj084fMvV5OSgx0H8Y8OitC2uhDEvnZqqFIjdLpnrPBY4LYC1--2zvNJkTINLYQedUQPm";
 
 export const BRAND_NAME = "EduMaster AI";
+export const BRAND_WITH_OWNER = "EduMaster AI by Techmuzzle";
+export const OWNER_NAME = "Techmuzzle";

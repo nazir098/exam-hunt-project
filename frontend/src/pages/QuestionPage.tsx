@@ -124,7 +124,7 @@ export default function QuestionPage() {
     const variantLabel = isVariant
       ? `${formatVariantTypeLabel(q.variantType, q.variantNo)}`
       : `Question ${q.questionNo}`;
-    const title = `${exam} ${q.subject} ${variantLabel} - ${topic} Solution | EduMaster AI`;
+    const title = `${exam} ${q.subject} ${variantLabel} - ${topic} Solution | EduMaster AI by Techmuzzle`;
     const preview = seoExcerpt(q.questionTextPreview);
     const description =
       preview ||
