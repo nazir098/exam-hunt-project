@@ -15,6 +15,7 @@ import BankResultsFeed, { BANK_PAGE_SIZE } from "../components/BankResultsFeed";
 import BankSearchSection from "../components/BankSearchSection";
 import BankSubjectGrid from "../components/BankSubjectGrid";
 import ComingSoon from "../components/ComingSoon";
+import AppLoader from "../components/AppLoader";
 import FilterPanel, { activeFilterCount } from "../components/FilterPanel";
 import { buildSubjectTiles } from "../utils/bankSubjects";
 import { useAuth } from "../auth/AuthContext";
@@ -378,7 +379,16 @@ export default function BrowsePage() {
         )}
 
         {error && <p className="error-text">{error}</p>}
-        {loading && neetAvailable && <p className="muted state-msg">Loading questions…</p>}
+        {loading && neetAvailable && (
+          <section className="glass-card content-loader-panel">
+            <AppLoader
+              variant="inline"
+              label="Loading questions…"
+              hint="Fetching question bank"
+              icon="menu_book"
+            />
+          </section>
+        )}
 
         {!loading && neetAvailable && resolvedPackId && questions.length > 0 && (
           <BankResultsFeed

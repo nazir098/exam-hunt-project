@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import AdminLatexField from "../components/AdminLatexField";
 import AiMarkdown from "../components/AiMarkdown";
+import AppLoader from "../components/AppLoader";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import { PRACTICE_AI_FEATURES } from "../utils/practiceAiFeatures";
@@ -380,7 +381,18 @@ export default function AdminQuestionEditorPage() {
   if (!q || !contentDraft || !enrichmentDraft || !previewQ) {
     return (
       <main className="stitch-page admin-page">
-        <p className="muted">{error || "Loading question…"}</p>
+        {error ? (
+          <p className="muted">{error}</p>
+        ) : (
+          <section className="glass-card content-loader-panel">
+            <AppLoader
+              variant="inline"
+              label="Loading question…"
+              hint="Fetching editor data"
+              icon="menu_book"
+            />
+          </section>
+        )}
       </main>
     );
   }

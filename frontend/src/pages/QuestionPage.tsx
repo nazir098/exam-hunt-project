@@ -7,6 +7,7 @@ import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import AiMarkdown from "../components/AiMarkdown";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
+import AppLoader from "../components/AppLoader";
 import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
@@ -203,7 +204,14 @@ export default function QuestionPage() {
   if (!q) {
     return (
       <main className="solve-page pt-24">
-        <p className="text-outline">Loading question…</p>
+        <section className="glass-card content-loader-panel">
+          <AppLoader
+            variant="inline"
+            label="Loading question…"
+            hint="Fetching question details"
+            icon="menu_book"
+          />
+        </section>
       </main>
     );
   }
