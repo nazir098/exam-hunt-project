@@ -49,6 +49,7 @@ export default function BrowsePage() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const skipResultsScrollRef = useRef(true);
   const [error, setError] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
@@ -75,6 +76,7 @@ export default function BrowsePage() {
   }, [catalog, bankPacks]);
 
   useEffect(() => {
+    setCatalogLoading(true);
     Promise.allSettled([fetchExams(), fetchPacks()]).then(([examsResult, packsResult]) => {
       if (examsResult.status === "fulfilled") {
         setCatalog(examsResult.value);
@@ -91,7 +93,7 @@ export default function BrowsePage() {
           examsResult.reason instanceof Error ? examsResult.reason.message : "Could not load question bank"
         );
       }
-    });
+    }).finally(() => setCatalogLoading(false));
   }, []);
 
   useEffect(() => {
@@ -313,7 +315,18 @@ export default function BrowsePage() {
 
       <div className="space-y-gutter min-w-0">
         <div className="space-y-gutter">
-        {!neetAvailable && !loading && (
+        {catalogLoading && !neetAvailable && (
+          <section className="glass-card content-loader-panel">
+            <AppLoader
+              variant="inline"
+              label="Loading question bank…"
+              hint="Checking available NEET papers"
+              icon="menu_book"
+            />
+          </section>
+        )}
+
+        {!catalogLoading && !neetAvailable && !loading && (
           <div className="neet-import-hint card">
             <h2>NEET data not loaded yet</h2>
             {user?.admin ? (
