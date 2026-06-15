@@ -56,9 +56,13 @@ public class ManifestImportService {
 
     /** Published extractor folders that have {@code output/<name>/published/manifest.json}. */
     public List<ImportFolderEntry> listImportableFolders() throws IOException {
-        Path outputRoot = resolveOutputRoot();
+        Optional<Path> outputRootOptional = resolveOutputRootOptional();
+        if (outputRootOptional.isEmpty()) {
+            return List.of();
+        }
+        Path outputRoot = outputRootOptional.get();
         if (!Files.isDirectory(outputRoot)) {
-            throw new IOException("Extractor output not found: " + outputRoot);
+            return List.of();
         }
         List<ImportFolderEntry> entries = new ArrayList<>();
         try (Stream<Path> dirs = Files.list(outputRoot)) {
@@ -293,7 +297,11 @@ public class ManifestImportService {
 
     /** Import QC-accepted AI practice variants from extractor metadata/AI_*.json. */
     private int importAiVariants(String sourceFolder, String packId) throws IOException {
-        Path metadataDir = resolveOutputRoot().resolve(sourceFolder).resolve("metadata");
+        Optional<Path> outputRootOptional = resolveOutputRootOptional();
+        if (outputRootOptional.isEmpty()) {
+            return 0;
+        }
+        Path metadataDir = outputRootOptional.get().resolve(sourceFolder).resolve("metadata");
         if (!Files.isDirectory(metadataDir)) {
             return 0;
         }

@@ -134,19 +134,23 @@ export default function AdminPage() {
     {
       id: "import-neet",
       title: "Sync all NEET packs",
-      description: "Import every published NEET folder from EXTRACTOR_ROOT.",
+      description: folders.length
+        ? "Import every locally discovered NEET manifest folder."
+        : "Bulk sync needs local extractor folders on the server. Use single-folder sync below for remote import.",
       run: adminImportNeet,
     },
     {
       id: "import-all",
       title: "Sync all published packs",
-      description: "Import all published manifest folders (not only NEET).",
+      description: folders.length
+        ? "Import all locally discovered manifest folders (not only NEET)."
+        : "Bulk sync needs local extractor folders on the server. Use single-folder sync below for remote import.",
       run: adminImportAll,
     },
     {
       id: "import-folder",
       title: `Sync folder “${folderName.trim() || "…"}”`,
-      description: "Import one extractor output folder by name (e.g. 2016).",
+      description: "Import one published folder by name, using remote manifest fallback when local files are unavailable.",
       run: () => adminImportFolder(folderName.trim()),
     },
   ];
@@ -213,30 +217,44 @@ export default function AdminPage() {
         <h2 className="admin-page__section-title">Import / sync</h2>
         <div className="admin-page__folder">
           <label className="text-body-sm text-on-surface-variant" htmlFor="admin-folder">
-            Extractor folder
+            Published folder
           </label>
-          <select
-            id="admin-folder"
-            className="admin-page__input admin-page__select"
-            value={folderName}
-            onChange={(e) => setFolderName(e.target.value)}
-            disabled={foldersLoading || folders.length === 0}
-          >
-            {foldersLoading && <option value="">Loading folders…</option>}
-            {!foldersLoading && folders.length === 0 && (
-              <option value="">No published folders found</option>
-            )}
-            {folders.map((f) => (
-              <option key={f.folderName} value={f.folderName}>
-                {f.folderName} — {f.exam} {f.year} ({f.questionCount} questions)
-              </option>
-            ))}
-          </select>
+          {folders.length > 0 ? (
+            <select
+              id="admin-folder"
+              className="admin-page__input admin-page__select"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              disabled={foldersLoading}
+            >
+              {foldersLoading && <option value="">Loading folders…</option>}
+              {folders.map((f) => (
+                <option key={f.folderName} value={f.folderName}>
+                  {f.folderName} — {f.exam} {f.year} ({f.questionCount} questions)
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="admin-folder"
+              className="admin-page__input"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              placeholder="2016"
+              disabled={foldersLoading}
+            />
+          )}
           {foldersError && <p className="admin-page__folder-hint admin-page__folder-hint--error">{foldersError}</p>}
           {!foldersLoading && !foldersError && folders.length > 0 && (
             <p className="admin-page__folder-hint muted">
-              From EXTRACTOR_ROOT/output · {folders.length} published manifest
+              Local extractor discovery found {folders.length} published manifest
               {folders.length === 1 ? "" : "s"}
+            </p>
+          )}
+          {!foldersLoading && !foldersError && folders.length === 0 && (
+            <p className="admin-page__folder-hint muted">
+              No local extractor folders are mounted on this server. Enter a folder name, such as 2016,
+              to import from the configured remote manifest source.
             </p>
           )}
         </div>
@@ -252,7 +270,10 @@ export default function AdminPage() {
                   type="button"
                   className={"btn primary btn-block" + (running ? " admin-btn--busy" : "")}
                   disabled={
-                    blocked || running || (task.id === "import-folder" && !folderName.trim())
+                    blocked ||
+                    running ||
+                    (task.id === "import-folder" && !folderName.trim()) ||
+                    ((task.id === "import-neet" || task.id === "import-all") && folders.length === 0)
                   }
                   onClick={() => runTask(task)}
                 >
