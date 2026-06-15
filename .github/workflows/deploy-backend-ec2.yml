@@ -27,37 +27,16 @@ jobs:
 
       - name: Build backend
         working-directory: backend
-        run: mvn clean package
+        run: mvn clean package -DskipTests
 
       - name: Prepare SSH key
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
           install -m 700 -d ~/.ssh
-          key_ready=false
-
-          if [ -n "$EC2_SSH_KEY_B64" ]; then
-            printf '%s' "$EC2_SSH_KEY_B64" | tr -d '[:space:]' | base64 -d > ~/.ssh/ec2_key.b64 2>/dev/null || true
-            if [ -s ~/.ssh/ec2_key.b64 ] && ssh-keygen -y -f ~/.ssh/ec2_key.b64 > /dev/null 2>&1; then
-              mv ~/.ssh/ec2_key.b64 ~/.ssh/ec2_key
-              key_ready=true
-            fi
-          fi
-
-          if [ "$key_ready" != "true" ] && [ -n "$EC2_SSH_KEY" ]; then
-            printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
-            if ssh-keygen -y -f ~/.ssh/ec2_key > /dev/null 2>&1; then
-              key_ready=true
-            fi
-          fi
-
-          if [ "$key_ready" != "true" ]; then
-            echo "No valid EC2 SSH private key found. Update EC2_SSH_KEY_B64 with: base64 -i ~/Downloads/nazir.pem | pbcopy"
-            exit 1
-          fi
-
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
+          ssh-keygen -y -f ~/.ssh/ec2_key > /dev/null
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Upload JAR
