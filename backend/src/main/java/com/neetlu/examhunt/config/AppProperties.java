@@ -7,6 +7,7 @@ public record AppProperties(
         String corsOrigins,
         String extractorRoot,
         String extractorManifestBaseUrl,
+        String publicFilesBaseUrl,
         String adminImportKey,
         String adminEmail,
         String adminBootstrapPassword,

@@ -14,6 +14,7 @@ class CorsSupportTest {
                 "",
                 "",
                 "",
+                "",
                 "admin@example.com",
                 "",
                 "test-secret-test-secret-test-secret-32b",
@@ -39,6 +40,7 @@ class CorsSupportTest {
     @Test
     void applyKeepsLocalDevelopmentOriginsAndPatterns() {
         AppProperties props = new AppProperties(
+                "",
                 "",
                 "",
                 "",

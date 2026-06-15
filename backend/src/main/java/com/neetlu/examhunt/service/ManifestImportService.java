@@ -275,7 +275,7 @@ public class ManifestImportService {
             count++;
         }
 
-        int variantsImported = importAiVariants(sourceFolder, packId);
+        int variantsImported = importAiVariants(sourceFolder, packId, manifest);
         restoreAdminPreservedFields(adminPreserve);
         stats.put("pyq_count", count);
         stats.put("variant_count", variantsImported);
@@ -296,33 +296,160 @@ public class ManifestImportService {
     }
 
     /** Import QC-accepted AI practice variants from extractor metadata/AI_*.json. */
-    private int importAiVariants(String sourceFolder, String packId) throws IOException {
+    private int importAiVariants(String sourceFolder, String packId, JsonNode manifest) throws IOException {
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
-        if (outputRootOptional.isEmpty()) {
-            return 0;
+        if (outputRootOptional.isPresent()) {
+            Path metadataDir = outputRootOptional.get().resolve(sourceFolder).resolve("metadata");
+            if (Files.isDirectory(metadataDir)) {
+                return importAiVariantsFromLocalMetadata(metadataDir, packId, sourceFolder);
+            }
         }
-        Path metadataDir = outputRootOptional.get().resolve(sourceFolder).resolve("metadata");
-        if (!Files.isDirectory(metadataDir)) {
-            return 0;
-        }
+        return importAiVariantsFromRemoteMetadata(sourceFolder, packId, manifest);
+    }
+
+    private int importAiVariantsFromLocalMetadata(Path metadataDir, String packId, String sourceFolder) throws IOException {
         int imported = 0;
         try (Stream<Path> files = Files.list(metadataDir)) {
             for (Path file : files.filter(p -> p.getFileName().toString().startsWith("AI_")).sorted().toList()) {
-                JsonNode node = objectMapper.readTree(file.toFile());
-                if (!"accepted".equalsIgnoreCase(text(node, "qc_status"))) {
-                    continue;
-                }
-                String parentId = text(node, "parent_question_id");
-                if (parentId.isBlank() || questionRepository.findByQuestionId(parentId).isEmpty()) {
-                    continue;
-                }
-                Question doc = mapAiVariant(node, packId, parentId, sourceFolder);
-                saveAiVariantUpsert(doc);
-                imported++;
+                imported += importAiVariantNode(objectMapper.readTree(file.toFile()), packId, sourceFolder);
             }
         }
         purgeDuplicateVariantsInPack(packId);
         return imported;
+    }
+
+    private int importAiVariantsFromRemoteMetadata(String sourceFolder, String packId, JsonNode manifest) {
+        List<String> metadataFiles = loadRemoteMetadataFileNames(sourceFolder, manifest);
+        if (metadataFiles.isEmpty()) {
+            return 0;
+        }
+        int imported = 0;
+        for (String fileName : metadataFiles) {
+            if (!fileName.startsWith("AI_") || !fileName.endsWith(".json")) {
+                continue;
+            }
+            for (String url : remoteMetadataFileUrls(sourceFolder, manifest, fileName)) {
+                try {
+                    String body = restTemplate.getForObject(url, String.class);
+                    if (body == null || body.isBlank()) {
+                        continue;
+                    }
+                    imported += importAiVariantNode(objectMapper.readTree(body), packId, sourceFolder);
+                    break;
+                } catch (Exception ignored) {
+                    // Try the next supported remote metadata URL.
+                }
+            }
+        }
+        purgeDuplicateVariantsInPack(packId);
+        return imported;
+    }
+
+    private int importAiVariantNode(JsonNode node, String packId, String sourceFolder) {
+        if (!"accepted".equalsIgnoreCase(text(node, "qc_status"))) {
+            return 0;
+        }
+        String parentId = text(node, "parent_question_id");
+        if (parentId.isBlank() || questionRepository.findByQuestionId(parentId).isEmpty()) {
+            return 0;
+        }
+        Question doc = mapAiVariant(node, packId, parentId, sourceFolder);
+        saveAiVariantUpsert(doc);
+        return 1;
+    }
+
+    private List<String> loadRemoteMetadataFileNames(String sourceFolder, JsonNode manifest) {
+        for (String indexUrl : remoteMetadataIndexUrls(sourceFolder, manifest)) {
+            try {
+                String body = restTemplate.getForObject(indexUrl, String.class);
+                if (body == null || body.isBlank()) {
+                    continue;
+                }
+                List<String> files = readMetadataFileNames(objectMapper.readTree(body));
+                if (!files.isEmpty()) {
+                    return files;
+                }
+            } catch (Exception ignored) {
+                // Try the next supported metadata index URL.
+            }
+        }
+        return List.of();
+    }
+
+    private List<String> readMetadataFileNames(JsonNode index) {
+        JsonNode files = index.path("files");
+        if (!files.isArray()) {
+            files = index.path("metadata_files");
+        }
+        if (!files.isArray()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonNode file : files) {
+            String name = file.asText("").strip();
+            if (name.startsWith("metadata/")) {
+                name = name.substring("metadata/".length());
+            }
+            if (name.startsWith("AI_") && name.endsWith(".json")) {
+                out.add(name);
+            }
+        }
+        return out;
+    }
+
+    private List<String> remoteMetadataIndexUrls(String sourceFolder, JsonNode manifest) {
+        List<String> urls = new ArrayList<>();
+        remoteExtractorBaseUrl().ifPresent(base -> {
+            urls.add(base + "/" + sourceFolder + "/metadata/index.json");
+            urls.add(base + "/" + sourceFolder + "/metadata");
+        });
+        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(base + "/" + sourceFolder + "/metadata/index.json"));
+        inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/index.json"));
+        return urls;
+    }
+
+    private List<String> remoteMetadataFileUrls(String sourceFolder, JsonNode manifest, String fileName) {
+        List<String> urls = new ArrayList<>();
+        remoteExtractorBaseUrl().ifPresent(base -> {
+            urls.add(base + "/" + sourceFolder + "/metadata/" + fileName);
+            urls.add(base + "/" + sourceFolder + "/metadata/" + fileName.replaceFirst("\\.json$", ""));
+        });
+        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(base + "/" + sourceFolder + "/metadata/" + fileName));
+        inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/" + fileName));
+        return urls;
+    }
+
+    private Optional<String> remoteExtractorBaseUrl() {
+        String baseUrl = appProperties.extractorManifestBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(baseUrl.replaceAll("/$", ""));
+    }
+
+    private Optional<String> remotePublicFilesBaseUrl() {
+        String baseUrl = appProperties.publicFilesBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(baseUrl.replaceAll("/$", ""));
+    }
+
+    private Optional<String> inferPublicFolderBaseUrl(JsonNode manifest) {
+        for (JsonNode q : manifest.path("questions")) {
+            String url = text(q, "question_image_url");
+            if (url.isBlank()) {
+                url = text(q, "solution_image_url");
+            }
+            int marker = url.indexOf("/questions/");
+            if (marker < 0) {
+                marker = url.indexOf("/solutions/");
+            }
+            if (marker > 0) {
+                return Optional.of(url.substring(0, marker));
+            }
+        }
+        return Optional.empty();
     }
 
     private Question mapQuestion(JsonNode q, String packId) {
@@ -526,7 +653,11 @@ public class ManifestImportService {
         if (qid == null || qid.isBlank()) {
             return;
         }
-        Path diagramsDir = resolveOutputRoot().resolve(sourceFolder).resolve("diagrams");
+        Optional<Path> outputRootOptional = resolveOutputRootOptional();
+        if (outputRootOptional.isEmpty()) {
+            return;
+        }
+        Path diagramsDir = outputRootOptional.get().resolve(sourceFolder).resolve("diagrams");
         Path questionSvg = diagramsDir.resolve(qid + "_question.svg");
         Path solutionSvg = diagramsDir.resolve(qid + "_solution.svg");
         try {
