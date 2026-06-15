@@ -29,6 +29,10 @@ jobs:
         working-directory: backend
         run: mvn clean package -DskipTests
 
+      - name: Verify packaged backend
+        run: |
+          jar tf backend/target/exam-hunt-api-0.1.0-SNAPSHOT.jar | grep -E 'BOOT-INF/lib/logback-classic-.*\.jar'
+
       - name: Prepare SSH key
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -43,12 +47,15 @@ jobs:
         run: |
           scp -i ~/.ssh/ec2_key \
             backend/target/exam-hunt-api-0.1.0-SNAPSHOT.jar \
-            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/exam-hunt-api.jar"
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/exam-hunt-api.jar.new"
 
       - name: Restart backend
         run: |
           ssh -i ~/.ssh/ec2_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-            'sudo systemctl restart exam-hunt && sudo systemctl status exam-hunt --no-pager'
+            'sudo systemctl stop exam-hunt || true
+             mv /home/ec2-user/exam-hunt-api.jar.new /home/ec2-user/exam-hunt-api.jar
+             sudo systemctl start exam-hunt
+             sudo systemctl status exam-hunt --no-pager'
 
       - name: Verify health
         run: |
