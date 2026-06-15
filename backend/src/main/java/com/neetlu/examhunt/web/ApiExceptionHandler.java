@@ -32,7 +32,7 @@ public class ApiExceptionHandler {
     }
 
     @ExceptionHandler({IllegalStateException.class, IOException.class})
-    public ResponseEntity<Map<String, String>> handleBadRequest(RuntimeException ex) {
+    public ResponseEntity<Map<String, String>> handleBadRequest(Exception ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 }
