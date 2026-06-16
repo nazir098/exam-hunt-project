@@ -158,7 +158,7 @@ public class ManifestImportService {
         }
 
         for (String normalizedBaseUrl : remoteManifestBaseUrls()) {
-            for (String suffix : List.of("/manifest", "/manifest.json")) {
+            for (String suffix : List.of("/manifest", "/manifest.json", "/published/manifest.json")) {
                 try {
                     String body = restTemplate.getForObject(normalizedBaseUrl + "/" + folderName + suffix, String.class);
                     if (body != null && !body.isBlank()) {
