@@ -9,6 +9,7 @@ import com.neetlu.examhunt.model.McqOption;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
+import com.neetlu.examhunt.service.ContentPackCatalog;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -69,16 +70,43 @@ public class ManifestImportService {
         return importManifestNode(manifest, sourceFolder);
     }
 
-    /** Published extractor folders from local disk and/or remote object storage. */
+    /** Published extractor folders from local disk, remote object storage, and installed packs. */
     public List<ImportFolderEntry> listImportableFolders() throws IOException {
         Map<String, ImportFolderEntry> byFolder = new LinkedHashMap<>();
+        for (ImportFolderEntry entry : listInstalledPackFolders()) {
+            byFolder.put(entry.folderName(), entry);
+        }
         for (ImportFolderEntry entry : listLocalImportableFolders()) {
             byFolder.put(entry.folderName(), entry);
         }
         for (ImportFolderEntry entry : listRemoteImportableFolders()) {
-            byFolder.putIfAbsent(entry.folderName(), entry);
+            byFolder.put(entry.folderName(), entry);
         }
-        return new ArrayList<>(byFolder.values());
+        return byFolder.values().stream()
+                .sorted((a, b) -> Integer.compare(b.year(), a.year()))
+                .toList();
+    }
+
+    private List<ImportFolderEntry> listInstalledPackFolders() {
+        List<ImportFolderEntry> entries = new ArrayList<>();
+        for (ContentPack pack : ContentPackCatalog.dedupeByPackId(packRepository.findAll())) {
+            String folder = pack.getSourceFolder();
+            if (folder == null || folder.isBlank()) {
+                folder = pack.getYear() > 0 ? String.valueOf(pack.getYear()) : null;
+            }
+            if (folder == null || folder.isBlank()) {
+                continue;
+            }
+            folder = normalizeSourceFolder(folder);
+            entries.add(new ImportFolderEntry(
+                    folder,
+                    pack.getPackId(),
+                    pack.getExam(),
+                    pack.getYear(),
+                    (int) questionRepository.countByPackId(pack.getPackId()),
+                    true));
+        }
+        return entries;
     }
 
     public ImportSourceView importSourceStatus() {
@@ -151,7 +179,8 @@ public class ManifestImportService {
                 packId,
                 text(manifest, "exam"),
                 manifest.path("year").asInt(0),
-                questionCount);
+                questionCount,
+                false);
     }
 
     private List<String> configuredImportPackFolders() {
@@ -1172,8 +1201,13 @@ public class ManifestImportService {
             String packId,
             String exam,
             int year,
-            int questionCount
-    ) {}
+            int questionCount,
+            boolean installed) {
+
+        public ImportFolderEntry(String folderName, String packId, String exam, int year, int questionCount) {
+            this(folderName, packId, exam, year, questionCount, false);
+        }
+    }
 
     public record ImportSourceView(boolean localConfigured, boolean remoteConfigured, String publicFilesBaseUrl) {}
 

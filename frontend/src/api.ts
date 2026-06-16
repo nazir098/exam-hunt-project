@@ -365,7 +365,53 @@ export type RatingView = {
   yourScore: number;
   yourVotes: number;
   comment: string | null;
+  category?: string | null;
+  context?: string | null;
   aggregate: { count: number; average: number };
+};
+
+export type QuestionFeedbackCategory =
+  | "general"
+  | "wrong_answer"
+  | "typo"
+  | "image_issue"
+  | "ai_variant"
+  | "other";
+
+export type QuestionFeedbackContext = "solve" | "practice" | "test";
+
+export type QuestionFeedbackView = {
+  yourScore: number;
+  comment: string | null;
+  category: string | null;
+  context: string | null;
+  aggregate: { count: number; average: number };
+};
+
+export type AdminFeedbackRow = {
+  id: string;
+  questionId: string;
+  userId: string;
+  userEmail: string;
+  score: number;
+  comment: string | null;
+  category: string | null;
+  context: string | null;
+  ratedAt: string;
+  exam: string;
+  year: number;
+  questionNo: number;
+  subject: string;
+  packId: string;
+  variantNo: number;
+};
+
+export type AdminFeedbackPage = {
+  items: AdminFeedbackRow[];
+  total: number;
+  totalPages: number;
+  page: number;
+  size: number;
 };
 
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 25_000): Promise<T> {
@@ -498,6 +544,8 @@ export type ImportFolderOption = {
   exam: string;
   year: number;
   questionCount: number;
+  /** True when folder comes from MongoDB only (re-sync target). */
+  installed?: boolean;
 };
 
 export type ImportSourceStatus = {
@@ -742,6 +790,43 @@ export function fetchQuestionRating(questionId: string) {
   return request<RatingView>(
     `/api/practice/questions/${encodeURIComponent(questionId)}/rating`
   );
+}
+
+export function submitQuestionFeedback(
+  questionId: string,
+  body: {
+    score?: number;
+    comment?: string;
+    category?: QuestionFeedbackCategory;
+    context?: QuestionFeedbackContext;
+  }
+) {
+  return request<QuestionFeedbackView>(
+    `/api/questions/${encodeURIComponent(questionId)}/feedback`,
+    {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function fetchQuestionFeedback(questionId: string) {
+  return request<QuestionFeedbackView>(
+    `/api/questions/${encodeURIComponent(questionId)}/feedback`
+  );
+}
+
+export function fetchAdminQuestionFeedback(params?: {
+  questionId?: string;
+  page?: number;
+  size?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.questionId) q.set("questionId", params.questionId);
+  if (params?.page != null) q.set("page", String(params.page));
+  if (params?.size != null) q.set("size", String(params.size));
+  const suffix = q.toString() ? `?${q}` : "";
+  return request<AdminFeedbackPage>(`/api/admin/question-feedback${suffix}`);
 }
 
 export type PublicPlatformSettings = {

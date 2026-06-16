@@ -3,10 +3,8 @@ package com.neetlu.examhunt.service;
 import com.neetlu.examhunt.model.PracticeSession;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.model.QuestionAttempt;
-import com.neetlu.examhunt.model.QuestionRating;
 import com.neetlu.examhunt.repository.PracticeSessionRepository;
 import com.neetlu.examhunt.repository.QuestionAttemptRepository;
-import com.neetlu.examhunt.repository.QuestionRatingRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,7 +34,7 @@ public class PracticeService {
     private final PracticeSessionRepository sessions;
     private final QuestionRepository questions;
     private final QuestionAttemptRepository attempts;
-    private final QuestionRatingRepository ratings;
+    private final QuestionFeedbackService feedbackService;
     private final AnswerValidationService validation;
     private final RevisionService revisionService;
     private final ManifestImportService manifestImportService;
@@ -45,14 +43,14 @@ public class PracticeService {
             PracticeSessionRepository sessions,
             QuestionRepository questions,
             QuestionAttemptRepository attempts,
-            QuestionRatingRepository ratings,
+            QuestionFeedbackService feedbackService,
             AnswerValidationService validation,
             RevisionService revisionService,
             ManifestImportService manifestImportService) {
         this.sessions = sessions;
         this.questions = questions;
         this.attempts = attempts;
-        this.ratings = ratings;
+        this.feedbackService = feedbackService;
         this.validation = validation;
         this.revisionService = revisionService;
         this.manifestImportService = manifestImportService;
@@ -532,39 +530,26 @@ public class PracticeService {
     }
 
     public RatingView rateQuestion(String userId, String questionId, int score, String comment) {
-        if (score < 1 || score > 5) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rating must be 1–5");
-        }
-        requireQuestion(questionId);
-        QuestionRating rating = ratings.findByUserIdAndQuestionId(userId, questionId)
-                .orElseGet(QuestionRating::new);
-        rating.setUserId(userId);
-        rating.setQuestionId(questionId);
-        rating.setScore(score);
-        rating.setComment(comment);
-        rating.setRatedAt(Instant.now());
-        ratings.save(rating);
-        return new RatingView(score, 1, comment, aggregateRating(questionId));
+        QuestionFeedbackService.FeedbackView view = feedbackService.submitFeedback(
+                userId, questionId, score, comment, "general", "practice");
+        return toRatingView(view);
     }
 
     public RatingView getUserRating(String userId, String questionId) {
-        RatingAggregate agg = aggregateRating(questionId);
-        return ratings.findByUserIdAndQuestionId(userId, questionId)
-                .map(r -> new RatingView(r.getScore(), 1, r.getComment(), agg))
-                .orElse(new RatingView(0, 0, null, agg));
+        QuestionFeedbackService.FeedbackView view = feedbackService.getUserFeedback(userId, questionId);
+        return toRatingView(view);
+    }
+
+    private RatingView toRatingView(QuestionFeedbackService.FeedbackView view) {
+        int votes = view.yourScore() > 0 ? 1 : 0;
+        QuestionFeedbackService.RatingAggregate src = view.aggregate();
+        RatingAggregate agg = new RatingAggregate(src.count(), src.average());
+        return new RatingView(
+                view.yourScore(), votes, view.comment(), view.category(), view.context(), agg);
     }
 
     public SessionView toView(PracticeSession s) {
         return sessionView(s);
-    }
-
-    private RatingAggregate aggregateRating(String questionId) {
-        List<QuestionRating> all = ratings.findByQuestionId(questionId);
-        if (all.isEmpty()) {
-            return new RatingAggregate(0, 0);
-        }
-        double avg = all.stream().mapToInt(QuestionRating::getScore).average().orElse(0);
-        return new RatingAggregate(all.size(), Math.round(avg * 10.0) / 10.0);
     }
 
     private List<String> buildQuestionIds(
@@ -1284,7 +1269,13 @@ public class PracticeService {
     public record ChapterProgress(
             String subject, String chapter, int attempts, int correct, int marks, int accuracyPercent) {}
 
-    public record RatingView(int yourScore, int yourVotes, String comment, RatingAggregate aggregate) {}
+    public record RatingView(
+            int yourScore,
+            int yourVotes,
+            String comment,
+            String category,
+            String context,
+            RatingAggregate aggregate) {}
 
     public record RatingAggregate(int count, double average) {}
 

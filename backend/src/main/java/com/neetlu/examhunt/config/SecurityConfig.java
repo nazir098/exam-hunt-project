@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exams", "/api/exams/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/packs", "/api/packs/**").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/questions/*/feedback").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/*/feedback").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/questions", "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/leaderboard", "/api/leaderboard/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/settings/**", "/api/practice-ai/status")

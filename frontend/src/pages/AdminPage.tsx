@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   adminCleanupDemoPacks,
@@ -70,11 +70,6 @@ export default function AdminPage() {
       .then((res) => {
         setFolders(res.folders);
         setImportSource(res.source ?? null);
-        if (res.folders.length) {
-          setFolderName((prev) =>
-            prev && res.folders.some((f) => f.folderName === prev) ? prev : res.folders[0].folderName
-          );
-        }
       })
       .catch((e) => setFoldersError(e instanceof Error ? e.message : "Could not load folders"))
       .finally(() => setFoldersLoading(false));
@@ -84,6 +79,35 @@ export default function AdminPage() {
     if (!user?.admin) return;
     loadInstalledPacks();
   }, [user?.admin, loadInstalledPacks]);
+
+  const selectableFolders = useMemo(() => {
+    const byName = new Map<string, ImportFolderOption>();
+    for (const p of installedPacks) {
+      const folder = p.sourceFolder?.trim() || (p.year > 0 ? String(p.year) : "");
+      if (!folder) continue;
+      byName.set(folder, {
+        folderName: folder,
+        packId: p.packId,
+        exam: p.exam,
+        year: p.year,
+        questionCount: p.questionCount,
+        installed: true,
+      });
+    }
+    for (const f of folders) {
+      byName.set(f.folderName, f);
+    }
+    return Array.from(byName.values()).sort((a, b) => b.year - a.year);
+  }, [folders, installedPacks]);
+
+  useEffect(() => {
+    if (!selectableFolders.length) return;
+    setFolderName((prev) =>
+      prev && selectableFolders.some((f) => f.folderName === prev)
+        ? prev
+        : selectableFolders[0].folderName
+    );
+  }, [selectableFolders]);
 
   const runTask = useCallback(async (task: AdminTask) => {
     setBusyId(task.id);
@@ -137,7 +161,7 @@ export default function AdminPage() {
     {
       id: "import-neet",
       title: "Sync all NEET packs",
-      description: folders.length
+      description: selectableFolders.length
         ? "Import every discovered NEET manifest folder (local disk or R2)."
         : "Set PUBLIC_FILES_BASE_URL on the API, or mount EXTRACTOR_ROOT locally.",
       run: adminImportNeet,
@@ -145,7 +169,7 @@ export default function AdminPage() {
     {
       id: "import-all",
       title: "Sync all published packs",
-      description: folders.length
+      description: selectableFolders.length
         ? "Import all discovered manifest folders (local disk or R2)."
         : "Set PUBLIC_FILES_BASE_URL on the API, or mount EXTRACTOR_ROOT locally.",
       run: adminImportAll,
@@ -206,6 +230,16 @@ export default function AdminPage() {
       <AdminPlatformSettingsPanel />
 
       <section className="admin-page__section">
+        <h2 className="admin-page__section-title">Student feedback</h2>
+        <p className="admin-page__section-desc muted">
+          View star ratings and issue reports submitted from Question Bank and Practice.
+        </p>
+        <Link to="/admin/feedback" className="btn primary">
+          Open feedback inbox
+        </Link>
+      </section>
+
+      <section className="admin-page__section">
         <h2 className="admin-page__section-title">Question editor</h2>
         <p className="admin-page__section-desc muted">
           Preview how students see question text, options, and LaTeX. Fix content and override AI
@@ -222,18 +256,19 @@ export default function AdminPage() {
           <label className="text-body-sm text-on-surface-variant" htmlFor="admin-folder">
             Published folder
           </label>
-          {folders.length > 0 ? (
+          {selectableFolders.length > 0 ? (
             <select
               id="admin-folder"
               className="admin-page__input admin-page__select"
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
-              disabled={foldersLoading}
+              disabled={foldersLoading || packsLoading}
             >
-              {foldersLoading && <option value="">Loading folders…</option>}
-              {folders.map((f) => (
+              {(foldersLoading || packsLoading) && <option value="">Loading folders…</option>}
+              {selectableFolders.map((f) => (
                 <option key={f.folderName} value={f.folderName}>
-                  {f.folderName} — {f.exam} {f.year} ({f.questionCount} questions)
+                  {f.folderName} — {f.exam} {f.year} ({f.questionCount} questions
+                  {f.installed && !importSource?.remoteConfigured ? ", installed" : ""})
                 </option>
               ))}
             </select>
@@ -248,14 +283,14 @@ export default function AdminPage() {
             />
           )}
           {foldersError && <p className="admin-page__folder-hint admin-page__folder-hint--error">{foldersError}</p>}
-          {!foldersLoading && !foldersError && folders.length > 0 && (
+          {!foldersLoading && !packsLoading && !foldersError && selectableFolders.length > 0 && (
             <p className="admin-page__folder-hint muted">
-              Found {folders.length} importable pack{folders.length === 1 ? "" : "s"}
-              {importSource?.remoteConfigured ? " from R2/remote storage" : ""}
-              {importSource?.localConfigured ? " from local extractor output" : ""}.
+              {selectableFolders.length} pack{selectableFolders.length === 1 ? "" : "s"} available to sync
+              {importSource?.remoteConfigured ? " (R2 connected)" : ""}
+              {importSource?.localConfigured ? " (local extractor mounted)" : ""}.
             </p>
           )}
-          {!foldersLoading && !foldersError && folders.length === 0 && (
+          {!foldersLoading && !packsLoading && !foldersError && selectableFolders.length === 0 && (
             <p className="admin-page__folder-hint muted">
               No packs discovered yet. On production EC2 set{" "}
               <code>PUBLIC_FILES_BASE_URL</code> to your R2 public URL (without the bucket name in the path if

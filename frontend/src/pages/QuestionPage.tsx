@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "../components/BookmarkButton";
+import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import AiMarkdown from "../components/AiMarkdown";
 import TextMcqQuestion from "../components/TextMcqQuestion";
@@ -457,6 +458,12 @@ export default function QuestionPage() {
               </div>
             </section>
           )}
+
+          <QuestionFeedbackPanel
+            questionId={questionId}
+            context="solve"
+            className="glass-card solve-page__feedback"
+          />
 
           <footer className="solve-page__footer-nav">
             <button

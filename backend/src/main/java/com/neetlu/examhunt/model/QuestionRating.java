@@ -16,6 +16,10 @@ public class QuestionRating {
     private String questionId;
     private int score;
     private String comment;
+    /** Report category: general, wrong_answer, typo, image_issue, ai_variant, other */
+    private String category;
+    /** Where feedback was submitted: solve, practice, test */
+    private String context;
     private Instant ratedAt = Instant.now();
 
     public String getId() {
@@ -56,6 +60,22 @@ public class QuestionRating {
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getContext() {
+        return context;
+    }
+
+    public void setContext(String context) {
+        this.context = context;
     }
 
     public Instant getRatedAt() {

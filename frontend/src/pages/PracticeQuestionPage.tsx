@@ -4,11 +4,9 @@ import {
   checkVariantPracticeAnswer,
   fetchPracticeQuestion,
   fetchPracticeSession,
-  fetchQuestionRating,
   finishPracticeSession,
   PracticeQuestion,
   PracticeSessionView,
-  rateQuestion,
   SubmitResult,
   skipPracticeQuestion,
   submitPracticeAnswer,
@@ -21,6 +19,7 @@ import AppLoader from "../components/AppLoader";
 import PageLoadShell from "../components/PageLoadShell";
 import PracticeStudyAssistant, { explainFeatureForResult } from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
+import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
@@ -179,7 +178,6 @@ export default function PracticeQuestionPage() {
   const [q, setQ] = useState<PracticeQuestion | null>(null);
   const [selected, setSelected] = useState("");
   const [result, setResult] = useState<SubmitResult | null>(null);
-  const [rating, setRating] = useState(0);
   const [error, setError] = useState("");
   const [loadTick, setLoadTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -230,7 +228,6 @@ export default function PracticeQuestionPage() {
       if (!opts?.prefetch) {
         setQ(null);
         setSelected("");
-        setRating(0);
         setShowSolution(false);
         setResult(null);
         setVariantCheck(null);
@@ -249,7 +246,6 @@ export default function PracticeQuestionPage() {
       questionCacheRef.current.set(qid, question);
       if (!opts?.prefetch) {
         setSelected("");
-        setRating(0);
         setShowSolution(false);
         setResult(null);
         setVariantCheck(null);
@@ -272,7 +268,6 @@ export default function PracticeQuestionPage() {
     setError("");
     setResult(null);
     setSelected("");
-    setRating(0);
     setShowSolution(false);
 
     if (routeMode === "test" && loadedSessionIdRef.current === sessionId && sessionRef.current) {
@@ -315,16 +310,9 @@ export default function PracticeQuestionPage() {
         }
         throw e;
       }
-      const loaded = questionCacheRef.current.get(qid);
-      const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
-      if (routeMode !== "test") {
-        try {
-          const r = await fetchQuestionRating(anchorId);
-          if (r.yourScore > 0) setRating(r.yourScore);
-        } catch {
-          /* optional */
-        }
-      } else {
+      if (routeMode === "test") {
+        const loaded = questionCacheRef.current.get(qid);
+        const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
         prefetchNextQuestion(s.questionTiles, anchorId);
       }
     },
@@ -443,11 +431,6 @@ export default function PracticeQuestionPage() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function saveRating(score: number) {
-    setRating(score);
-    await rateQuestion(questionId, score);
   }
 
   function goNext() {
@@ -921,22 +904,12 @@ export default function PracticeQuestionPage() {
 
         {renderPracticeAnswerActions(res.correct)}
 
-        <div className="practice-run-rating practice-run-rating--compact">
-          <p className="practice-run-rating__label">Rate this question</p>
-          <div className="practice-run-rating__stars">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`practice-run-rating__star${rating >= n ? " is-on" : ""}`}
-                onClick={() => saveRating(n)}
-                aria-label={`${n} stars`}
-              >
-                ★
-              </button>
-            ))}
-          </div>
-        </div>
+        <QuestionFeedbackPanel
+          questionId={questionId}
+          context="practice"
+          compact
+          className="glass-card"
+        />
       </section>
     );
   }
