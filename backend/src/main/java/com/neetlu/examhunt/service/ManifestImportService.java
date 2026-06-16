@@ -157,9 +157,7 @@ public class ManifestImportService {
             return objectMapper.readTree(manifestPath.toFile());
         }
 
-        String baseUrl = appProperties.extractorManifestBaseUrl();
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            String normalizedBaseUrl = baseUrl.replaceAll("/$", "");
+        for (String normalizedBaseUrl : remoteManifestBaseUrls()) {
             for (String suffix : List.of("/manifest", "/manifest.json")) {
                 try {
                     String body = restTemplate.getForObject(normalizedBaseUrl + "/" + folderName + suffix, String.class);
@@ -176,6 +174,13 @@ public class ManifestImportService {
                 ? manifestPath
                 : Path.of("<EXTRACTOR_ROOT>", "output", folderName, "published", "manifest.json");
         throw new IOException("manifest.json not found: " + expected);
+    }
+
+    private List<String> remoteManifestBaseUrls() {
+        List<String> urls = new ArrayList<>();
+        remoteExtractorBaseUrl().ifPresent(urls::add);
+        remotePublicFilesBaseUrl().ifPresent(urls::add);
+        return urls;
     }
 
     private Path resolveOutputRoot() {
