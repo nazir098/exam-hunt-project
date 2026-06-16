@@ -49,8 +49,9 @@ public class ManifestImportService {
 
     public ImportResult importFromFolder(String folderName) throws IOException {
         synchronized (importMonitor) {
-            JsonNode manifest = loadManifestFromDisk(folderName);
-            return importManifestNode(manifest, folderName);
+            String sourceFolder = normalizeSourceFolder(folderName);
+            JsonNode manifest = loadManifest(sourceFolder);
+            return importManifestNode(manifest, sourceFolder);
         }
     }
 
@@ -146,12 +147,11 @@ public class ManifestImportService {
         }
     }
 
-    private JsonNode loadManifestFromDisk(String folderName) throws IOException {
+    private JsonNode loadManifest(String sourceFolder) throws IOException {
         Path manifestPath = resolveOutputRootOptional()
-                .map(root -> root
-                    .resolve(folderName)
-                    .resolve("published")
-                    .resolve("manifest.json"))
+                .map(root -> localYearPath(root, sourceFolder)
+                        .resolve("published")
+                        .resolve("manifest.json"))
                 .orElse(null);
         if (manifestPath != null && Files.isRegularFile(manifestPath)) {
             return objectMapper.readTree(manifestPath.toFile());
@@ -160,7 +160,7 @@ public class ManifestImportService {
         for (String normalizedBaseUrl : remoteManifestBaseUrls()) {
             for (String suffix : List.of("/manifest", "/manifest.json", "/published/manifest.json")) {
                 try {
-                    String body = restTemplate.getForObject(normalizedBaseUrl + "/" + folderName + suffix, String.class);
+                    String body = restTemplate.getForObject(remoteYearUrl(normalizedBaseUrl, sourceFolder) + suffix, String.class);
                     if (body != null && !body.isBlank()) {
                         return objectMapper.readTree(body);
                     }
@@ -172,8 +172,34 @@ public class ManifestImportService {
 
         Path expected = manifestPath != null
                 ? manifestPath
-                : Path.of("<EXTRACTOR_ROOT>", "output", folderName, "published", "manifest.json");
+                : Path.of("<EXTRACTOR_ROOT>", "output", sourceFolder, "published", "manifest.json");
         throw new IOException("manifest.json not found: " + expected);
+    }
+
+    private String normalizeSourceFolder(String folderName) {
+        if (folderName == null) {
+            return "";
+        }
+        String value = folderName.strip().replace('\\', '/');
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        if (value.startsWith("output/")) {
+            value = value.substring("output/".length());
+        }
+        int slash = value.indexOf('/');
+        return slash >= 0 ? value.substring(0, slash) : value;
+    }
+
+    private Path localYearPath(Path outputRoot, String sourceFolder) {
+        return outputRoot.resolve(sourceFolder);
+    }
+
+    private String remoteYearUrl(String baseUrl, String sourceFolder) {
+        return baseUrl.replaceAll("/$", "") + "/" + sourceFolder;
     }
 
     private List<String> remoteManifestBaseUrls() {
@@ -304,7 +330,7 @@ public class ManifestImportService {
     private int importAiVariants(String sourceFolder, String packId, JsonNode manifest) throws IOException {
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
         if (outputRootOptional.isPresent()) {
-            Path metadataDir = outputRootOptional.get().resolve(sourceFolder).resolve("metadata");
+            Path metadataDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("metadata");
             if (Files.isDirectory(metadataDir)) {
                 return importAiVariantsFromLocalMetadata(metadataDir, packId, sourceFolder);
             }
@@ -405,10 +431,10 @@ public class ManifestImportService {
     private List<String> remoteMetadataIndexUrls(String sourceFolder, JsonNode manifest) {
         List<String> urls = new ArrayList<>();
         remoteExtractorBaseUrl().ifPresent(base -> {
-            urls.add(base + "/" + sourceFolder + "/metadata/index.json");
-            urls.add(base + "/" + sourceFolder + "/metadata");
+            urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/index.json");
+            urls.add(remoteYearUrl(base, sourceFolder) + "/metadata");
         });
-        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(base + "/" + sourceFolder + "/metadata/index.json"));
+        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/index.json"));
         inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/index.json"));
         return urls;
     }
@@ -416,10 +442,10 @@ public class ManifestImportService {
     private List<String> remoteMetadataFileUrls(String sourceFolder, JsonNode manifest, String fileName) {
         List<String> urls = new ArrayList<>();
         remoteExtractorBaseUrl().ifPresent(base -> {
-            urls.add(base + "/" + sourceFolder + "/metadata/" + fileName);
-            urls.add(base + "/" + sourceFolder + "/metadata/" + fileName.replaceFirst("\\.json$", ""));
+            urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/" + fileName);
+            urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/" + fileName.replaceFirst("\\.json$", ""));
         });
-        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(base + "/" + sourceFolder + "/metadata/" + fileName));
+        remotePublicFilesBaseUrl().ifPresent(base -> urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/" + fileName));
         inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/" + fileName));
         return urls;
     }
@@ -662,7 +688,7 @@ public class ManifestImportService {
         if (outputRootOptional.isEmpty()) {
             return;
         }
-        Path diagramsDir = outputRootOptional.get().resolve(sourceFolder).resolve("diagrams");
+        Path diagramsDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("diagrams");
         Path questionSvg = diagramsDir.resolve(qid + "_question.svg");
         Path solutionSvg = diagramsDir.resolve(qid + "_solution.svg");
         try {
