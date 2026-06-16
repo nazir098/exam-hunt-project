@@ -8,6 +8,8 @@ public record AppProperties(
         String extractorRoot,
         String extractorManifestBaseUrl,
         String publicFilesBaseUrl,
+        /** Comma-separated year folders on remote storage, e.g. 2016,2025 */
+        String importPackFolders,
         String adminImportKey,
         String adminEmail,
         String adminBootstrapPassword,

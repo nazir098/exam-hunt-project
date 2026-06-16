@@ -13,6 +13,7 @@ import {
   type AdminActionResult,
   type AdminPackRow,
   type ImportFolderOption,
+  type ImportSourceStatus,
 } from "../api";
 import AdminPlatformSettingsPanel from "../components/AdminPlatformSettings";
 import { useAuth } from "../auth/AuthContext";
@@ -36,6 +37,7 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [folders, setFolders] = useState<ImportFolderOption[]>([]);
+  const [importSource, setImportSource] = useState<ImportSourceStatus | null>(null);
   const [foldersLoading, setFoldersLoading] = useState(true);
   const [foldersError, setFoldersError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
@@ -67,6 +69,7 @@ export default function AdminPage() {
     fetchAdminImportFolders()
       .then((res) => {
         setFolders(res.folders);
+        setImportSource(res.source ?? null);
         if (res.folders.length) {
           setFolderName((prev) =>
             prev && res.folders.some((f) => f.folderName === prev) ? prev : res.folders[0].folderName
@@ -135,22 +138,22 @@ export default function AdminPage() {
       id: "import-neet",
       title: "Sync all NEET packs",
       description: folders.length
-        ? "Import every locally discovered NEET manifest folder."
-        : "Bulk sync needs local extractor folders on the server. Use single-folder sync below for remote import.",
+        ? "Import every discovered NEET manifest folder (local disk or R2)."
+        : "Set PUBLIC_FILES_BASE_URL on the API, or mount EXTRACTOR_ROOT locally.",
       run: adminImportNeet,
     },
     {
       id: "import-all",
       title: "Sync all published packs",
       description: folders.length
-        ? "Import all locally discovered manifest folders (not only NEET)."
-        : "Bulk sync needs local extractor folders on the server. Use single-folder sync below for remote import.",
+        ? "Import all discovered manifest folders (local disk or R2)."
+        : "Set PUBLIC_FILES_BASE_URL on the API, or mount EXTRACTOR_ROOT locally.",
       run: adminImportAll,
     },
     {
       id: "import-folder",
       title: `Sync folder “${folderName.trim() || "…"}”`,
-      description: "Import one published folder by name, using remote manifest fallback when local files are unavailable.",
+      description: "Import one year folder (e.g. 2016) from R2 or local extractor output.",
       run: () => adminImportFolder(folderName.trim()),
     },
   ];
@@ -247,14 +250,18 @@ export default function AdminPage() {
           {foldersError && <p className="admin-page__folder-hint admin-page__folder-hint--error">{foldersError}</p>}
           {!foldersLoading && !foldersError && folders.length > 0 && (
             <p className="admin-page__folder-hint muted">
-              Local extractor discovery found {folders.length} published manifest
-              {folders.length === 1 ? "" : "s"}
+              Found {folders.length} importable pack{folders.length === 1 ? "" : "s"}
+              {importSource?.remoteConfigured ? " from R2/remote storage" : ""}
+              {importSource?.localConfigured ? " from local extractor output" : ""}.
             </p>
           )}
           {!foldersLoading && !foldersError && folders.length === 0 && (
             <p className="admin-page__folder-hint muted">
-              No local extractor folders are mounted on this server. Enter a folder name, such as 2016,
-              to import from the configured remote manifest source.
+              No packs discovered yet. On production EC2 set{" "}
+              <code>PUBLIC_FILES_BASE_URL</code> to your R2 public URL (without the bucket name in the path if
+              using r2.dev), e.g. <code>https://pub-….r2.dev</code>, then enter a folder like <code>2016</code>{" "}
+              and run single-folder sync. Optional: upload <code>packs-index.json</code> to the R2 root or set{" "}
+              <code>IMPORT_PACK_FOLDERS=2016,2025</code> on the API.
             </p>
           )}
         </div>
@@ -272,8 +279,7 @@ export default function AdminPage() {
                   disabled={
                     blocked ||
                     running ||
-                    (task.id === "import-folder" && !folderName.trim()) ||
-                    ((task.id === "import-neet" || task.id === "import-all") && folders.length === 0)
+                    (task.id === "import-folder" && !folderName.trim())
                   }
                   onClick={() => runTask(task)}
                 >

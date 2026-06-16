@@ -33,7 +33,10 @@ public class AdminImportController {
             throws IOException {
         adminAuthorization.requireAdminAccess(userId, adminKey);
         var folders = importService.listImportableFolders();
-        return ResponseEntity.ok(Map.of("folders", folders, "count", folders.size()));
+        return ResponseEntity.ok(Map.of(
+                "folders", folders,
+                "count", folders.size(),
+                "source", importService.importSourceStatus()));
     }
 
     @PostMapping("/folder/{folderName}")

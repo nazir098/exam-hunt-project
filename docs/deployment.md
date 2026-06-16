@@ -65,9 +65,33 @@ OPENAI_BASE_URL=https://freellmapi-t1pm.onrender.com/v1
 OPENAI_API_KEY=<freellmapi-client-key>
 OPENAI_CHAT_MODEL=auto
 AI_PRACTICE_ENABLED=true
+PUBLIC_FILES_BASE_URL=https://pub-e97c6c0fb4ed4d289eea27512d33293d.r2.dev
+# IMPORT_PACK_FOLDERS=2016,2025
 CORS_ORIGINS=https://www.techmuzzle.in,https://exam-hunt-project.pages.dev,http://localhost:8080,http://localhost:5173
 LEADERBOARD_DEMO_SEED=false
 ```
+
+Do **not** set `EXTRACTOR_ROOT` on EC2 unless you mount extractor output on the server. Production import reads manifests and metadata from R2 via `PUBLIC_FILES_BASE_URL`.
+
+### R2 layout (per year)
+
+Upload each published year folder to the bucket root:
+
+```text
+2016/manifest.json
+2016/questions/*.webp
+2016/solutions/*.webp
+2016/metadata/AI_*.json
+2016/metadata/index.json
+```
+
+Optional at bucket root for faster admin discovery:
+
+```json
+{ "folders": ["2016", "2025"] }
+```
+
+Save as `packs-index.json` in R2.
 
 ## Nginx Proxy
 

@@ -500,8 +500,16 @@ export type ImportFolderOption = {
   questionCount: number;
 };
 
+export type ImportSourceStatus = {
+  localConfigured: boolean;
+  remoteConfigured: boolean;
+  publicFilesBaseUrl: string | null;
+};
+
 export function fetchAdminImportFolders() {
-  return request<{ folders: ImportFolderOption[]; count: number }>("/api/admin/import/folders");
+  return request<{ folders: ImportFolderOption[]; count: number; source: ImportSourceStatus }>(
+    "/api/admin/import/folders"
+  );
 }
 
 export function adminImportNeet() {

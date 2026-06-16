@@ -10,12 +10,18 @@ import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Year;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,7 +39,7 @@ public class ManifestImportService {
     private final QuestionRepository questionRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final Object importMonitor = new Object();
 
     public ManifestImportService(
@@ -45,18 +51,45 @@ public class ManifestImportService {
         this.questionRepository = questionRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(20));
+        factory.setReadTimeout(Duration.ofSeconds(120));
+        this.restTemplate = new RestTemplate(factory);
     }
 
     public ImportResult importFromFolder(String folderName) throws IOException {
         synchronized (importMonitor) {
-            String sourceFolder = normalizeSourceFolder(folderName);
-            JsonNode manifest = loadManifest(sourceFolder);
-            return importManifestNode(manifest, sourceFolder);
+            return importFromFolderUnlocked(folderName);
         }
     }
 
-    /** Published extractor folders that have {@code output/<name>/published/manifest.json}. */
+    private ImportResult importFromFolderUnlocked(String folderName) throws IOException {
+        String sourceFolder = normalizeSourceFolder(folderName);
+        JsonNode manifest = loadManifest(sourceFolder);
+        return importManifestNode(manifest, sourceFolder);
+    }
+
+    /** Published extractor folders from local disk and/or remote object storage. */
     public List<ImportFolderEntry> listImportableFolders() throws IOException {
+        Map<String, ImportFolderEntry> byFolder = new LinkedHashMap<>();
+        for (ImportFolderEntry entry : listLocalImportableFolders()) {
+            byFolder.put(entry.folderName(), entry);
+        }
+        for (ImportFolderEntry entry : listRemoteImportableFolders()) {
+            byFolder.putIfAbsent(entry.folderName(), entry);
+        }
+        return new ArrayList<>(byFolder.values());
+    }
+
+    public ImportSourceView importSourceStatus() {
+        boolean local = resolveOutputRootOptional()
+                .map(Files::isDirectory)
+                .orElse(false);
+        boolean remote = !remoteManifestBaseUrls().isEmpty();
+        return new ImportSourceView(local, remote, remotePublicFilesBaseUrl().orElse(null));
+    }
+
+    private List<ImportFolderEntry> listLocalImportableFolders() throws IOException {
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
         if (outputRootOptional.isEmpty()) {
             return List.of();
@@ -70,53 +103,176 @@ public class ManifestImportService {
             for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
                 Path manifestPath = dir.resolve("published").resolve("manifest.json");
                 if (!Files.isRegularFile(manifestPath)) {
+                    manifestPath = dir.resolve("manifest.json");
+                }
+                if (!Files.isRegularFile(manifestPath)) {
                     continue;
                 }
                 JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
-                String folderName = dir.getFileName().toString();
-                String packId = text(manifest, "pack_id");
-                if (packId.isBlank()) {
-                    packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
-                }
-                int questionCount = manifest.path("questions").size();
-                if (questionCount == 0 && manifest.path("stats").has("total_questions")) {
-                    questionCount = manifest.path("stats").path("total_questions").asInt(0);
-                }
-                entries.add(new ImportFolderEntry(
-                        folderName,
-                        packId,
-                        text(manifest, "exam"),
-                        manifest.path("year").asInt(0),
-                        questionCount));
+                entries.add(toImportFolderEntry(dir.getFileName().toString(), manifest));
             }
         }
         return entries;
     }
 
+    private List<ImportFolderEntry> listRemoteImportableFolders() throws IOException {
+        if (remoteManifestBaseUrls().isEmpty()) {
+            return List.of();
+        }
+        List<String> folderNames = new ArrayList<>();
+        folderNames.addAll(loadRemoteFolderNamesFromIndex());
+        folderNames.addAll(configuredImportPackFolders());
+        if (folderNames.isEmpty()) {
+            folderNames.addAll(probeRemoteYearFolders());
+        }
+        List<ImportFolderEntry> entries = new ArrayList<>();
+        for (String folderName : folderNames.stream().distinct().sorted().toList()) {
+            try {
+                JsonNode manifest = loadManifest(folderName);
+                entries.add(toImportFolderEntry(folderName, manifest));
+            } catch (IOException ignored) {
+                // Skip folders that do not expose a readable manifest.
+            }
+        }
+        return entries;
+    }
+
+    private ImportFolderEntry toImportFolderEntry(String folderName, JsonNode manifest) {
+        String packId = text(manifest, "pack_id");
+        if (packId.isBlank()) {
+            packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
+        }
+        int questionCount = manifest.path("questions").size();
+        if (questionCount == 0 && manifest.path("stats").has("total_questions")) {
+            questionCount = manifest.path("stats").path("total_questions").asInt(0);
+        }
+        return new ImportFolderEntry(
+                folderName,
+                packId,
+                text(manifest, "exam"),
+                manifest.path("year").asInt(0),
+                questionCount);
+    }
+
+    private List<String> configuredImportPackFolders() {
+        String raw = appProperties.importPackFolders();
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String folder = normalizeSourceFolder(part);
+            if (!folder.isBlank()) {
+                out.add(folder);
+            }
+        }
+        return out;
+    }
+
+    private List<String> loadRemoteFolderNamesFromIndex() {
+        for (String baseUrl : remoteManifestBaseUrls()) {
+            for (String suffix : List.of("/packs-index.json", "/index.json")) {
+                try {
+                    String body = restTemplate.getForObject(baseUrl.replaceAll("/$", "") + suffix, String.class);
+                    if (body == null || body.isBlank()) {
+                        continue;
+                    }
+                    List<String> folders = readRemoteFolderNames(objectMapper.readTree(body));
+                    if (!folders.isEmpty()) {
+                        return folders;
+                    }
+                } catch (Exception ignored) {
+                    // Try the next supported remote index file.
+                }
+            }
+        }
+        return List.of();
+    }
+
+    private List<String> readRemoteFolderNames(JsonNode index) {
+        List<String> out = new ArrayList<>();
+        JsonNode folders = index.path("folders");
+        if (!folders.isArray()) {
+            folders = index.path("packs");
+        }
+        if (!folders.isArray() && index.isArray()) {
+            folders = index;
+        }
+        if (folders.isArray()) {
+            for (JsonNode folder : folders) {
+                if (folder.isTextual()) {
+                    String name = normalizeSourceFolder(folder.asText(""));
+                    if (!name.isBlank()) {
+                        out.add(name);
+                    }
+                    continue;
+                }
+                String name = normalizeSourceFolder(text(folder, "folderName"));
+                if (name.isBlank()) {
+                    name = normalizeSourceFolder(text(folder, "folder"));
+                }
+                if (name.isBlank()) {
+                    name = normalizeSourceFolder(text(folder, "year"));
+                }
+                if (!name.isBlank()) {
+                    out.add(name);
+                }
+            }
+        }
+        return out;
+    }
+
+    private List<String> probeRemoteYearFolders() {
+        List<String> found = new ArrayList<>();
+        int currentYear = Year.now().getValue();
+        for (int year = 1998; year <= currentYear + 1; year++) {
+            String folder = String.valueOf(year);
+            if (remoteManifestExists(folder)) {
+                found.add(folder);
+            }
+        }
+        return found;
+    }
+
+    private boolean remoteManifestExists(String sourceFolder) {
+        for (String baseUrl : remoteManifestBaseUrls()) {
+            for (String suffix : List.of("/manifest.json", "/published/manifest.json", "/manifest")) {
+                String url = remoteYearUrl(baseUrl, sourceFolder) + suffix;
+                try {
+                    HttpHeaders headers =
+                            restTemplate.exchange(url, HttpMethod.HEAD, HttpEntity.EMPTY, String.class).getHeaders();
+                    if (headers.getContentLength() > 0) {
+                        return true;
+                    }
+                } catch (Exception ignored) {
+                    // Fall back to a lightweight GET below.
+                }
+                try {
+                    String body = restTemplate.getForObject(url, String.class);
+                    if (body != null && !body.isBlank()) {
+                        return true;
+                    }
+                } catch (Exception ignored) {
+                    // Try the next supported manifest URL.
+                }
+            }
+        }
+        return false;
+    }
+
     /** Imports every published folder whose manifest {@code exam} is NEET. */
     public ImportResult importNeetFolders() throws IOException {
         synchronized (importMonitor) {
-            Path outputRoot = resolveOutputRoot();
-            if (!Files.isDirectory(outputRoot)) {
-                throw new IOException("Extractor output not found: " + outputRoot);
-            }
             List<ImportResult> results = new ArrayList<>();
-            try (Stream<Path> dirs = Files.list(outputRoot)) {
-                for (Path dir : dirs.filter(Files::isDirectory).sorted().toList()) {
-                    Path manifestPath = dir.resolve("published").resolve("manifest.json");
-                    if (!Files.isRegularFile(manifestPath)) {
-                        continue;
-                    }
-                    JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
-                    if (!"NEET".equalsIgnoreCase(text(manifest, "exam"))) {
-                        continue;
-                    }
-                    results.add(importManifestNode(manifest, dir.getFileName().toString()));
+            for (ImportFolderEntry entry : listImportableFolders()) {
+                if (!"NEET".equalsIgnoreCase(entry.exam())) {
+                    continue;
                 }
+                results.add(importFromFolderUnlocked(entry.folderName()));
             }
             if (results.isEmpty()) {
                 throw new IOException(
-                        "No NEET manifests under " + outputRoot + " — publish years in pdf-qa-extractor first.");
+                        "No NEET manifests found — set PUBLIC_FILES_BASE_URL on production or publish years locally.");
             }
             int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
             int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
@@ -126,20 +282,14 @@ public class ManifestImportService {
 
     public ImportResult importAllPublishedFolders() throws IOException {
         synchronized (importMonitor) {
-            Path outputRoot = resolveOutputRoot();
-            if (!Files.isDirectory(outputRoot)) {
-                throw new IOException("Extractor output not found: " + outputRoot);
+            List<ImportFolderEntry> folders = listImportableFolders();
+            if (folders.isEmpty()) {
+                throw new IOException(
+                        "No published manifests found — set PUBLIC_FILES_BASE_URL on production or mount EXTRACTOR_ROOT locally.");
             }
             List<ImportResult> results = new ArrayList<>();
-            try (Stream<Path> dirs = Files.list(outputRoot)) {
-                for (Path dir : dirs.filter(Files::isDirectory).toList()) {
-                    Path manifestPath = dir.resolve("published").resolve("manifest.json");
-                    if (!Files.isRegularFile(manifestPath)) {
-                        continue;
-                    }
-                    JsonNode manifest = objectMapper.readTree(manifestPath.toFile());
-                    results.add(importManifestNode(manifest, dir.getFileName().toString()));
-                }
+            for (ImportFolderEntry entry : folders) {
+                results.add(importFromFolderUnlocked(entry.folderName()));
             }
             int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
             int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
@@ -148,19 +298,22 @@ public class ManifestImportService {
     }
 
     private JsonNode loadManifest(String sourceFolder) throws IOException {
-        Path manifestPath = resolveOutputRootOptional()
-                .map(root -> localYearPath(root, sourceFolder)
-                        .resolve("published")
-                        .resolve("manifest.json"))
-                .orElse(null);
-        if (manifestPath != null && Files.isRegularFile(manifestPath)) {
-            return objectMapper.readTree(manifestPath.toFile());
+        Optional<Path> outputRootOptional = resolveOutputRootOptional();
+        if (outputRootOptional.isPresent()) {
+            Path yearDir = localYearPath(outputRootOptional.get(), sourceFolder);
+            for (Path manifestPath :
+                    List.of(yearDir.resolve("published").resolve("manifest.json"), yearDir.resolve("manifest.json"))) {
+                if (Files.isRegularFile(manifestPath)) {
+                    return objectMapper.readTree(manifestPath.toFile());
+                }
+            }
         }
 
         for (String normalizedBaseUrl : remoteManifestBaseUrls()) {
-            for (String suffix : List.of("/manifest", "/manifest.json", "/published/manifest.json")) {
+            for (String suffix : List.of("/manifest.json", "/manifest", "/published/manifest.json")) {
                 try {
-                    String body = restTemplate.getForObject(remoteYearUrl(normalizedBaseUrl, sourceFolder) + suffix, String.class);
+                    String body =
+                            restTemplate.getForObject(remoteYearUrl(normalizedBaseUrl, sourceFolder) + suffix, String.class);
                     if (body != null && !body.isBlank()) {
                         return objectMapper.readTree(body);
                     }
@@ -170,10 +323,14 @@ public class ManifestImportService {
             }
         }
 
-        Path expected = manifestPath != null
-                ? manifestPath
-                : Path.of("<EXTRACTOR_ROOT>", "output", sourceFolder, "published", "manifest.json");
-        throw new IOException("manifest.json not found: " + expected);
+        String remoteHint = remotePublicFilesBaseUrl()
+                .map(base -> remoteYearUrl(base, sourceFolder) + "/manifest.json")
+                .orElse("PUBLIC_FILES_BASE_URL/<year>/manifest.json");
+        throw new IOException(
+                "manifest.json not found for folder "
+                        + sourceFolder
+                        + ". Set PUBLIC_FILES_BASE_URL on production (e.g. R2 public URL) or mount EXTRACTOR_ROOT locally. Tried "
+                        + remoteHint);
     }
 
     private String normalizeSourceFolder(String folderName) {
@@ -207,14 +364,6 @@ public class ManifestImportService {
         remoteExtractorBaseUrl().ifPresent(urls::add);
         remotePublicFilesBaseUrl().ifPresent(urls::add);
         return urls;
-    }
-
-    private Path resolveOutputRoot() {
-        String root = appProperties.extractorRoot();
-        if (root == null || root.isBlank()) {
-            throw new IllegalStateException("Set EXTRACTOR_ROOT to your pdf-qa-extractor project path");
-        }
-        return Path.of(root).resolve("output");
     }
 
     private Optional<Path> resolveOutputRootOptional() {
@@ -301,7 +450,7 @@ public class ManifestImportService {
 
         int count = 0;
         for (JsonNode q : manifest.path("questions")) {
-            Question doc = mapQuestion(q, packId);
+            Question doc = mapQuestion(q, packId, sourceFolder);
             questionRepository.save(doc);
             count++;
         }
@@ -483,7 +632,7 @@ public class ManifestImportService {
         return Optional.empty();
     }
 
-    private Question mapQuestion(JsonNode q, String packId) {
+    private Question mapQuestion(JsonNode q, String packId, String sourceFolder) {
         Question doc = new Question();
         doc.setQuestionId(text(q, "question_id"));
         doc.setPackId(packId);
@@ -502,12 +651,12 @@ public class ManifestImportService {
         doc.setHasDiagram(q.path("has_diagram").asBoolean(false));
         doc.setHasEquation(q.path("has_equation").asBoolean(false));
         doc.setAnswerOnly(q.path("answer_only").asBoolean(false));
-        doc.setQuestionImageUrl(text(q, "question_image_url"));
+        doc.setQuestionImageUrl(rewriteAssetUrl(text(q, "question_image_url"), sourceFolder));
         String solutionUrl = text(q, "solution_image_url");
         if (solutionUrl.isBlank()) {
             solutionUrl = text(q, "solution_image");
         }
-        doc.setSolutionImageUrl(solutionUrl);
+        doc.setSolutionImageUrl(rewriteAssetUrl(solutionUrl, sourceFolder));
         boolean hasSolutionFlag = q.path("has_solution").asBoolean(false);
         String solutionText = text(q, "solution_text_preview");
         if (solutionText.isBlank()) {
@@ -612,12 +761,12 @@ public class ManifestImportService {
         if (imageUrl.isBlank()) {
             imageUrl = text(v, "question_image");
         }
-        doc.setQuestionImageUrl(imageUrl);
+        doc.setQuestionImageUrl(rewriteAssetUrl(imageUrl, sourceFolder));
         String solutionUrl = text(v, "solution_image_url");
         if (solutionUrl.isBlank()) {
             solutionUrl = text(v, "solution_image");
         }
-        doc.setSolutionImageUrl(solutionUrl);
+        doc.setSolutionImageUrl(rewriteAssetUrl(solutionUrl, sourceFolder));
         String preview = text(v, "question_text_preview");
         if (preview.isBlank()) {
             preview = text(v, "question_text");
@@ -642,12 +791,12 @@ public class ManifestImportService {
         doc.setParentQuestionId(parentQuestionId);
         doc.setVariantNo(v.path("variant_no").asInt(0));
         doc.setVariantType(text(v, "variant_type"));
-        applyVariantFormatFields(doc, v);
+        applyVariantFormatFields(doc, v, sourceFolder);
         attachDiagramSvgs(doc, sourceFolder);
         return doc;
     }
 
-    private void applyVariantFormatFields(Question doc, JsonNode v) {
+    private void applyVariantFormatFields(Question doc, JsonNode v, String sourceFolder) {
         String format = text(v, "question_format");
         if (format.isBlank()) {
             format = text(v, "variant_type");
@@ -669,7 +818,7 @@ public class ManifestImportService {
             diagramUrl = text(v, "question_image_url");
         }
         if ((doc.getQuestionImageUrl() == null || doc.getQuestionImageUrl().isBlank()) && !diagramUrl.isBlank()) {
-            doc.setQuestionImageUrl(diagramUrl);
+            doc.setQuestionImageUrl(rewriteAssetUrl(diagramUrl, sourceFolder));
         }
         if (v.path("has_diagram").asBoolean(false)) {
             doc.setHasDiagram(true);
@@ -685,24 +834,69 @@ public class ManifestImportService {
             return;
         }
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
-        if (outputRootOptional.isEmpty()) {
-            return;
+        if (outputRootOptional.isPresent()) {
+            Path diagramsDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("diagrams");
+            Path questionSvg = diagramsDir.resolve(qid + "_question.svg");
+            Path solutionSvg = diagramsDir.resolve(qid + "_solution.svg");
+            try {
+                if (Files.isRegularFile(questionSvg)
+                        && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_DIAGRAM_SVG)) {
+                    doc.setQuestionDiagramSvg(Files.readString(questionSvg));
+                }
+                if (Files.isRegularFile(solutionSvg)
+                        && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.SOLUTION_DIAGRAM_SVG)) {
+                    doc.setSolutionDiagramSvg(Files.readString(solutionSvg));
+                }
+            } catch (IOException ignored) {
+                /* optional local diagrams */
+            }
         }
-        Path diagramsDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("diagrams");
-        Path questionSvg = diagramsDir.resolve(qid + "_question.svg");
-        Path solutionSvg = diagramsDir.resolve(qid + "_solution.svg");
+        remotePublicFilesBaseUrl().ifPresent(base -> {
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_DIAGRAM_SVG)
+                    && (doc.getQuestionDiagramSvg() == null || doc.getQuestionDiagramSvg().isBlank())) {
+                fetchRemoteText(base + "/" + sourceFolder + "/diagrams/" + qid + "_question.svg")
+                        .ifPresent(doc::setQuestionDiagramSvg);
+            }
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.SOLUTION_DIAGRAM_SVG)
+                    && (doc.getSolutionDiagramSvg() == null || doc.getSolutionDiagramSvg().isBlank())) {
+                fetchRemoteText(base + "/" + sourceFolder + "/diagrams/" + qid + "_solution.svg")
+                        .ifPresent(doc::setSolutionDiagramSvg);
+            }
+        });
+    }
+
+    private Optional<String> fetchRemoteText(String url) {
         try {
-            if (Files.isRegularFile(questionSvg)
-                    && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_DIAGRAM_SVG)) {
-                doc.setQuestionDiagramSvg(Files.readString(questionSvg));
+            String body = restTemplate.getForObject(url, String.class);
+            if (body != null && !body.isBlank()) {
+                return Optional.of(body);
             }
-            if (Files.isRegularFile(solutionSvg)
-                    && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.SOLUTION_DIAGRAM_SVG)) {
-                doc.setSolutionDiagramSvg(Files.readString(solutionSvg));
-            }
-        } catch (IOException ignored) {
-            /* optional local diagrams */
+        } catch (Exception ignored) {
+            // Optional remote asset.
         }
+        return Optional.empty();
+    }
+
+    private String rewriteAssetUrl(String url, String sourceFolder) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        String trimmed = url.strip();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        while (trimmed.startsWith("/")) {
+            trimmed = trimmed.substring(1);
+        }
+        Optional<String> base = remotePublicFilesBaseUrl();
+        if (base.isEmpty()) {
+            return trimmed;
+        }
+        String root = base.get();
+        if (trimmed.startsWith(sourceFolder + "/")) {
+            return root + "/" + trimmed;
+        }
+        return root + "/" + sourceFolder + "/" + trimmed;
     }
 
     private static String sanitize(String value) {
@@ -861,8 +1055,8 @@ public class ManifestImportService {
             String folder = resolveSourceFolder(doc.getPackId());
             return loadVariantMetadataNode(doc)
                     .map(node -> {
-                        applyVariantEnrichment(doc, node);
-                        applyVariantFormatFields(doc, node);
+                        applyVariantEnrichment(doc, node, folder);
+                        applyVariantFormatFields(doc, node, folder);
                         attachDiagramSvgs(doc, folder);
                         return questionRepository.save(doc);
                     })
@@ -874,15 +1068,28 @@ public class ManifestImportService {
 
     private java.util.Optional<JsonNode> loadVariantMetadataNode(Question doc) throws IOException {
         String folder = resolveSourceFolder(doc.getPackId());
-        Path file =
-                resolveOutputRoot()
-                        .resolve(folder)
-                        .resolve("metadata")
-                        .resolve(doc.getQuestionId() + ".json");
-        if (!Files.isRegularFile(file)) {
-            return java.util.Optional.empty();
+        Optional<Path> outputRootOptional = resolveOutputRootOptional();
+        if (outputRootOptional.isPresent()) {
+            Path file =
+                    localYearPath(outputRootOptional.get(), folder)
+                            .resolve("metadata")
+                            .resolve(doc.getQuestionId() + ".json");
+            if (Files.isRegularFile(file)) {
+                return java.util.Optional.of(objectMapper.readTree(file.toFile()));
+            }
         }
-        return java.util.Optional.of(objectMapper.readTree(file.toFile()));
+        String fileName = doc.getQuestionId() + ".json";
+        for (String url : remoteMetadataFileUrls(folder, null, fileName)) {
+            try {
+                String body = restTemplate.getForObject(url, String.class);
+                if (body != null && !body.isBlank()) {
+                    return java.util.Optional.of(objectMapper.readTree(body));
+                }
+            } catch (Exception ignored) {
+                // Try the next supported remote metadata URL.
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     private String resolveSourceFolder(String packId) {
@@ -893,7 +1100,7 @@ public class ManifestImportService {
                 .orElse(packId != null ? packId.replace("NEET_", "") : "2016");
     }
 
-    private void applyVariantEnrichment(Question doc, JsonNode v) {
+    private void applyVariantEnrichment(Question doc, JsonNode v, String sourceFolder) {
         String preview = text(v, "question_text_preview");
         if (preview.isBlank()) {
             preview = text(v, "question_text");
@@ -945,7 +1152,7 @@ public class ManifestImportService {
         if (!pattern.isBlank() && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.PRACTICE_PATTERN)) {
             doc.setPracticePattern(pattern);
         }
-        applyVariantFormatFields(doc, v);
+        applyVariantFormatFields(doc, v, sourceFolder);
     }
 
     private static String nullToEmpty(String value) {
@@ -967,6 +1174,8 @@ public class ManifestImportService {
             int year,
             int questionCount
     ) {}
+
+    public record ImportSourceView(boolean localConfigured, boolean remoteConfigured, String publicFilesBaseUrl) {}
 
     public record RemovePackResult(String packId, long questionsRemoved) {}
 }

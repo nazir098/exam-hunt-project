@@ -13,6 +13,7 @@ app:
   extractor-root: ${EXTRACTOR_ROOT:}
   extractor-manifest-base-url: ${EXTRACTOR_MANIFEST_BASE_URL:}
   public-files-base-url: ${PUBLIC_FILES_BASE_URL:${R2_PUBLIC_BASE_URL:}}
+  import-pack-folders: ${IMPORT_PACK_FOLDERS:}
   admin-import-key: ${ADMIN_IMPORT_KEY:}
   admin-email: ${ADMIN_EMAIL:hussaininazir1@gmail.com}
   admin-bootstrap-password: ${ADMIN_PASSWORD:}

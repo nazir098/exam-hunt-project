@@ -63,6 +63,9 @@ public final class RootEnvLoader {
                     if (PUBLIC_FILES_BASE_URL.equals(key) || R2_PUBLIC_BASE_URL.equals(key)) {
                         defaults.put("app.public-files-base-url", value);
                     }
+                    if ("IMPORT_PACK_FOLDERS".equals(key)) {
+                        defaults.put("app.import-pack-folders", value);
+                    }
                     if ("OPENAI_API_KEY".equals(key)) {
                         defaults.put("app.llm-api-key", value);
                     }
