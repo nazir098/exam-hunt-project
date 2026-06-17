@@ -681,6 +681,9 @@ public class ManifestImportService {
     }
 
     private Optional<String> inferPublicFolderBaseUrl(JsonNode manifest) {
+        if (manifest == null || manifest.isMissingNode()) {
+            return Optional.empty();
+        }
         for (JsonNode q : manifest.path("questions")) {
             String url = text(q, "question_image_url");
             if (url.isBlank()) {
