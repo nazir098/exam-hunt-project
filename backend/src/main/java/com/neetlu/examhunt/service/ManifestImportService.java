@@ -10,6 +10,8 @@ import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import com.neetlu.examhunt.service.ContentPackCatalog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +37,8 @@ import java.util.stream.Stream;
 
 @Service
 public class ManifestImportService {
+
+    private static final Logger log = LoggerFactory.getLogger(ManifestImportService.class);
 
     private final ContentPackRepository packRepository;
     private final QuestionRepository questionRepository;
@@ -327,6 +331,7 @@ public class ManifestImportService {
             for (Path manifestPath :
                     List.of(yearDir.resolve("published").resolve("manifest.json"), yearDir.resolve("manifest.json"))) {
                 if (Files.isRegularFile(manifestPath)) {
+                    log.info("IMPORT_MANIFEST source=local folder={} path={}", sourceFolder, manifestPath);
                     return objectMapper.readTree(manifestPath.toFile());
                 }
             }
@@ -338,6 +343,7 @@ public class ManifestImportService {
                     String body =
                             restTemplate.getForObject(remoteYearUrl(normalizedBaseUrl, sourceFolder) + suffix, String.class);
                     if (body != null && !body.isBlank()) {
+                        log.info("IMPORT_MANIFEST source=remote folder={} path={}", sourceFolder, sourceFolder + suffix);
                         return objectMapper.readTree(body);
                     }
                 } catch (Exception ignored) {
@@ -446,6 +452,11 @@ public class ManifestImportService {
         if (packId.isBlank()) {
             packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
         }
+        log.info(
+                "IMPORT_START folder={} packId={} questions={}",
+                sourceFolder,
+                packId,
+                manifest.path("questions").size());
 
         List<Question> prefetchedVariants = loadAcceptedVariantDocs(sourceFolder, packId, manifest);
 
@@ -496,6 +507,13 @@ public class ManifestImportService {
             purgeDuplicateContentPacks();
         }
 
+        log.info(
+                "IMPORT_DONE folder={} packId={} questionsImported={} variantsImported={}",
+                sourceFolder,
+                packId,
+                count,
+                variantsImported);
+
         return new ImportResult(packId, count, variantsImported, 1, List.of());
     }
 
@@ -513,6 +531,7 @@ public class ManifestImportService {
         if (outputRootOptional.isPresent()) {
             Path metadataDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("metadata");
             if (Files.isDirectory(metadataDir)) {
+                log.info("IMPORT_VARIANTS source=local folder={} metadataDir={}", sourceFolder, metadataDir);
                 return loadAcceptedVariantDocsFromLocal(metadataDir, packId, sourceFolder);
             }
         }
@@ -534,8 +553,10 @@ public class ManifestImportService {
     private List<Question> loadAcceptedVariantDocsFromRemote(String sourceFolder, String packId, JsonNode manifest) {
         List<String> metadataFiles = loadRemoteMetadataFileNames(sourceFolder, manifest);
         if (metadataFiles.isEmpty()) {
+            log.info("IMPORT_VARIANTS source=remote folder={} metadataFiles=0", sourceFolder);
             return List.of();
         }
+        log.info("IMPORT_VARIANTS source=remote folder={} metadataFiles={}", sourceFolder, metadataFiles.size());
         List<Question> docs = new ArrayList<>();
         for (String fileName : metadataFiles) {
             if (!fileName.startsWith("AI_") || !fileName.endsWith(".json")) {
@@ -594,13 +615,27 @@ public class ManifestImportService {
                 }
                 List<String> files = readMetadataFileNames(objectMapper.readTree(body));
                 if (!files.isEmpty()) {
+                    log.info(
+                            "IMPORT_METADATA_INDEX source=remote folder={} path={} files={}",
+                            sourceFolder,
+                            metadataIndexPath(indexUrl, sourceFolder),
+                            files.size());
                     return files;
                 }
             } catch (Exception ignored) {
                 // Try the next supported metadata index URL.
             }
         }
-        return deriveMetadataFileNamesFromManifest(manifest);
+        List<String> derived = deriveMetadataFileNamesFromManifest(manifest);
+        if (!derived.isEmpty()) {
+            log.info("IMPORT_METADATA_INDEX source=derived folder={} files={}", sourceFolder, derived.size());
+        }
+        return derived;
+    }
+
+    private String metadataIndexPath(String indexUrl, String sourceFolder) {
+        int marker = indexUrl.indexOf("/" + sourceFolder + "/");
+        return marker >= 0 ? indexUrl.substring(marker + 1) : sourceFolder + "/metadata/index.json";
     }
 
     /** When metadata/index.json is missing on R2, probe standard AI_{questionId}_V{n}.json paths. */

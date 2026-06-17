@@ -178,6 +178,14 @@ docker compose ps
 docker compose logs -f api
 ```
 
+Confirm the running image/build:
+
+```bash
+docker compose logs --tail=80 api | grep DEPLOYMENT_INFO
+curl -s http://127.0.0.1:8081/actuator/info
+docker inspect exam-hunt-api --format '{{.Config.Image}} {{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
 ### Manual image refresh
 
 Usually Watchtower does this automatically. To force it:
