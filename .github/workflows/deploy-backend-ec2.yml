@@ -39,6 +39,8 @@ jobs:
         run: |
           install -m 700 -d ~/.ssh
           printf '%s' "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/ec2_key
+          ls -lh ~/.ssh/ec2_key
+          file ~/.ssh/ec2_key || true
           chmod 600 ~/.ssh/ec2_key
           ssh-keygen -y -f ~/.ssh/ec2_key > /dev/null
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
