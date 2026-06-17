@@ -35,10 +35,10 @@ jobs:
 
       - name: Prepare SSH key
         env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
+          printf '%s' "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
           ssh-keygen -y -f ~/.ssh/ec2_key > /dev/null
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
@@ -51,11 +51,13 @@ jobs:
 
       - name: Restart backend
         run: |
-          ssh -i ~/.ssh/ec2_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-            'sudo systemctl stop exam-hunt || true
-             mv /home/ec2-user/exam-hunt-api.jar.new /home/ec2-user/exam-hunt-api.jar
-             sudo systemctl start exam-hunt
-             sudo systemctl status exam-hunt --no-pager'
+          ssh -i ~/.ssh/ec2_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" '
+            set -e
+            sudo systemctl stop exam-hunt || true
+            mv /home/ec2-user/exam-hunt-api.jar.new /home/ec2-user/exam-hunt-api.jar
+            sudo systemctl start exam-hunt
+            sudo systemctl status exam-hunt --no-pager
+          '
 
       - name: Verify health
         run: |
