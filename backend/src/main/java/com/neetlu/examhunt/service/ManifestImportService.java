@@ -600,7 +600,25 @@ public class ManifestImportService {
                 // Try the next supported metadata index URL.
             }
         }
-        return List.of();
+        return deriveMetadataFileNamesFromManifest(manifest);
+    }
+
+    /** When metadata/index.json is missing on R2, probe standard AI_{questionId}_V{n}.json paths. */
+    private List<String> deriveMetadataFileNamesFromManifest(JsonNode manifest) {
+        if (manifest == null || manifest.isMissingNode()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonNode question : manifest.path("questions")) {
+            String questionId = text(question, "question_id");
+            if (questionId.isBlank()) {
+                continue;
+            }
+            for (int variantNo = 1; variantNo <= 5; variantNo++) {
+                out.add("AI_" + questionId + "_V" + variantNo + ".json");
+            }
+        }
+        return out;
     }
 
     private List<String> readMetadataFileNames(JsonNode index) {

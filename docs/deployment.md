@@ -17,7 +17,8 @@ This runbook documents the current low-cost production setup.
 - Backend: AWS EC2 Amazon Linux 2023
 - Reverse proxy: Nginx
 - TLS: Certbot / Let's Encrypt
-- Backend service: systemd unit `exam-hunt`
+- Backend runtime: Docker Compose service `api`
+- Backend auto-update: Watchtower pulls `ghcr.io/nazir098/exam-hunt-project/exam-hunt-api:latest`
 - Spring Boot port: `8081`, bound behind Nginx
 
 ## DNS
@@ -47,8 +48,9 @@ Do not expose `8081` publicly. Nginx should be the only public path to the API.
 
 | Purpose | Path |
 |---------|------|
-| JAR | `/home/ec2-user/exam-hunt-api.jar` |
-| Env | `/home/ec2-user/exam-hunt.env` |
+| Compose stack | `/home/ec2-user/exam-hunt/docker-compose.yml` |
+| Env | `/home/ec2-user/exam-hunt/.env` |
+| Docker auth | `/home/ec2-user/.docker/config.json` |
 | Nginx config | `/etc/nginx/conf.d/exam-hunt-api.conf` |
 | SSL cert | `/etc/letsencrypt/live/api.techmuzzle.in/fullchain.pem` |
 | SSL key | `/etc/letsencrypt/live/api.techmuzzle.in/privkey.pem` |
@@ -136,24 +138,55 @@ The Admin UI polls automatically. Large R2 syncs (many `metadata/AI_*.json` file
 Watch server logs:
 
 ```bash
-sudo journalctl -u exam-hunt -f
+cd ~/exam-hunt
+docker compose logs -f api
 ```
 
-## Deploy Backend Update
+## Backend Image Deploy
 
-From local machine:
+GitHub Actions builds and publishes the backend image to GHCR on each `main` push that touches backend deployment files:
 
-```bash
-cd backend
-mvn clean package
-scp -i ~/Downloads/nazir.pem target/exam-hunt-api-0.1.0-SNAPSHOT.jar ec2-user@3.80.221.101:/home/ec2-user/exam-hunt-api.jar
+```text
+ghcr.io/nazir098/exam-hunt-project/exam-hunt-api:latest
 ```
 
-On EC2:
+Watchtower on EC2 polls GHCR every 5 minutes and restarts the `api` container when `latest` changes.
+
+### One-time EC2 setup
+
+Copy the compose files:
 
 ```bash
-sudo systemctl restart exam-hunt
-sudo systemctl status exam-hunt --no-pager
+mkdir -p ~/exam-hunt
+cd ~/exam-hunt
+# copy deploy/ec2/docker-compose.yml and deploy/ec2/.env.example here
+cp .env.example .env
+nano .env
+```
+
+If the GHCR package is private, create a GitHub PAT with `read:packages`, then log in on EC2:
+
+```bash
+echo YOUR_GITHUB_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+Start the stack:
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f api
+```
+
+### Manual image refresh
+
+Usually Watchtower does this automatically. To force it:
+
+```bash
+cd ~/exam-hunt
+docker compose pull api
+docker compose up -d api
+docker compose logs -f api
 ```
 
 ## Cloudflare Pages
@@ -212,9 +245,11 @@ sudo certbot renew --dry-run
 Useful service commands:
 
 ```bash
-sudo systemctl status exam-hunt --no-pager
-sudo systemctl restart exam-hunt
-sudo journalctl -u exam-hunt.service -n 100 --no-pager
+cd ~/exam-hunt
+docker compose ps
+docker compose restart api
+docker compose logs --tail=100 api
+docker compose logs --tail=100 watchtower
 sudo nginx -t
 sudo systemctl reload nginx
 ```
