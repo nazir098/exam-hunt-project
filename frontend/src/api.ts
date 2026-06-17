@@ -1,5 +1,6 @@
 import { touchSessionActivity } from "./auth/session";
 import { getToken } from "./auth/storage";
+import { familyParentId } from "./utils/questionFamily";
 
 /** In dev, use Vite proxy (same origin) unless VITE_API_BASE_URL_FORCE is set. */
 function resolveApiBase(): string {
@@ -530,9 +531,21 @@ export function fetchQuestion(questionId: string) {
   return getJsonCached<QuestionDetail>(`/api/questions/${encodeURIComponent(questionId)}`);
 }
 
-export function fetchQuestionFamily(questionId: string) {
-  return getJsonCached<QuestionFamily>(`/api/questions/${encodeURIComponent(questionId)}/family`);
+export function fetchQuestionFamily(questionId: string): Promise<QuestionFamily> {
+  const parentId = familyParentId(questionId);
+  const cached = familyByParent.get(parentId);
+  const now = Date.now();
+  if (cached && now - cached.at < GET_CACHE_MS) {
+    return Promise.resolve({ ...cached.data, activeQuestionId: questionId });
+  }
+  const path = `/api/questions/${encodeURIComponent(questionId)}/family`;
+  return getJsonCached<QuestionFamily>(path).then((data) => {
+    familyByParent.set(parentId, { at: now, data });
+    return { ...data, activeQuestionId: questionId };
+  });
 }
+
+const familyByParent = new Map<string, { at: number; data: QuestionFamily }>();
 
 async function authRequest<T>(path: string, body: object): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -922,7 +935,7 @@ export function submitQuestionFeedback(
 }
 
 export function fetchQuestionFeedback(questionId: string) {
-  return request<QuestionFeedbackView>(
+  return getJsonCached<QuestionFeedbackView>(
     `/api/questions/${encodeURIComponent(questionId)}/feedback`
   );
 }
@@ -1046,7 +1059,7 @@ export function fetchBookmarks() {
 }
 
 export function fetchBookmarkStatus(questionId: string) {
-  return request<{ questionId: string; saved: boolean }>(
+  return getJsonCached<{ questionId: string; saved: boolean }>(
     `/api/bookmarks/${encodeURIComponent(questionId)}/status`
   );
 }

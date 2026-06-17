@@ -31,6 +31,8 @@ function dedupeVariants(variants: QuestionVariantRef[]): QuestionVariantRef[] {
 
 type Props = {
   questionId: string;
+  /** When provided, skips internal family fetch (parent loads once per PYQ). */
+  family?: QuestionFamily | null;
   onSelect: (questionId: string) => void;
   className?: string;
   onSwitchStateChange?: (state: VariantSwitchState) => void;
@@ -38,29 +40,32 @@ type Props = {
 
 export default function QuestionVariantSwitcher({
   questionId,
+  family: familyProp,
   onSelect,
   className = "",
   onSwitchStateChange,
 }: Props) {
-  const [family, setFamily] = useState<QuestionFamily | null>(null);
+  const [familyLocal, setFamilyLocal] = useState<QuestionFamily | null>(null);
+  const family = familyProp !== undefined ? familyProp : familyLocal;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<VariantSwitchState>(VARIANT_SWITCH_IDLE);
   const rootRef = useRef<HTMLDivElement>(null);
   const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (familyProp !== undefined) return;
     let cancelled = false;
     fetchQuestionFamily(questionId)
       .then((data) => {
-        if (!cancelled) setFamily(data);
+        if (!cancelled) setFamilyLocal(data);
       })
       .catch(() => {
-        if (!cancelled) setFamily(null);
+        if (!cancelled) setFamilyLocal(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [questionId]);
+  }, [questionId, familyProp]);
 
   useEffect(() => {
     onSwitchStateChange?.(pending);

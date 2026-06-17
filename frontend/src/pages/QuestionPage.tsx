@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
+import { fetchQuestion, fetchQuestionFamily, fetchQuestions, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "../components/BookmarkButton";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
@@ -14,6 +14,7 @@ import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
+import { familyParentId, isAiVariantQuestionId } from "../utils/questionFamily";
 import { formatVariantTypeLabel, VARIANT_SWITCH_IDLE, type VariantSwitchState } from "../utils/variantLabels";
 
 const OPTIONS = [
@@ -70,7 +71,9 @@ export default function QuestionPage() {
   const [answerPeek, setAnswerPeek] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const [variantSwitch, setVariantSwitch] = useState<VariantSwitchState>(VARIANT_SWITCH_IDLE);
+  const [family, setFamily] = useState<QuestionFamily | null>(null);
   const returnQs = searchParams.toString();
+  const familyParent = familyParentId(questionId, q?.parentQuestionId);
 
   useEffect(() => {
     setQ(null);
@@ -92,6 +95,32 @@ export default function QuestionPage() {
     return () => {
       cancelled = true;
     };
+  }, [questionId]);
+
+  useEffect(() => {
+    if (!questionId) {
+      setFamily(null);
+      return;
+    }
+    let cancelled = false;
+    fetchQuestionFamily(questionId)
+      .then((data) => {
+        if (!cancelled) setFamily(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFamily(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyParent]);
+
+  useEffect(() => {
+    setFamily((prev) =>
+      prev && prev.activeQuestionId !== questionId
+        ? { ...prev, activeQuestionId: questionId }
+        : prev
+    );
   }, [questionId]);
 
   useEffect(() => {
@@ -175,13 +204,14 @@ export default function QuestionPage() {
 
   const goToSibling = useCallback(
     async (direction: "prev" | "next") => {
+      if (isAiVariantQuestionId(questionId) || q?.parentQuestionId) return;
       const list = await loadSiblings();
       const idx = list.findIndex((p) => p.questionId === questionId);
       if (idx < 0) return;
       const target = direction === "prev" ? list[idx - 1] : list[idx + 1];
       if (target) goToQuestion(target.questionId);
     },
-    [loadSiblings, questionId, goToQuestion]
+    [loadSiblings, questionId, q?.parentQuestionId, goToQuestion]
   );
 
   useEffect(() => {
@@ -278,6 +308,7 @@ export default function QuestionPage() {
 
   const diff = difficultyLabel(q.difficulty);
   const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
+  const pyqSiblingNav = !isAiVariantQuestionId(questionId) && !q.parentQuestionId;
   const imageMode = isImageQuestion(q);
 
   return (
@@ -330,6 +361,7 @@ export default function QuestionPage() {
 
             <QuestionVariantSwitcher
               questionId={questionId}
+              family={family}
               onSelect={goToQuestion}
               onSwitchStateChange={setVariantSwitch}
             />
@@ -501,7 +533,7 @@ export default function QuestionPage() {
             <button
               type="button"
               className="practice-run-nav-btn"
-              disabled={siblingsLoading || (nav.loaded && !nav.prev)}
+              disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
               onClick={() => void goToSibling("prev")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
@@ -514,7 +546,7 @@ export default function QuestionPage() {
             <button
               type="button"
               className="practice-run-nav-btn"
-              disabled={siblingsLoading || (nav.loaded && !nav.next)}
+              disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
               onClick={() => void goToSibling("next")}
             >
               Next
