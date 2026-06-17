@@ -3,7 +3,6 @@ package com.neetlu.examhunt.service;
 import com.neetlu.examhunt.config.PublicApiCacheProperties;
 import com.neetlu.examhunt.model.ContentPack;
 import com.neetlu.examhunt.repository.ContentPackRepository;
-import com.neetlu.examhunt.repository.QuestionRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -35,17 +34,17 @@ public class ExamCatalogService {
     );
 
     private final ContentPackRepository packRepository;
-    private final QuestionRepository questionRepository;
+    private final PackStatsService packStatsService;
     private final PublicApiCacheProperties cacheProperties;
     private final AtomicLong cacheVersion = new AtomicLong(1);
     private volatile Cached<List<ExamCatalogEntry>> cachedCatalog;
 
     public ExamCatalogService(
             ContentPackRepository packRepository,
-            QuestionRepository questionRepository,
+            PackStatsService packStatsService,
             PublicApiCacheProperties cacheProperties) {
         this.packRepository = packRepository;
-        this.questionRepository = questionRepository;
+        this.packStatsService = packStatsService;
         this.cacheProperties = cacheProperties;
     }
 
@@ -87,7 +86,7 @@ public class ExamCatalogService {
                         .map(year -> {
                             ContentPack pack = packByYear.get(year);
                             if (pack != null) {
-                                long count = questionRepository.countByPackId(pack.getPackId());
+                                long count = packStatsService.readPyqCount(pack);
                                 return new YearCatalogEntry(
                                         year,
                                         "available",

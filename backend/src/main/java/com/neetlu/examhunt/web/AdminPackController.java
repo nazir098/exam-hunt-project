@@ -1,10 +1,10 @@
 package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.repository.ContentPackRepository;
-import com.neetlu.examhunt.repository.QuestionRepository;
 import com.neetlu.examhunt.security.AdminAuthorization;
 import com.neetlu.examhunt.service.ContentPackCatalog;
 import com.neetlu.examhunt.service.ManifestImportService;
+import com.neetlu.examhunt.service.PackStatsService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,17 +25,17 @@ import java.util.NoSuchElementException;
 public class AdminPackController {
 
     private final ContentPackRepository packRepository;
-    private final QuestionRepository questionRepository;
+    private final PackStatsService packStatsService;
     private final ManifestImportService importService;
     private final AdminAuthorization adminAuthorization;
 
     public AdminPackController(
             ContentPackRepository packRepository,
-            QuestionRepository questionRepository,
+            PackStatsService packStatsService,
             ManifestImportService importService,
             AdminAuthorization adminAuthorization) {
         this.packRepository = packRepository;
-        this.questionRepository = questionRepository;
+        this.packStatsService = packStatsService;
         this.importService = importService;
         this.adminAuthorization = adminAuthorization;
     }
@@ -51,7 +51,7 @@ public class AdminPackController {
                         p.getExam(),
                         p.getYear(),
                         p.getSourceFolder(),
-                        questionRepository.countByPackId(p.getPackId()),
+                        packStatsService.readPyqCount(p),
                         p.getPackId().startsWith("DEMO_")))
                 .toList();
         return ResponseEntity.ok(Map.of("packs", packs, "count", packs.size()));

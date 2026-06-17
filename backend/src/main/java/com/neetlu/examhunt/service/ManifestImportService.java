@@ -45,6 +45,7 @@ public class ManifestImportService {
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final PackStatsService packStatsService;
     private final PublicCatalogCacheInvalidator catalogCacheInvalidator;
     private final Object importMonitor = new Object();
 
@@ -53,11 +54,13 @@ public class ManifestImportService {
             QuestionRepository questionRepository,
             AppProperties appProperties,
             ObjectMapper objectMapper,
+            PackStatsService packStatsService,
             PublicCatalogCacheInvalidator catalogCacheInvalidator) {
         this.packRepository = packRepository;
         this.questionRepository = questionRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
+        this.packStatsService = packStatsService;
         this.catalogCacheInvalidator = catalogCacheInvalidator;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(20));
@@ -108,7 +111,7 @@ public class ManifestImportService {
                     pack.getPackId(),
                     pack.getExam(),
                     pack.getYear(),
-                    (int) questionRepository.countByPackId(pack.getPackId()),
+                    (int) packStatsService.readPyqCount(pack),
                     true));
         }
         return entries;
@@ -418,6 +421,7 @@ public class ManifestImportService {
             long questionsRemoved = questionRepository.countByPackId(packId);
             questionRepository.deleteByPackId(packId);
             packRepository.deleteAll(rows);
+            catalogCacheInvalidator.invalidate();
             return new RemovePackResult(packId, questionsRemoved);
         }
     }
@@ -500,15 +504,15 @@ public class ManifestImportService {
         pack.setImportedAt(Instant.now());
         Map<String, Object> stats = new LinkedHashMap<>(jsonToMap(manifest.path("stats")));
         Map<String, Object> facets = new LinkedHashMap<>(jsonToMap(manifest.path("facets")));
-        stats.put("pyq_count", count);
-        stats.put("variant_count", variantsImported);
         pack.setStats(stats);
-        facets.put("variant_count", variantsImported);
         pack.setFacets(facets);
         synchronized (importMonitor) {
             packRepository.save(pack);
             purgeDuplicateContentPacks();
         }
+
+        packStatsService.recompute(packId);
+        catalogCacheInvalidator.invalidate();
 
         log.info(
                 "IMPORT_DONE folder={} packId={} questionsImported={} variantsImported={}",
@@ -516,8 +520,6 @@ public class ManifestImportService {
                 packId,
                 count,
                 variantsImported);
-
-        catalogCacheInvalidator.invalidate();
 
         return new ImportResult(packId, count, variantsImported, 1, List.of());
     }

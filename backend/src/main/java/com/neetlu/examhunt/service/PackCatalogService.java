@@ -3,7 +3,6 @@ package com.neetlu.examhunt.service;
 import com.neetlu.examhunt.config.PublicApiCacheProperties;
 import com.neetlu.examhunt.model.ContentPack;
 import com.neetlu.examhunt.repository.ContentPackRepository;
-import com.neetlu.examhunt.repository.QuestionRepository;
 import com.neetlu.examhunt.web.PackController.PackSummary;
 import org.springframework.stereotype.Service;
 
@@ -15,17 +14,17 @@ import java.util.concurrent.atomic.AtomicLong;
 public class PackCatalogService {
 
     private final ContentPackRepository packRepository;
-    private final QuestionRepository questionRepository;
+    private final PackStatsService packStatsService;
     private final PublicApiCacheProperties cacheProperties;
     private final AtomicLong cacheVersion = new AtomicLong(1);
     private volatile Cached<List<PackSummary>> cachedList;
 
     public PackCatalogService(
             ContentPackRepository packRepository,
-            QuestionRepository questionRepository,
+            PackStatsService packStatsService,
             PublicApiCacheProperties cacheProperties) {
         this.packRepository = packRepository;
-        this.questionRepository = questionRepository;
+        this.packStatsService = packStatsService;
         this.cacheProperties = cacheProperties;
     }
 
@@ -56,14 +55,12 @@ public class PackCatalogService {
     }
 
     private PackSummary toSummary(ContentPack p) {
-        long variants = questionRepository.countByPackIdAndSourceType(p.getPackId(), "ai_variant");
-        long total = questionRepository.countByPackId(p.getPackId());
         return new PackSummary(
                 p.getPackId(),
                 p.getExam(),
                 p.getYear(),
                 p.getSourceFolder(),
-                Math.max(0, total - variants),
+                packStatsService.readPyqCount(p),
                 p.getFacets());
     }
 
