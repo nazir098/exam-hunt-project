@@ -473,6 +473,24 @@ async function getJson<T>(path: string): Promise<T> {
   return request<T>(path);
 }
 
+/** Coalesce duplicate GETs (e.g. React StrictMode double-mount). */
+const shortLivedGetCache = new Map<string, { at: number; promise: Promise<unknown> }>();
+const GET_CACHE_MS = 8_000;
+
+function getJsonCached<T>(path: string): Promise<T> {
+  const now = Date.now();
+  const hit = shortLivedGetCache.get(path);
+  if (hit && now - hit.at < GET_CACHE_MS) {
+    return hit.promise as Promise<T>;
+  }
+  const promise = request<T>(path).catch((err) => {
+    shortLivedGetCache.delete(path);
+    throw err;
+  });
+  shortLivedGetCache.set(path, { at: now, promise });
+  return promise;
+}
+
 export function fetchPacks() {
   return getJson<PackSummary[]>("/api/packs");
 }
@@ -509,11 +527,11 @@ export function fetchQuestions(
 }
 
 export function fetchQuestion(questionId: string) {
-  return getJson<QuestionDetail>(`/api/questions/${encodeURIComponent(questionId)}`);
+  return getJsonCached<QuestionDetail>(`/api/questions/${encodeURIComponent(questionId)}`);
 }
 
 export function fetchQuestionFamily(questionId: string) {
-  return getJson<QuestionFamily>(`/api/questions/${encodeURIComponent(questionId)}/family`);
+  return getJsonCached<QuestionFamily>(`/api/questions/${encodeURIComponent(questionId)}/family`);
 }
 
 async function authRequest<T>(path: string, body: object): Promise<T> {
@@ -809,7 +827,7 @@ export function fetchPracticeSession(sessionId: string) {
 }
 
 export function fetchPracticeQuestion(questionId: string) {
-  return request<PracticeQuestion>(
+  return getJsonCached<PracticeQuestion>(
     `/api/practice/questions/${encodeURIComponent(questionId)}`
   );
 }

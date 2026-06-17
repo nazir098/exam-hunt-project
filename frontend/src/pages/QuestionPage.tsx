@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchQuestion, fetchQuestions, QuestionDetail, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
@@ -61,7 +61,9 @@ export default function QuestionPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [q, setQ] = useState<QuestionDetail | null>(null);
-  const [siblings, setSiblings] = useState<QuestionPublic[]>([]);
+  const [siblings, setSiblings] = useState<QuestionPublic[] | null>(null);
+  const [siblingsLoading, setSiblingsLoading] = useState(false);
+  const siblingsLoadRef = useRef<Promise<QuestionPublic[]> | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
   const [checked, setChecked] = useState(false);
@@ -93,31 +95,42 @@ export default function QuestionPage() {
   }, [questionId]);
 
   useEffect(() => {
-    if (!q?.packId) return;
-    let cancelled = false;
-    fetchQuestions(q.packId, {
+    setSiblings(null);
+    siblingsLoadRef.current = null;
+  }, [q?.packId, returnQs]);
+
+  const loadSiblings = useCallback(async (): Promise<QuestionPublic[]> => {
+    if (!q?.packId) return [];
+    if (siblings !== null) return siblings;
+    if (siblingsLoadRef.current) return siblingsLoadRef.current;
+    setSiblingsLoading(true);
+    const promise = fetchQuestions(q.packId, {
       subject: searchParams.get("subject") || undefined,
       chapter: searchParams.get("chapter") || undefined,
       size: 300,
     })
-      .then((res) => {
-        if (!cancelled) {
-          setSiblings(
-            filterQuestionsForPractice(res.content, {
-              topic: searchParams.get("topic") || undefined,
-              difficulty: searchParams.get("difficulty") || undefined,
-              q: searchParams.get("q") || undefined,
-            })
-          );
-        }
+      .then((res) =>
+        filterQuestionsForPractice(res.content, {
+          topic: searchParams.get("topic") || undefined,
+          difficulty: searchParams.get("difficulty") || undefined,
+          q: searchParams.get("q") || undefined,
+        })
+      )
+      .then((filtered) => {
+        setSiblings(filtered);
+        return filtered;
       })
       .catch(() => {
-        if (!cancelled) setSiblings([]);
+        setSiblings([]);
+        return [] as QuestionPublic[];
+      })
+      .finally(() => {
+        setSiblingsLoading(false);
+        siblingsLoadRef.current = null;
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [q?.packId, returnQs]);
+    siblingsLoadRef.current = promise;
+    return promise;
+  }, [q?.packId, returnQs, siblings, searchParams]);
 
   useEffect(() => {
     if (!q) return;
@@ -147,23 +160,38 @@ export default function QuestionPage() {
   );
 
   const nav = useMemo(() => {
+    if (!siblings) {
+      return { idx: -1, prev: null, next: null, total: 0, loaded: false };
+    }
     const idx = siblings.findIndex((p) => p.questionId === questionId);
     return {
       idx,
       prev: idx > 0 ? siblings[idx - 1] : null,
       next: idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null,
       total: siblings.length,
+      loaded: true,
     };
   }, [siblings, questionId]);
 
+  const goToSibling = useCallback(
+    async (direction: "prev" | "next") => {
+      const list = await loadSiblings();
+      const idx = list.findIndex((p) => p.questionId === questionId);
+      if (idx < 0) return;
+      const target = direction === "prev" ? list[idx - 1] : list[idx + 1];
+      if (target) goToQuestion(target.questionId);
+    },
+    [loadSiblings, questionId, goToQuestion]
+  );
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "ArrowLeft" && nav.prev) goToQuestion(nav.prev.questionId);
-      if (e.key === "ArrowRight" && nav.next) goToQuestion(nav.next.questionId);
+      if (e.key === "ArrowLeft") void goToSibling("prev");
+      if (e.key === "ArrowRight") void goToSibling("next");
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [nav, goToQuestion]);
+  }, [goToSibling]);
 
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
@@ -473,20 +501,21 @@ export default function QuestionPage() {
             <button
               type="button"
               className="practice-run-nav-btn"
-              disabled={!nav.prev}
-              onClick={() => nav.prev && goToQuestion(nav.prev.questionId)}
+              disabled={siblingsLoading || (nav.loaded && !nav.prev)}
+              onClick={() => void goToSibling("prev")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
               Previous
             </button>
             <span className="text-caption text-outline">
-              {nav.idx >= 0 ? nav.idx + 1 : q.questionNo} / {nav.total || "—"}
+              {nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo}
+              {nav.loaded ? ` / ${nav.total}` : siblingsLoading ? " · …" : ""}
             </span>
             <button
               type="button"
               className="practice-run-nav-btn"
-              disabled={!nav.next}
-              onClick={() => nav.next && goToQuestion(nav.next.questionId)}
+              disabled={siblingsLoading || (nav.loaded && !nav.next)}
+              onClick={() => void goToSibling("next")}
             >
               Next
               <span className="material-symbols-outlined">arrow_forward</span>

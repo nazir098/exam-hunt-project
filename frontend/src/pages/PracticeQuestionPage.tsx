@@ -144,6 +144,7 @@ function patchSessionAfterAction(
   const nextId = res.nextQuestionId;
   const tiles = session.questionTiles?.map((t) => {
     if (t.questionId === actedQuestionId) return { ...t, status: tileStatus };
+    if (nextId && t.questionId === nextId) return { ...t, status: "current" as const };
     if (t.status === "current") return { ...t, status: "unattempted" as const };
     return t;
   });
@@ -330,7 +331,7 @@ export default function PracticeQuestionPage() {
       return;
     }
     loadSession().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-  }, [user, authLoading, loadSession, navigate, sessionId, location.pathname, loadTick]);
+  }, [user, authLoading, loadSession, navigate, sessionId, loadTick]);
 
   useEffect(() => {
     if (authLoading || !user || !session) return;
@@ -397,10 +398,9 @@ export default function PracticeQuestionPage() {
         }
         return;
       }
-      refreshProgress();
-      const updated = await fetchPracticeSession(session.id);
-      setSession(updated);
+      setSession(patchSessionAfterAction(session, questionId, answeredTileStatus(session, res), res));
       setResult(res);
+      void refreshProgress();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
     } finally {
@@ -418,16 +418,19 @@ export default function PracticeQuestionPage() {
       if (routeMode === "test") {
         setSession(patchSessionAfterAction(session, anchorQid, "skipped", res));
         if (res.nextQuestionId) {
+          void loadQuestionById(res.nextQuestionId, { prefetch: true });
           navigate(sessionPath(sessionId, res.nextQuestionId));
         } else {
           navigate(sessionPath(sessionId, questionId), { replace: true });
         }
         return;
       }
-      refreshProgress();
+      setSession(patchSessionAfterAction(session, anchorQid, "skipped", res));
       if (res.nextQuestionId) {
+        void loadQuestionById(res.nextQuestionId, { prefetch: true });
         navigate(sessionPath(sessionId, res.nextQuestionId));
       } else {
+        void refreshProgress();
         navigate(resultPath(session.id));
       }
     } catch (e) {
