@@ -29,8 +29,9 @@ type AdminTask = {
 };
 
 function formatImportProgress(job: ImportJobView): string {
-  if (job.status === "QUEUED") return "Queued — waiting to start…";
-  if (job.status === "RUNNING") return job.message || "Import in progress…";
+  const prefix = job.jobId ? `Job ${job.jobId.slice(0, 8)}… — ` : "";
+  if (job.status === "QUEUED") return `${prefix}Queued — waiting to start…`;
+  if (job.status === "RUNNING") return `${prefix}${job.message || "Import in progress…"}`;
   return job.message || job.status;
 }
 

@@ -59,9 +59,7 @@ public class ManifestImportService {
     }
 
     public ImportResult importFromFolder(String folderName) throws IOException {
-        synchronized (importMonitor) {
-            return importFromFolderUnlocked(folderName);
-        }
+        return importFromFolderUnlocked(folderName);
     }
 
     private ImportResult importFromFolderUnlocked(String folderName) throws IOException {
@@ -291,39 +289,35 @@ public class ManifestImportService {
 
     /** Imports every published folder whose manifest {@code exam} is NEET. */
     public ImportResult importNeetFolders() throws IOException {
-        synchronized (importMonitor) {
-            List<ImportResult> results = new ArrayList<>();
-            for (ImportFolderEntry entry : listImportableFolders()) {
-                if (!"NEET".equalsIgnoreCase(entry.exam())) {
-                    continue;
-                }
-                results.add(importFromFolderUnlocked(entry.folderName()));
+        List<ImportResult> results = new ArrayList<>();
+        for (ImportFolderEntry entry : listImportableFolders()) {
+            if (!"NEET".equalsIgnoreCase(entry.exam())) {
+                continue;
             }
-            if (results.isEmpty()) {
-                throw new IOException(
-                        "No NEET manifests found — set PUBLIC_FILES_BASE_URL on production or publish years locally.");
-            }
-            int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
-            int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
-            return new ImportResult("NEET", questions, variants, results.size(), results);
+            results.add(importFromFolderUnlocked(entry.folderName()));
         }
+        if (results.isEmpty()) {
+            throw new IOException(
+                    "No NEET manifests found — set PUBLIC_FILES_BASE_URL on production or publish years locally.");
+        }
+        int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
+        int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
+        return new ImportResult("NEET", questions, variants, results.size(), results);
     }
 
     public ImportResult importAllPublishedFolders() throws IOException {
-        synchronized (importMonitor) {
-            List<ImportFolderEntry> folders = listImportableFolders();
-            if (folders.isEmpty()) {
-                throw new IOException(
-                        "No published manifests found — set PUBLIC_FILES_BASE_URL on production or mount EXTRACTOR_ROOT locally.");
-            }
-            List<ImportResult> results = new ArrayList<>();
-            for (ImportFolderEntry entry : folders) {
-                results.add(importFromFolderUnlocked(entry.folderName()));
-            }
-            int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
-            int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
-            return new ImportResult("ALL", questions, variants, results.size(), results);
+        List<ImportFolderEntry> folders = listImportableFolders();
+        if (folders.isEmpty()) {
+            throw new IOException(
+                    "No published manifests found — set PUBLIC_FILES_BASE_URL on production or mount EXTRACTOR_ROOT locally.");
         }
+        List<ImportResult> results = new ArrayList<>();
+        for (ImportFolderEntry entry : folders) {
+            results.add(importFromFolderUnlocked(entry.folderName()));
+        }
+        int questions = results.stream().mapToInt(ImportResult::questionsImported).sum();
+        int variants = results.stream().mapToInt(ImportResult::variantsImported).sum();
+        return new ImportResult("ALL", questions, variants, results.size(), results);
     }
 
     private JsonNode loadManifest(String sourceFolder) throws IOException {
@@ -453,14 +447,30 @@ public class ManifestImportService {
             packId = text(manifest, "exam") + "_" + manifest.path("year").asInt(0);
         }
 
-        List<Question> adminPreserve =
-                questionRepository.findByPackId(packId, PageRequest.of(0, 50_000)).getContent().stream()
-                        .map(AdminQuestionPreserve::copyPreserveState)
-                        .filter(Objects::nonNull)
-                        .toList();
+        List<Question> prefetchedVariants = loadAcceptedVariantDocs(sourceFolder, packId, manifest);
 
-        deleteAllPackRows(packId);
-        questionRepository.deleteByPackId(packId);
+        List<Question> adminPreserve;
+        int count;
+        int variantsImported;
+        synchronized (importMonitor) {
+            adminPreserve = questionRepository.findByPackId(packId, PageRequest.of(0, 50_000)).getContent().stream()
+                    .map(AdminQuestionPreserve::copyPreserveState)
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            deleteAllPackRows(packId);
+            questionRepository.deleteByPackId(packId);
+
+            count = 0;
+            for (JsonNode q : manifest.path("questions")) {
+                Question doc = mapQuestion(q, packId, sourceFolder);
+                questionRepository.save(doc);
+                count++;
+            }
+
+            variantsImported = persistAcceptedVariants(prefetchedVariants, packId);
+            restoreAdminPreservedFields(adminPreserve);
+        }
 
         ContentPack pack = new ContentPack();
         pack.setPackId(packId);
@@ -476,23 +486,15 @@ public class ManifestImportService {
         pack.setImportedAt(Instant.now());
         Map<String, Object> stats = new LinkedHashMap<>(jsonToMap(manifest.path("stats")));
         Map<String, Object> facets = new LinkedHashMap<>(jsonToMap(manifest.path("facets")));
-
-        int count = 0;
-        for (JsonNode q : manifest.path("questions")) {
-            Question doc = mapQuestion(q, packId, sourceFolder);
-            questionRepository.save(doc);
-            count++;
-        }
-
-        int variantsImported = importAiVariants(sourceFolder, packId, manifest);
-        restoreAdminPreservedFields(adminPreserve);
         stats.put("pyq_count", count);
         stats.put("variant_count", variantsImported);
         pack.setStats(stats);
         facets.put("variant_count", variantsImported);
         pack.setFacets(facets);
-        packRepository.save(pack);
-        purgeDuplicateContentPacks();
+        synchronized (importMonitor) {
+            packRepository.save(pack);
+            purgeDuplicateContentPacks();
+        }
 
         return new ImportResult(packId, count, variantsImported, 1, List.of());
     }
@@ -504,35 +506,37 @@ public class ManifestImportService {
         }
     }
 
-    /** Import QC-accepted AI practice variants from extractor metadata/AI_*.json. */
-    private int importAiVariants(String sourceFolder, String packId, JsonNode manifest) throws IOException {
+    /** Load accepted AI variant documents from disk/R2 without touching MongoDB. */
+    private List<Question> loadAcceptedVariantDocs(String sourceFolder, String packId, JsonNode manifest)
+            throws IOException {
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
         if (outputRootOptional.isPresent()) {
             Path metadataDir = localYearPath(outputRootOptional.get(), sourceFolder).resolve("metadata");
             if (Files.isDirectory(metadataDir)) {
-                return importAiVariantsFromLocalMetadata(metadataDir, packId, sourceFolder);
+                return loadAcceptedVariantDocsFromLocal(metadataDir, packId, sourceFolder);
             }
         }
-        return importAiVariantsFromRemoteMetadata(sourceFolder, packId, manifest);
+        return loadAcceptedVariantDocsFromRemote(sourceFolder, packId, manifest);
     }
 
-    private int importAiVariantsFromLocalMetadata(Path metadataDir, String packId, String sourceFolder) throws IOException {
-        int imported = 0;
+    private List<Question> loadAcceptedVariantDocsFromLocal(Path metadataDir, String packId, String sourceFolder)
+            throws IOException {
+        List<Question> docs = new ArrayList<>();
         try (Stream<Path> files = Files.list(metadataDir)) {
             for (Path file : files.filter(p -> p.getFileName().toString().startsWith("AI_")).sorted().toList()) {
-                imported += importAiVariantNode(objectMapper.readTree(file.toFile()), packId, sourceFolder);
+                JsonNode node = objectMapper.readTree(file.toFile());
+                mapAcceptedVariantNode(node, packId, sourceFolder).ifPresent(docs::add);
             }
         }
-        purgeDuplicateVariantsInPack(packId);
-        return imported;
+        return docs;
     }
 
-    private int importAiVariantsFromRemoteMetadata(String sourceFolder, String packId, JsonNode manifest) {
+    private List<Question> loadAcceptedVariantDocsFromRemote(String sourceFolder, String packId, JsonNode manifest) {
         List<String> metadataFiles = loadRemoteMetadataFileNames(sourceFolder, manifest);
         if (metadataFiles.isEmpty()) {
-            return 0;
+            return List.of();
         }
-        int imported = 0;
+        List<Question> docs = new ArrayList<>();
         for (String fileName : metadataFiles) {
             if (!fileName.startsWith("AI_") || !fileName.endsWith(".json")) {
                 continue;
@@ -543,28 +547,42 @@ public class ManifestImportService {
                     if (body == null || body.isBlank()) {
                         continue;
                     }
-                    imported += importAiVariantNode(objectMapper.readTree(body), packId, sourceFolder);
+                    mapAcceptedVariantNode(objectMapper.readTree(body), packId, sourceFolder).ifPresent(docs::add);
                     break;
                 } catch (Exception ignored) {
                     // Try the next supported remote metadata URL.
                 }
             }
         }
-        purgeDuplicateVariantsInPack(packId);
-        return imported;
+        return docs;
     }
 
-    private int importAiVariantNode(JsonNode node, String packId, String sourceFolder) {
+    private java.util.Optional<Question> mapAcceptedVariantNode(
+            JsonNode node, String packId, String sourceFolder) {
         if (!"accepted".equalsIgnoreCase(text(node, "qc_status"))) {
-            return 0;
+            return java.util.Optional.empty();
         }
         String parentId = text(node, "parent_question_id");
-        if (parentId.isBlank() || questionRepository.findByQuestionId(parentId).isEmpty()) {
-            return 0;
+        if (parentId.isBlank()) {
+            return java.util.Optional.empty();
         }
-        Question doc = mapAiVariant(node, packId, parentId, sourceFolder);
-        saveAiVariantUpsert(doc);
-        return 1;
+        return java.util.Optional.of(mapAiVariant(node, packId, parentId, sourceFolder));
+    }
+
+    private int persistAcceptedVariants(List<Question> variantDocs, String packId) {
+        int imported = 0;
+        for (Question doc : variantDocs) {
+            String parentId = doc.getParentQuestionId();
+            if (parentId == null
+                    || parentId.isBlank()
+                    || questionRepository.findByQuestionId(parentId).isEmpty()) {
+                continue;
+            }
+            saveAiVariantUpsert(doc);
+            imported++;
+        }
+        purgeDuplicateVariantsInPack(packId);
+        return imported;
     }
 
     private List<String> loadRemoteMetadataFileNames(String sourceFolder, JsonNode manifest) {

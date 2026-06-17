@@ -45,7 +45,6 @@ public class AdminPackController {
             @AuthenticationPrincipal String userId,
             @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
         adminAuthorization.requireAdminAccess(userId, adminKey);
-        importService.purgeDuplicateContentPacks();
         List<PackRow> packs = ContentPackCatalog.dedupeByPackId(packRepository.findAllByOrderByYearDesc()).stream()
                 .map(p -> new PackRow(
                         p.getPackId(),
