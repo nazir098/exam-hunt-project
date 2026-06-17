@@ -649,7 +649,9 @@ public class ManifestImportService {
             urls.add(remoteYearUrl(base, sourceFolder) + "/metadata");
         });
         remotePublicFilesBaseUrl().ifPresent(base -> urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/index.json"));
-        inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/index.json"));
+        if (manifest != null && !manifest.isMissingNode()) {
+            inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/index.json"));
+        }
         return urls;
     }
 
@@ -660,7 +662,9 @@ public class ManifestImportService {
             urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/" + fileName.replaceFirst("\\.json$", ""));
         });
         remotePublicFilesBaseUrl().ifPresent(base -> urls.add(remoteYearUrl(base, sourceFolder) + "/metadata/" + fileName));
-        inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/" + fileName));
+        if (manifest != null && !manifest.isMissingNode()) {
+            inferPublicFolderBaseUrl(manifest).ifPresent(base -> urls.add(base + "/metadata/" + fileName));
+        }
         return urls;
     }
 
@@ -1147,7 +1151,8 @@ public class ManifestImportService {
                         return questionRepository.save(doc);
                     })
                     .orElse(doc);
-        } catch (IOException | IllegalStateException ex) {
+        } catch (Exception ex) {
+            // Enrichment is best-effort; never break question detail if R2/metadata fetch fails.
             return doc;
         }
     }
