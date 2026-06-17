@@ -8,6 +8,9 @@ import BookmarkButton from "./BookmarkButton";
 type Props = {
   question: QuestionPublic;
   packId: string;
+  bookmarkSaved?: boolean;
+  onBookmarkChange?: (saved: boolean) => void;
+  bookmarkBatchStatus?: boolean;
 };
 
 type OutletCtx = {
@@ -24,7 +27,13 @@ function testCreateHref(packId: string, subject: string, searchParams: URLSearch
   return `/test/create?${next.toString()}`;
 }
 
-export default function QuestionCard({ question: q, packId }: Props) {
+export default function QuestionCard({
+  question: q,
+  packId,
+  bookmarkSaved,
+  onBookmarkChange,
+  bookmarkBatchStatus,
+}: Props) {
   const [searchParams] = useSearchParams();
   const outlet = useOutletContext<OutletCtx | undefined>();
   const diff = difficultyLabel(q.difficulty);
@@ -74,7 +83,14 @@ export default function QuestionCard({ question: q, packId }: Props) {
           </span>
         </div>
         <div className="flex gap-2 flex-wrap justify-end items-center">
-          <BookmarkButton questionId={q.questionId} variant="icon" className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2" />
+          <BookmarkButton
+            questionId={q.questionId}
+            variant="icon"
+            className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors p-2"
+            saved={bookmarkSaved}
+            onSavedChange={onBookmarkChange}
+            batchStatus={bookmarkBatchStatus}
+          />
           <Link
             to={solveHref}
             className="bank-mode-btn bank-mode-btn--solve"

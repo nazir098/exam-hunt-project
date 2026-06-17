@@ -4,7 +4,6 @@ import {
   adminImportNeet,
   ExamCatalogEntry,
   fetchExams,
-  fetchPack,
   fetchPacks,
   fetchQuestions,
   PackSummary,
@@ -42,7 +41,6 @@ export default function BrowsePage() {
 
   const [catalog, setCatalog] = useState<ExamCatalogEntry[]>([]);
   const [packs, setPacks] = useState<PackSummary[]>([]);
-  const [pack, setPack] = useState<PackSummary | null>(null);
   const [questions, setQuestions] = useState<QuestionPublic[]>([]);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -129,17 +127,15 @@ export default function BrowsePage() {
     return packs[0]?.packId || "";
   }, [showComingSoon, activePackId, packs, yearFilter, neetYears]);
 
+  const pack = useMemo(
+    () => packs.find((p) => p.packId === resolvedPackId) ?? null,
+    [packs, resolvedPackId]
+  );
+
   useEffect(() => {
     if (showComingSoon || pathname !== "/bank" || !resolvedPackId || packIdParam) return;
     navigate(`/pack/${resolvedPackId}?${searchParams.toString()}`, { replace: true });
   }, [showComingSoon, pathname, resolvedPackId, packIdParam, navigate, searchParams]);
-
-  useEffect(() => {
-    if (!resolvedPackId || showComingSoon) return;
-    fetchPack(resolvedPackId)
-      .then((p) => setPack(p as PackSummary))
-      .catch((e) => setError(e.message));
-  }, [resolvedPackId, showComingSoon]);
 
   useEffect(() => {
     if (!resolvedPackId || showComingSoon) {

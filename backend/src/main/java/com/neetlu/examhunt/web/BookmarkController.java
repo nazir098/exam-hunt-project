@@ -7,9 +7,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookmarks")
@@ -24,6 +27,19 @@ public class BookmarkController {
     @GetMapping
     public List<BookmarkService.BookmarkItemView> list(@AuthenticationPrincipal String userId) {
         return bookmarkService.list(userId);
+    }
+
+    @GetMapping("/batch-status")
+    public Map<String, Boolean> batchStatus(
+            @AuthenticationPrincipal String userId, @RequestParam("ids") String idsParam) {
+        List<String> ids =
+                idsParam == null || idsParam.isBlank()
+                        ? List.of()
+                        : Arrays.stream(idsParam.split(","))
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .toList();
+        return bookmarkService.batchStatus(userId, ids);
     }
 
     @GetMapping("/{questionId}/status")

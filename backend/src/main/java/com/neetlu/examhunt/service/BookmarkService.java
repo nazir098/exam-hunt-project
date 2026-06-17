@@ -10,8 +10,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +63,30 @@ public class BookmarkService {
                 .findByUserIdAndQuestionId(userId, questionId)
                 .map(b -> new BookmarkStatus(questionId, true))
                 .orElse(new BookmarkStatus(questionId, false));
+    }
+
+    /** One round-trip for bank lists instead of per-question status calls. */
+    public Map<String, Boolean> batchStatus(String userId, List<String> questionIds) {
+        if (!platformSettingsService.requireSettings().isBookmarksEnabled() || questionIds == null) {
+            return Map.of();
+        }
+        List<String> ids = questionIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .limit(100)
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> saved = new HashSet<>();
+        for (Bookmark bookmark : bookmarkRepository.findByUserIdAndQuestionIdIn(userId, ids)) {
+            saved.add(bookmark.getQuestionId());
+        }
+        Map<String, Boolean> out = new LinkedHashMap<>();
+        for (String id : ids) {
+            out.put(id, saved.contains(id));
+        }
+        return out;
     }
 
     public List<BookmarkItemView> list(String userId) {

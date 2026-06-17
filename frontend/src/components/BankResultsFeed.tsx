@@ -1,5 +1,7 @@
-import { forwardRef, useEffect, useRef, useState } from "react";
-import type { QuestionPublic } from "../api";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import { fetchBookmarkStatusBatch, type QuestionPublic } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import QuestionCard from "./QuestionCard";
 
 /** Questions loaded per page from the API. */
@@ -38,6 +40,9 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [reachedEnd, setReachedEnd] = useState(false);
+  const { user } = useAuth();
+  const { settings } = usePlatformSettings();
+  const [bookmarkMap, setBookmarkMap] = useState<Record<string, boolean>>({});
 
   const pageSize = BANK_PAGE_SIZE;
   const hasNext = page + 1 < totalPages;
@@ -53,6 +58,31 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
     setReachedEnd(false);
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [page, packId, questions.length]);
+
+  useEffect(() => {
+    if (!user || !settings.bookmarksEnabled || questions.length === 0) {
+      setBookmarkMap({});
+      return;
+    }
+    let cancelled = false;
+    const ids = questions.map((q) => q.questionId);
+    fetchBookmarkStatusBatch(ids)
+      .then((map) => {
+        if (!cancelled) setBookmarkMap(map);
+      })
+      .catch(() => {
+        if (!cancelled) setBookmarkMap({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, settings.bookmarksEnabled, questions]);
+
+  const onBookmarkChange = useCallback((questionId: string, saved: boolean) => {
+    setBookmarkMap((prev) => ({ ...prev, [questionId]: saved }));
+  }, []);
+
+  const bookmarkBatch = Boolean(user && settings.bookmarksEnabled);
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -109,7 +139,14 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
       <div className="bank-results-feed__scroll custom-scrollbar" ref={scrollRef}>
         <div className="bank-results-feed__list">
           {questions.map((q) => (
-            <QuestionCard key={q.questionId} question={q} packId={packId} />
+            <QuestionCard
+              key={q.questionId}
+              question={q}
+              packId={packId}
+              bookmarkSaved={bookmarkMap[q.questionId]}
+              onBookmarkChange={(saved) => onBookmarkChange(q.questionId, saved)}
+              bookmarkBatchStatus={bookmarkBatch}
+            />
           ))}
         </div>
         <div ref={sentinelRef} className="bank-results-feed__sentinel" aria-hidden />

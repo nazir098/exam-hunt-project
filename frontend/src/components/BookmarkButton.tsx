@@ -8,42 +8,60 @@ type Props = {
   questionId: string;
   variant?: "icon" | "full";
   className?: string;
+  /** When set, skips per-question status fetch (e.g. bank list batch load). */
+  saved?: boolean;
+  onSavedChange?: (saved: boolean) => void;
+  /** Parent loads status in bulk; do not fetch per question. */
+  batchStatus?: boolean;
 };
 
-export default function BookmarkButton({ questionId, variant = "full", className = "" }: Props) {
+export default function BookmarkButton({
+  questionId,
+  variant = "full",
+  className = "",
+  saved: savedProp,
+  onSavedChange,
+  batchStatus = false,
+}: Props) {
   const { user } = useAuth();
   const { settings } = usePlatformSettings();
-  const [saved, setSaved] = useState(false);
+  const [savedLocal, setSavedLocal] = useState(false);
   const [busy, setBusy] = useState(false);
+  const controlled = savedProp !== undefined || batchStatus;
+  const saved = controlled ? (savedProp ?? false) : savedLocal;
 
   useEffect(() => {
-    if (!user || !settings.bookmarksEnabled || !questionId) {
-      setSaved(false);
+    if (controlled || !user || !settings.bookmarksEnabled || !questionId) {
+      if (!controlled) setSavedLocal(false);
       return;
     }
     let cancelled = false;
     fetchBookmarkStatus(questionId)
       .then((s) => {
-        if (!cancelled) setSaved(s.saved);
+        if (!cancelled) setSavedLocal(s.saved);
       })
       .catch(() => {
-        if (!cancelled) setSaved(false);
+        if (!cancelled) setSavedLocal(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [user, questionId, settings.bookmarksEnabled]);
+  }, [controlled, user, questionId, settings.bookmarksEnabled]);
 
   const onToggle = useCallback(async () => {
     if (!user) return;
     setBusy(true);
     try {
       const res = await toggleBookmark(questionId);
-      setSaved(res.saved);
+      if (controlled) {
+        onSavedChange?.(res.saved);
+      } else {
+        setSavedLocal(res.saved);
+      }
     } finally {
       setBusy(false);
     }
-  }, [user, questionId]);
+  }, [user, questionId, controlled, onSavedChange]);
 
   if (!settings.bookmarksEnabled) return null;
 

@@ -1033,6 +1033,15 @@ export function fetchBookmarkStatus(questionId: string) {
   );
 }
 
+export function fetchBookmarkStatusBatch(questionIds: string[]) {
+  const ids = [...new Set(questionIds.filter(Boolean))];
+  if (ids.length === 0) {
+    return Promise.resolve({} as Record<string, boolean>);
+  }
+  const qs = new URLSearchParams({ ids: ids.join(",") });
+  return request<Record<string, boolean>>(`/api/bookmarks/batch-status?${qs}`);
+}
+
 export function toggleBookmark(questionId: string, note?: string) {
   return request<{ questionId: string; saved: boolean; note: string | null; totalBookmarks: number }>(
     `/api/bookmarks/${encodeURIComponent(questionId)}/toggle`,
