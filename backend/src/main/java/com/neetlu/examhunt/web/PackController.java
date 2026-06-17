@@ -1,15 +1,18 @@
 package com.neetlu.examhunt.web;
 
-import com.neetlu.examhunt.model.ContentPack;
+import com.neetlu.examhunt.config.PublicApiCacheProperties;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
-import com.neetlu.examhunt.service.ContentPackCatalog;
+import com.neetlu.examhunt.service.PackCatalogService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.neetlu.examhunt.model.ContentPack;
 
 import java.util.List;
 import java.util.Map;
@@ -18,30 +21,26 @@ import java.util.Map;
 @RequestMapping("/api/packs")
 public class PackController {
 
+    private final PackCatalogService packCatalogService;
     private final ContentPackRepository packRepository;
     private final QuestionRepository questionRepository;
+    private final PublicApiCacheProperties cacheProperties;
 
-    public PackController(ContentPackRepository packRepository, QuestionRepository questionRepository) {
+    public PackController(
+            PackCatalogService packCatalogService,
+            ContentPackRepository packRepository,
+            QuestionRepository questionRepository,
+            PublicApiCacheProperties cacheProperties) {
+        this.packCatalogService = packCatalogService;
         this.packRepository = packRepository;
         this.questionRepository = questionRepository;
+        this.cacheProperties = cacheProperties;
     }
 
     @GetMapping
-    public List<PackSummary> listPacks() {
-        return ContentPackCatalog.dedupeByPackId(packRepository.findAllByOrderByYearDesc()).stream()
-                .filter(p -> !p.getPackId().startsWith("DEMO_"))
-                .map(p -> {
-                    long variants = questionRepository.countByPackIdAndSourceType(p.getPackId(), "ai_variant");
-                    long total = questionRepository.countByPackId(p.getPackId());
-                    return new PackSummary(
-                            p.getPackId(),
-                            p.getExam(),
-                            p.getYear(),
-                            p.getSourceFolder(),
-                            Math.max(0, total - variants),
-                            p.getFacets());
-                })
-                .toList();
+    public ResponseEntity<List<PackSummary>> listPacks() {
+        return PublicCacheResponses.catalogOk(
+                packCatalogService.listPacks(), packCatalogService.cacheVersion(), cacheProperties);
     }
 
     @GetMapping("/{packId}")

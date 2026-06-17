@@ -45,17 +45,20 @@ public class ManifestImportService {
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final PublicCatalogCacheInvalidator catalogCacheInvalidator;
     private final Object importMonitor = new Object();
 
     public ManifestImportService(
             ContentPackRepository packRepository,
             QuestionRepository questionRepository,
             AppProperties appProperties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PublicCatalogCacheInvalidator catalogCacheInvalidator) {
         this.packRepository = packRepository;
         this.questionRepository = questionRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
+        this.catalogCacheInvalidator = catalogCacheInvalidator;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(20));
         factory.setReadTimeout(Duration.ofSeconds(120));
@@ -513,6 +516,8 @@ public class ManifestImportService {
                 packId,
                 count,
                 variantsImported);
+
+        catalogCacheInvalidator.invalidate();
 
         return new ImportResult(packId, count, variantsImported, 1, List.of());
     }

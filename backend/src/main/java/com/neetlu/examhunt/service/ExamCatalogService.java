@@ -1,14 +1,17 @@
 package com.neetlu.examhunt.service;
 
+import com.neetlu.examhunt.config.PublicApiCacheProperties;
 import com.neetlu.examhunt.model.ContentPack;
 import com.neetlu.examhunt.repository.ContentPackRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,13 +36,39 @@ public class ExamCatalogService {
 
     private final ContentPackRepository packRepository;
     private final QuestionRepository questionRepository;
+    private final PublicApiCacheProperties cacheProperties;
+    private final AtomicLong cacheVersion = new AtomicLong(1);
+    private volatile Cached<List<ExamCatalogEntry>> cachedCatalog;
 
-    public ExamCatalogService(ContentPackRepository packRepository, QuestionRepository questionRepository) {
+    public ExamCatalogService(
+            ContentPackRepository packRepository,
+            QuestionRepository questionRepository,
+            PublicApiCacheProperties cacheProperties) {
         this.packRepository = packRepository;
         this.questionRepository = questionRepository;
+        this.cacheProperties = cacheProperties;
+    }
+
+    public long cacheVersion() {
+        return cacheVersion.get();
+    }
+
+    public void invalidateCache() {
+        cachedCatalog = null;
+        cacheVersion.incrementAndGet();
     }
 
     public List<ExamCatalogEntry> getCatalog() {
+        Cached<List<ExamCatalogEntry>> snapshot = cachedCatalog;
+        if (snapshot != null && !snapshot.expired()) {
+            return snapshot.value();
+        }
+        List<ExamCatalogEntry> fresh = loadCatalog();
+        cachedCatalog = new Cached<>(fresh, Instant.now().plusSeconds(cacheProperties.memoryTtlSeconds()));
+        return fresh;
+    }
+
+    private List<ExamCatalogEntry> loadCatalog() {
         List<ContentPack> neetPacks =
                 ContentPackCatalog.dedupeByPackId(
                                 packRepository.findByExamIgnoreCaseOrderByYearDesc("NEET"))
@@ -128,4 +157,10 @@ public class ExamCatalogService {
     ) {}
 
     private record ExamDefinition(String id, String name, String status, String description) {}
+
+    private record Cached<T>(T value, Instant expiresAt) {
+        boolean expired() {
+            return Instant.now().isAfter(expiresAt);
+        }
+    }
 }

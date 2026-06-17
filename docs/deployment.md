@@ -244,6 +244,53 @@ Access-Control-Allow-Origin: https://www.techmuzzle.in
 Access-Control-Allow-Credentials: true
 ```
 
+## Cloudflare edge cache (API)
+
+`GET /api/packs` and `GET /api/exams` return public cache headers so Cloudflare can serve them from the edge:
+
+```text
+Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=60
+ETag: "catalog-<version>"
+```
+
+The API also keeps a short **in-memory** catalog cache (default 120s) so repeated origin hits avoid extra MongoDB counts. Cache is cleared automatically after admin pack import.
+
+Optional EC2 env overrides:
+
+```env
+PUBLIC_API_CACHE_MAX_AGE=60
+PUBLIC_API_CACHE_S_MAX_AGE=300
+PUBLIC_API_CACHE_STALE_WHILE_REVALIDATE=60
+PUBLIC_API_CACHE_MEMORY_TTL=120
+```
+
+**Cloudflare dashboard** (api.techmuzzle.in must be proxied — orange cloud):
+
+1. **Caching** → **Cache Rules** → Create rule  
+   - **When:** `(http.host eq "api.techmuzzle.in" and http.request.method eq "GET" and (starts_with(http.request.uri.path, "/api/packs") or http.request.uri.path eq "/api/exams"))`  
+   - **Then:** Cache eligibility = Eligible for cache, Edge TTL = Respect origin `s-maxage`
+
+2. Or rely on origin `Cache-Control` alone (default for most zones when `s-maxage` is present).
+
+Verify after deploy:
+
+```bash
+curl -i 'https://api.techmuzzle.in/api/packs' | grep -iE 'cache-control|etag|cf-cache-status'
+curl -i 'https://api.techmuzzle.in/api/exams' | grep -iE 'cache-control|etag|cf-cache-status'
+```
+
+Second request should show `cf-cache-status: HIT` when Cloudflare caching is active.
+
+Purge edge cache after a major import (optional):
+
+```bash
+# Zone ID + API token with Cache Purge permission
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{"prefixes":["api.techmuzzle.in/api/packs","api.techmuzzle.in/api/exams"]}'
+```
+
 SSL renewal dry run:
 
 ```bash

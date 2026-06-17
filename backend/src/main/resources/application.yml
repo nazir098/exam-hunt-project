@@ -24,6 +24,11 @@ app:
   llm-base-url: ${OPENAI_BASE_URL:http://localhost:3001/v1}
   llm-model: ${OPENAI_CHAT_MODEL:auto}
   ai-practice-enabled: ${AI_PRACTICE_ENABLED:true}
+  public-api-cache:
+    max-age-seconds: ${PUBLIC_API_CACHE_MAX_AGE:60}
+    s-max-age-seconds: ${PUBLIC_API_CACHE_S_MAX_AGE:300}
+    stale-while-revalidate-seconds: ${PUBLIC_API_CACHE_STALE_WHILE_REVALIDATE:60}
+    memory-ttl-seconds: ${PUBLIC_API_CACHE_MEMORY_TTL:120}
 
 logging:
   level:
