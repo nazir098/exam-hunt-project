@@ -225,6 +225,8 @@ public class QuestionController {
             String assertion,
             String reason,
             java.util.List<McqOptionView> statements,
+            java.util.List<McqOptionView> matchListA,
+            java.util.List<McqOptionView> matchListB,
             String questionDiagramSvg,
             String solutionDiagramSvg
     ) {
@@ -260,6 +262,8 @@ public class QuestionController {
                     QuestionVariantMapper.nullToEmpty(q.getAssertion()),
                     QuestionVariantMapper.nullToEmpty(q.getReason()),
                     QuestionVariantMapper.mapStatements(q),
+                    QuestionVariantMapper.mapMatchListA(q),
+                    QuestionVariantMapper.mapMatchListB(q),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
                     QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg())
             );

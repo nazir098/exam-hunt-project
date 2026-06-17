@@ -57,9 +57,10 @@ mvn spring-boot:run
 **Import manifest** (after extractor publish):
 
 ```bash
+# Starts background job — returns jobId immediately (HTTP 202)
 curl -X POST http://127.0.0.1:8081/api/admin/import/folder/2016
-# or all folders with published/manifest.json:
-curl -X POST http://127.0.0.1:8081/api/admin/import/all
+# Poll until status is SUCCEEDED or FAILED:
+curl http://127.0.0.1:8081/api/admin/import/jobs/JOB_ID
 ```
 
 **Frontend**
@@ -81,8 +82,9 @@ Open http://127.0.0.1:5173 — dev server proxies `/api` to the backend.
 | GET | `/api/packs/{packId}/facets` | Subject/chapter facets |
 | GET | `/api/questions?packId=&subject=&chapter=&page=&size=` | Paginated questions (no answer) |
 | GET | `/api/questions/{questionId}` | Full question + answer (for reveal) |
-| POST | `/api/admin/import/folder/{folder}` | Import one year folder |
-| POST | `/api/admin/import/all` | Import all published manifests |
+| POST | `/api/admin/import/folder/{folder}` | Start async import (202 + `jobId`) |
+| GET | `/api/admin/import/jobs/{jobId}` | Import job status / result |
+| POST | `/api/admin/import/all` | Start async import of all published manifests |
 
 ## Product choices (v1)
 

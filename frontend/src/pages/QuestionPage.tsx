@@ -34,6 +34,7 @@ function usesTextVariantLayout(q: QuestionDetail) {
   if (q.questionDiagramSvg?.trim()) return true;
   if (q.assertion?.trim() || q.reason?.trim()) return true;
   if (q.statements && q.statements.length > 0) return true;
+  if (q.matchListA && q.matchListA.length > 0) return true;
   if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
   return false;
 }
@@ -337,6 +338,9 @@ export default function QuestionPage() {
                   assertion={q.assertion}
                   reason={q.reason}
                   statements={q.statements}
+                  matchListA={q.matchListA}
+                  matchListB={q.matchListB}
+                  questionId={q.questionId}
                   questionImageUrl={q.questionImageUrl}
                   questionDiagramSvg={q.questionDiagramSvg}
                 />

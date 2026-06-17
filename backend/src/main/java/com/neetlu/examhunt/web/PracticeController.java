@@ -208,6 +208,8 @@ public class PracticeController {
             String assertion,
             String reason,
             java.util.List<McqOptionView> statements,
+            java.util.List<McqOptionView> matchListA,
+            java.util.List<McqOptionView> matchListB,
             boolean hasDiagram,
             String questionDiagramSvg,
             String solutionDiagramSvg) {
@@ -236,6 +238,8 @@ public class PracticeController {
                     QuestionVariantMapper.nullToEmpty(q.getAssertion()),
                     QuestionVariantMapper.nullToEmpty(q.getReason()),
                     QuestionVariantMapper.mapStatementsForPractice(q),
+                    QuestionVariantMapper.mapMatchListAForPractice(q),
+                    QuestionVariantMapper.mapMatchListBForPractice(q),
                     q.isHasDiagram(),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
                     QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()));

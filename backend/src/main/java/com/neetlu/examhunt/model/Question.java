@@ -64,6 +64,10 @@ public class Question {
     private String assertion;
     private String reason;
     private List<McqOption> statements;
+    /** List-I items for matching-type AI variants (A, B, C, D). */
+    private List<McqOption> matchListA;
+    /** List-II items for matching-type AI variants ((i), (ii), …). */
+    private List<McqOption> matchListB;
     /** Inline SVG from extractor diagrams/ (when no raster image). */
     private String questionDiagramSvg;
     private String solutionDiagramSvg;
@@ -364,6 +368,22 @@ public class Question {
 
     public void setStatements(List<McqOption> statements) {
         this.statements = statements;
+    }
+
+    public List<McqOption> getMatchListA() {
+        return matchListA;
+    }
+
+    public void setMatchListA(List<McqOption> matchListA) {
+        this.matchListA = matchListA;
+    }
+
+    public List<McqOption> getMatchListB() {
+        return matchListB;
+    }
+
+    public void setMatchListB(List<McqOption> matchListB) {
+        this.matchListB = matchListB;
     }
 
     public String getQuestionDiagramSvg() {

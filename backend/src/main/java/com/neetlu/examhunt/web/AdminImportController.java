@@ -1,7 +1,9 @@
 package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.security.AdminAuthorization;
+import com.neetlu.examhunt.service.ImportJobService;
 import com.neetlu.examhunt.service.ManifestImportService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +21,15 @@ import java.util.Map;
 public class AdminImportController {
 
     private final ManifestImportService importService;
+    private final ImportJobService importJobService;
     private final AdminAuthorization adminAuthorization;
 
-    public AdminImportController(ManifestImportService importService, AdminAuthorization adminAuthorization) {
+    public AdminImportController(
+            ManifestImportService importService,
+            ImportJobService importJobService,
+            AdminAuthorization adminAuthorization) {
         this.importService = importService;
+        this.importJobService = importJobService;
         this.adminAuthorization = adminAuthorization;
     }
 
@@ -39,52 +46,64 @@ public class AdminImportController {
                 "source", importService.importSourceStatus()));
     }
 
+    @GetMapping("/jobs")
+    public ResponseEntity<?> listJobs(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        var jobs = importJobService.listRecentJobs();
+        return ResponseEntity.ok(Map.of("jobs", jobs, "count", jobs.size()));
+    }
+
+    @GetMapping("/jobs/{jobId}")
+    public ResponseEntity<?> getJob(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        return ResponseEntity.ok(importJobService.getJob(jobId));
+    }
+
     @PostMapping("/folder/{folderName}")
     public ResponseEntity<?> importFolder(
             @PathVariable String folderName,
             @AuthenticationPrincipal String userId,
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
-            throws IOException {
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
         adminAuthorization.requireAdminAccess(userId, adminKey);
-        var result = importService.importFromFolder(folderName);
-        return ResponseEntity.ok(Map.of(
-                "packId", result.packId(),
-                "questionsImported", result.questionsImported(),
-                "variantsImported", result.variantsImported(),
-                "message",
-                "Imported " + result.questionsImported() + " PYQs + " + result.variantsImported()
-                        + " AI variants from " + folderName));
+        var job = importJobService.startFolderImport(folderName);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(Map.of(
+                        "jobId", job.jobId(),
+                        "status", job.status(),
+                        "message", "Import started for folder " + folderName + ". Poll /api/admin/import/jobs/"
+                                + job.jobId()));
     }
 
     @PostMapping("/neet")
     public ResponseEntity<?> importNeet(
             @AuthenticationPrincipal String userId,
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
-            throws IOException {
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
         adminAuthorization.requireAdminAccess(userId, adminKey);
-        var result = importService.importNeetFolders();
-        int variants = result.variantsImported();
-        return ResponseEntity.ok(Map.of(
-                "packsProcessed", result.packsProcessed(),
-                "questionsImported", result.questionsImported(),
-                "variantsImported", variants,
-                "packIds",
-                result.details().stream().map(ManifestImportService.ImportResult::packId).toList(),
-                "message",
-                "Imported " + result.questionsImported() + " PYQs + " + variants + " AI variants across "
-                        + result.packsProcessed() + " pack(s)"));
+        var job = importJobService.startNeetImport();
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(Map.of(
+                        "jobId", job.jobId(),
+                        "status", job.status(),
+                        "message",
+                        "NEET import started. Poll /api/admin/import/jobs/" + job.jobId()));
     }
 
     @PostMapping("/all")
     public ResponseEntity<?> importAll(
             @AuthenticationPrincipal String userId,
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey)
-            throws IOException {
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
         adminAuthorization.requireAdminAccess(userId, adminKey);
-        var result = importService.importAllPublishedFolders();
-        return ResponseEntity.ok(Map.of(
-                "packsProcessed", result.packsProcessed(),
-                "questionsImported", result.questionsImported(),
-                "details", result.details()));
+        var job = importJobService.startAllImport();
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(Map.of(
+                        "jobId", job.jobId(),
+                        "status", job.status(),
+                        "message",
+                        "Full import started. Poll /api/admin/import/jobs/" + job.jobId()));
     }
 }

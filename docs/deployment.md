@@ -109,11 +109,35 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Admin pack sync fetches hundreds of R2 metadata files — allow long requests
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 900s;
+        proxy_read_timeout 900s;
+        send_timeout 900s;
     }
 }
 ```
 
 Certbot updates this file for HTTPS.
+
+### Import times out or shows “cancelled”
+
+Pack sync is **async**: `POST /api/admin/import/folder/{year}` returns **202** immediately with a `jobId`. Poll status:
+
+```bash
+curl -s https://api.techmuzzle.in/api/admin/import/jobs/JOB_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Status values: `QUEUED` → `RUNNING` → `SUCCEEDED` or `FAILED`.
+
+The Admin UI polls automatically. Large R2 syncs (many `metadata/AI_*.json` files) can take **5–15 minutes** on the server even though the start request finishes in under a second.
+
+Watch server logs:
+
+```bash
+sudo journalctl -u exam-hunt -f
+```
 
 ## Deploy Backend Update
 

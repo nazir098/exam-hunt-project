@@ -49,6 +49,8 @@ export type QuestionPublic = {
   assertion?: string;
   reason?: string;
   statements?: McqOptionView[];
+  matchListA?: McqOptionView[];
+  matchListB?: McqOptionView[];
   hasDiagram?: boolean;
   questionDiagramSvg?: string;
   solutionDiagramSvg?: string;
@@ -264,6 +266,8 @@ export type PracticeQuestion = {
   assertion?: string;
   reason?: string;
   statements?: McqOptionView[];
+  matchListA?: McqOptionView[];
+  matchListB?: McqOptionView[];
   hasDiagram?: boolean;
   questionDiagramSvg?: string;
   solutionDiagramSvg?: string;
@@ -560,18 +564,107 @@ export function fetchAdminImportFolders() {
   );
 }
 
-export function adminImportNeet() {
-  return request<AdminActionResult>("/api/admin/import/neet", { method: "POST" });
+export type ImportJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export type ImportJobDetail = {
+  packId: string;
+  questionsImported: number;
+  variantsImported: number;
+};
+
+export type ImportJobView = {
+  jobId: string;
+  type: string;
+  folderName: string | null;
+  status: ImportJobStatus;
+  message: string | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  packId: string | null;
+  questionsImported: number | null;
+  variantsImported: number | null;
+  packsProcessed: number | null;
+  packIds: string[] | null;
+  details: ImportJobDetail[] | null;
+};
+
+export type ImportJobStart = {
+  jobId: string;
+  status: string;
+  message: string;
+};
+
+const IMPORT_POLL_MS = 2500;
+const IMPORT_MAX_WAIT_MS = 30 * 60 * 1000;
+
+export function fetchAdminImportJob(jobId: string) {
+  return request<ImportJobView>(`/api/admin/import/jobs/${encodeURIComponent(jobId)}`);
 }
 
-export function adminImportAll() {
-  return request<AdminActionResult>("/api/admin/import/all", { method: "POST" });
+export type ImportProgressHandler = (job: ImportJobView) => void;
+
+async function waitForImportJob(
+  jobId: string,
+  onUpdate?: ImportProgressHandler
+): Promise<AdminActionResult> {
+  const started = Date.now();
+  while (Date.now() - started < IMPORT_MAX_WAIT_MS) {
+    const job = await fetchAdminImportJob(jobId);
+    onUpdate?.(job);
+    if (job.status === "SUCCEEDED") {
+      return {
+        message: job.message ?? "Import complete",
+        jobId: job.jobId,
+        packId: job.packId,
+        questionsImported: job.questionsImported,
+        variantsImported: job.variantsImported,
+        packsProcessed: job.packsProcessed,
+        packIds: job.packIds,
+        details: job.details,
+      };
+    }
+    if (job.status === "FAILED") {
+      throw new Error(job.error || job.message || "Import failed");
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, IMPORT_POLL_MS));
+  }
+  throw new Error(
+    `Import still running (job ${jobId}). Poll GET /api/admin/import/jobs/${jobId} or check server logs.`
+  );
 }
 
-export function adminImportFolder(folderName: string) {
-  return request<AdminActionResult>(`/api/admin/import/folder/${encodeURIComponent(folderName)}`, {
-    method: "POST",
-  });
+async function startAndWaitImport(
+  start: () => Promise<ImportJobStart>,
+  onUpdate?: ImportProgressHandler
+): Promise<AdminActionResult> {
+  const started = await start();
+  return waitForImportJob(started.jobId, onUpdate);
+}
+
+export function adminImportNeet(onUpdate?: ImportProgressHandler) {
+  return startAndWaitImport(
+    () => request<ImportJobStart>("/api/admin/import/neet", { method: "POST" }),
+    onUpdate
+  );
+}
+
+export function adminImportAll(onUpdate?: ImportProgressHandler) {
+  return startAndWaitImport(
+    () => request<ImportJobStart>("/api/admin/import/all", { method: "POST" }),
+    onUpdate
+  );
+}
+
+export function adminImportFolder(folderName: string, onUpdate?: ImportProgressHandler) {
+  return startAndWaitImport(
+    () =>
+      request<ImportJobStart>(`/api/admin/import/folder/${encodeURIComponent(folderName)}`, {
+        method: "POST",
+      }),
+    onUpdate
+  );
 }
 
 export type AdminPackRow = {

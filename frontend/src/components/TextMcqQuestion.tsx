@@ -2,6 +2,11 @@ import { useMemo } from "react";
 import AiMarkdown from "./AiMarkdown";
 import VariantDiagram from "./VariantDiagram";
 import { needsQuestionPrefix, questionStemBody } from "../utils/variantLabels";
+import {
+  listRomanLabel,
+  resolveMatchingColumns,
+  type ParsedMatching,
+} from "../utils/matchingVariant";
 
 export type McqOptionView = {
   id: string;
@@ -23,6 +28,10 @@ type Props = {
   assertion?: string;
   reason?: string;
   statements?: McqOptionView[];
+  matchListA?: McqOptionView[];
+  matchListB?: McqOptionView[];
+  answer?: string;
+  questionId?: string;
   questionImageUrl?: string;
   questionDiagramSvg?: string;
 };
@@ -34,9 +43,11 @@ function resolveFormat(
   variantType?: string | null,
   assertion?: string,
   reason?: string,
-  statements?: McqOptionView[]
+  statements?: McqOptionView[],
+  matchListA?: McqOptionView[]
 ): string {
   const raw = (questionFormat || variantType || "mcq").toLowerCase();
+  if (raw.includes("matching") || (matchListA && matchListA.length > 0)) return "matching";
   if (raw.includes("assertion") || (assertion && reason)) return "assertion_reason";
   if (raw.includes("statement") || (statements && statements.length > 0)) return "statement_based";
   return raw;
@@ -64,7 +75,7 @@ function optionHasMath(text: string): boolean {
 type OptionsLayout = "stacked" | "paired" | "horizontal";
 
 function resolveOptionsLayout(format: string, options: McqOptionView[]): OptionsLayout {
-  if (format === "assertion_reason" || format === "statement_based") {
+  if (format === "assertion_reason" || format === "statement_based" || format === "matching") {
     return "stacked";
   }
   const lengths = options.map((o) => plainOptionLength(o.text));
@@ -99,14 +110,33 @@ export default function TextMcqQuestion({
   assertion = "",
   reason = "",
   statements = [],
+  matchListA = [],
+  matchListB = [],
+  questionId = "",
   questionImageUrl = "",
   questionDiagramSvg = "",
 }: Props) {
   const sorted = [...options].sort((a, b) => Number(a.id) - Number(b.id));
   const format = useMemo(
-    () => resolveFormat(questionFormat, variantType, assertion, reason, statements),
-    [questionFormat, variantType, assertion, reason, statements]
+    () => resolveFormat(questionFormat, variantType, assertion, reason, statements, matchListA),
+    [questionFormat, variantType, assertion, reason, statements, matchListA]
   );
+
+  const matching = useMemo<ParsedMatching | null>(
+    () =>
+      resolveMatchingColumns({
+        questionId,
+        questionTextPreview: questionText,
+        variantType,
+        questionFormat,
+        options: sorted,
+        matchListA,
+        matchListB,
+      }),
+    [questionId, questionText, variantType, questionFormat, sorted, matchListA, matchListB]
+  );
+
+  const showMatching = format === "matching" && matching !== null;
 
   const showAssertionReason = format === "assertion_reason" && (assertion || reason);
   const showStatements = format === "statement_based" && statements.length > 0;
@@ -165,6 +195,42 @@ export default function TextMcqQuestion({
                 </li>
               ))}
             </ol>
+          </div>
+        ) : showMatching && matching ? (
+          <div className="variant-stem variant-stem--matching">
+            {matching.intro && (
+              <p className="variant-stem__intro">
+                <AiMarkdown text={matching.intro} className="ai-markdown--paper" />
+              </p>
+            )}
+            <div className="variant-matching-grid">
+              <section className="variant-matching-col" aria-label="List-I">
+                <p className="variant-matching-col__title">List-I</p>
+                <ol className="variant-matching-col__list">
+                  {matching.listA.map((item) => (
+                    <li key={item.id} className="variant-matching-col__item">
+                      <span className="variant-matching-col__label">{item.id}.</span>
+                      <AiMarkdown text={item.text} className="ai-markdown--paper" />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              {matching.listB.length > 0 && (
+                <section className="variant-matching-col" aria-label="List-II">
+                  <p className="variant-matching-col__title">List-II</p>
+                  <ol className="variant-matching-col__list">
+                    {matching.listB.map((item, idx) => (
+                      <li key={item.id} className="variant-matching-col__item">
+                        <span className="variant-matching-col__label">
+                          ({listRomanLabel(idx)}).
+                        </span>
+                        <AiMarkdown text={item.text} className="ai-markdown--paper" />
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+            </div>
           </div>
         ) : showQuestionMarker ? (
           <div className="variant-stem variant-stem--plain-question">

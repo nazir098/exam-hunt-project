@@ -842,6 +842,24 @@ public class ManifestImportService {
         if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.STATEMENTS)) {
             doc.setStatements(readMcqOptions(v.path("statements")));
         }
+        if (MatchingVariantParser.isMatchingVariant(v)) {
+            MatchingVariantParser.ParsedMatching parsed = MatchingVariantParser.parse(v);
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_FORMAT)) {
+                doc.setQuestionFormat("matching");
+            }
+            if (!parsed.intro().isBlank()
+                    && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)) {
+                doc.setQuestionTextPreview(sanitize(parsed.intro()));
+            }
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_A)
+                    && !parsed.listA().isEmpty()) {
+                doc.setMatchListA(parsed.listA());
+            }
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_B)
+                    && !parsed.listB().isEmpty()) {
+                doc.setMatchListB(parsed.listB());
+            }
+        }
         String diagramUrl = text(v, "question_diagram_url");
         if (diagramUrl.isBlank()) {
             diagramUrl = text(v, "question_image_url");

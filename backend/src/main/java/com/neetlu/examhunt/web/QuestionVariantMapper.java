@@ -26,6 +26,38 @@ final class QuestionVariantMapper {
                 .toList();
     }
 
+    static List<QuestionController.McqOptionView> mapMatchListA(Question q) {
+        return mapOptionList(q.getMatchListA());
+    }
+
+    static List<QuestionController.McqOptionView> mapMatchListB(Question q) {
+        return mapOptionList(q.getMatchListB());
+    }
+
+    static List<PracticeController.McqOptionView> mapMatchListAForPractice(Question q) {
+        return mapOptionListForPractice(q.getMatchListA());
+    }
+
+    static List<PracticeController.McqOptionView> mapMatchListBForPractice(Question q) {
+        return mapOptionListForPractice(q.getMatchListB());
+    }
+
+    private static List<QuestionController.McqOptionView> mapOptionList(List<McqOption> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream().map(QuestionVariantMapper::toView).toList();
+    }
+
+    private static List<PracticeController.McqOptionView> mapOptionListForPractice(List<McqOption> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(o -> new PracticeController.McqOptionView(o.getId(), o.getText()))
+                .toList();
+    }
+
     private static QuestionController.McqOptionView toView(McqOption o) {
         return new QuestionController.McqOptionView(o.getId(), o.getText());
     }

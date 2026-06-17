@@ -468,6 +468,9 @@ export default function AdminQuestionEditorPage() {
                 assertion={previewQ.assertion}
                 reason={previewQ.reason}
                 statements={previewQ.statements}
+                matchListA={previewQ.matchListA}
+                matchListB={previewQ.matchListB}
+                questionId={previewQ.questionId}
                 questionImageUrl={previewQ.questionImageUrl}
                 questionDiagramSvg={previewQ.questionDiagramSvg}
                 correctAnswer={previewQ.answer}

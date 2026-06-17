@@ -23,6 +23,8 @@ final class AdminQuestionPreserve {
     static final String ASSERTION = "assertion";
     static final String REASON = "reason";
     static final String STATEMENTS = "statements";
+    static final String MATCH_LIST_A = "matchListA";
+    static final String MATCH_LIST_B = "matchListB";
     static final String QUESTION_DIAGRAM_SVG = "questionDiagramSvg";
     static final String SOLUTION_DIAGRAM_SVG = "solutionDiagramSvg";
     static final String HINTS = "hints";
@@ -135,6 +137,8 @@ final class AdminQuestionPreserve {
             case ASSERTION -> target.setAssertion(source.getAssertion());
             case REASON -> target.setReason(source.getReason());
             case STATEMENTS -> target.setStatements(copyOptions(source.getStatements()));
+            case MATCH_LIST_A -> target.setMatchListA(copyOptions(source.getMatchListA()));
+            case MATCH_LIST_B -> target.setMatchListB(copyOptions(source.getMatchListB()));
             case QUESTION_DIAGRAM_SVG -> target.setQuestionDiagramSvg(source.getQuestionDiagramSvg());
             case SOLUTION_DIAGRAM_SVG -> target.setSolutionDiagramSvg(source.getSolutionDiagramSvg());
             case HINTS -> target.setHints(copyStrings(source.getHints()));

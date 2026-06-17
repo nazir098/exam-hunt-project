@@ -13,6 +13,8 @@ import {
   type AdminActionResult,
   type AdminPackRow,
   type ImportFolderOption,
+  type ImportJobView,
+  type ImportProgressHandler,
   type ImportSourceStatus,
 } from "../api";
 import AdminPlatformSettingsPanel from "../components/AdminPlatformSettings";
@@ -22,9 +24,15 @@ type AdminTask = {
   id: string;
   title: string;
   description: string;
-  run: () => Promise<AdminActionResult>;
+  run: (onUpdate?: ImportProgressHandler) => Promise<AdminActionResult>;
   variant?: "danger";
 };
+
+function formatImportProgress(job: ImportJobView): string {
+  if (job.status === "QUEUED") return "Queued — waiting to start…";
+  if (job.status === "RUNNING") return job.message || "Import in progress…";
+  return job.message || job.status;
+}
 
 function formatResult(data: AdminActionResult): string {
   if (data.message && typeof data.message === "string") {
@@ -114,7 +122,10 @@ export default function AdminPage() {
     setError(null);
     setLog(null);
     try {
-      const result = await task.run();
+      const onUpdate = task.id.startsWith("import-")
+        ? (job: ImportJobView) => setLog(formatImportProgress(job))
+        : undefined;
+      const result = await task.run(onUpdate);
       setLog(formatResult(result));
       if (task.id.startsWith("import-") || task.id === "cleanup-demo") {
         loadInstalledPacks();
@@ -252,6 +263,10 @@ export default function AdminPage() {
 
       <section className="admin-page__section">
         <h2 className="admin-page__section-title">Import / sync</h2>
+        <p className="admin-page__section-desc muted">
+          Sync runs in the background on the server. The UI polls every few seconds — large packs
+          (e.g. 2025 from R2) may take 5–15 minutes. Keep this tab open until you see the result.
+        </p>
         <div className="admin-page__folder">
           <label className="text-body-sm text-on-surface-variant" htmlFor="admin-folder">
             Published folder

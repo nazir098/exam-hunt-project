@@ -4,6 +4,7 @@ const VARIANT_TYPE_LABELS: Record<string, string> = {
   assertion_reason: "Assertion–reason",
   statement_based: "Statement based",
   hard_application: "Hard application",
+  matching: "Matching",
   mcq: "MCQ variation",
 };
 
@@ -45,11 +46,14 @@ export function needsQuestionPrefix(
   questionFormat?: string,
   resolvedFormat?: string
 ): boolean {
+  const type = normalizeVariantKey(variantType);
+  const format = normalizeVariantKey(questionFormat);
   if (resolvedFormat === "assertion_reason" || resolvedFormat === "statement_based") {
     return false;
   }
-  const type = normalizeVariantKey(variantType);
-  const format = normalizeVariantKey(questionFormat);
+  if (resolvedFormat === "matching" || type === "matching" || format === "matching") {
+    return false;
+  }
   return (
     type === "numerical" ||
     type === "hard_application" ||
