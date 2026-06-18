@@ -2,12 +2,16 @@ package com.neetlu.examhunt.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
 @Document(collection = "question_attempts")
-@CompoundIndex(name = "user_question", def = "{'userId': 1, 'questionId': 1}")
+@CompoundIndexes({
+    @CompoundIndex(name = "user_question", def = "{'userId': 1, 'questionId': 1}"),
+    @CompoundIndex(name = "user_answered", def = "{'userId': 1, 'answeredAt': -1}")
+})
 public class QuestionAttempt {
 
     @Id

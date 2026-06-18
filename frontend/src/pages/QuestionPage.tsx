@@ -14,8 +14,8 @@ import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
-import { familyParentId, isAiVariantQuestionId } from "../utils/questionFamily";
-import { formatVariantTypeLabel, VARIANT_SWITCH_IDLE, type VariantSwitchState } from "../utils/variantLabels";
+import { familyParentId, isAiVariantQuestionId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { formatVariantTypeLabel } from "../utils/variantLabels";
 
 const OPTIONS = [
   { label: "1", value: "1" },
@@ -70,20 +70,27 @@ export default function QuestionPage() {
   const [checked, setChecked] = useState(false);
   const [answerPeek, setAnswerPeek] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
-  const [variantSwitch, setVariantSwitch] = useState<VariantSwitchState>(VARIANT_SWITCH_IDLE);
+  const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
   const returnQs = searchParams.toString();
   const familyParent = familyParentId(questionId, q?.parentQuestionId);
 
   useEffect(() => {
-    setQ(null);
     setError("");
     setChecked(false);
     setAnswerPeek(false);
     setSolutionOpen(false);
-    setVariantSwitch(VARIANT_SWITCH_IDLE);
     setSelected("");
     if (!questionId) return;
+
+    const samePaper = isSamePaperQuestion(questionId, q);
+    if (!samePaper) {
+      setQ(null);
+      setContentLoading(false);
+    } else {
+      setContentLoading(true);
+    }
+
     let cancelled = false;
     fetchQuestion(questionId)
       .then((data) => {
@@ -91,6 +98,9 @@ export default function QuestionPage() {
       })
       .catch((e) => {
         if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setContentLoading(false);
       });
     return () => {
       cancelled = true;
@@ -250,6 +260,11 @@ export default function QuestionPage() {
     hasSolution: distinctSolution,
   };
 
+  const variantLoader = useMemo(() => {
+    if (!contentLoading) return null;
+    return variantSwitchLoaderForTarget(questionId, family);
+  }, [contentLoading, questionId, family]);
+
   function renderImageOptions() {
     return (
       <section className="practice-run-options" aria-label="Answer options">
@@ -363,20 +378,19 @@ export default function QuestionPage() {
               questionId={questionId}
               family={family}
               onSelect={goToQuestion}
-              onSwitchStateChange={setVariantSwitch}
             />
 
             <div
               className={`practice-run-question__media${
-                variantSwitch.active
-                  ? variantSwitch.mode === "ai"
+                variantLoader
+                  ? variantLoader.mode === "ai"
                     ? " practice-run-question__media--variant-generating"
                     : " practice-run-question__media--variant-loading"
                   : ""
               }`}
             >
-              {variantSwitch.active && variantSwitch.mode ? (
-                <VariantSwitchLoader mode={variantSwitch.mode} label={variantSwitch.label} />
+              {variantLoader ? (
+                <VariantSwitchLoader mode={variantLoader.mode} label={variantLoader.label} />
               ) : imageMode ? (
                 <img
                   src={imageSrc(q.questionImageUrl, questionId)}

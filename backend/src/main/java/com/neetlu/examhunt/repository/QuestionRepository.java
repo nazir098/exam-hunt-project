@@ -16,6 +16,11 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
 
     List<Question> findByQuestionIdIn(Collection<String> questionIds);
 
+    @Query(
+            value = "{ 'questionId': { $in: ?0 } }",
+            fields = "{ 'questionId': 1, 'subject': 1, 'chapter': 1, 'sourceType': 1, 'variantNo': 1 }")
+    List<Question> findAnalyticsFieldsByQuestionIdIn(Collection<String> questionIds);
+
     Page<Question> findByPackId(String packId, Pageable pageable);
 
     Page<Question> findByPackIdAndSubjectIgnoreCase(String packId, String subject, Pageable pageable);

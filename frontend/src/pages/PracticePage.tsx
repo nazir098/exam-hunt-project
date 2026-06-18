@@ -57,7 +57,7 @@ function formatRecentSessionHeadline(session: PracticeSessionView): string {
 }
 
 export default function PracticePage() {
-  const { user, progress, loading: authLoading, refreshProgress } = useAuth();
+  const { user, progress, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [packs, setPacks] = useState<PackSummary[]>([]);
@@ -90,10 +90,6 @@ export default function PracticePage() {
     if (s) setSubject(s);
     if (c) setChapter(c);
   }, [searchParams]);
-
-  useEffect(() => {
-    if (user) refreshProgress();
-  }, [user, refreshProgress]);
 
   useEffect(() => {
     if (!user) {

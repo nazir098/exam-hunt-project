@@ -28,7 +28,8 @@ import TestRunSidebar from "../components/TestRunSidebar";
 import SessionTimer from "../components/SessionTimer";
 import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName } from "../utils/labels";
-import { formatVariantTypeLabel, VARIANT_SWITCH_IDLE, type VariantSwitchState } from "../utils/variantLabels";
+import { formatVariantTypeLabel } from "../utils/variantLabels";
+import { isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 
 const OPTIONS = [
   { value: "1", label: "1" },
@@ -188,14 +189,16 @@ export default function PracticeQuestionPage() {
   const [busy, setBusy] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [aiTrigger, setAiTrigger] = useState<PracticeAiFeature | null>(null);
-  const [variantSwitch, setVariantSwitch] = useState<VariantSwitchState>(VARIANT_SWITCH_IDLE);
   const [variantCheck, setVariantCheck] = useState<VariantCheckResult | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
   const questionCacheRef = useRef(new Map<string, PracticeQuestion>());
+  const qRef = useRef<PracticeQuestion | null>(null);
   const loadedSessionIdRef = useRef<string | null>(null);
   const sessionRef = useRef<PracticeSessionView | null>(null);
   const visitedIdsRef = useRef<string[]>([]);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
   sessionRef.current = session;
+  qRef.current = q;
 
   const resultPath = useCallback(
     (sid: string) => (routeMode === "test" ? `/test/result/${sid}` : `/practice/result/${sid}`),
@@ -223,15 +226,17 @@ export default function PracticeQuestionPage() {
     setVisitedIds(visitedIdsRef.current);
   }, [questionId, routeMode]);
 
-  useEffect(() => {
-    setVariantSwitch(VARIANT_SWITCH_IDLE);
-  }, [questionId]);
-
   const loadQuestionById = useCallback(
     async (qid: string, opts?: { prefetch?: boolean }) => {
       const cached = questionCacheRef.current.get(qid);
       if (!opts?.prefetch) {
-        setQ(null);
+        const samePaper = isSamePaperQuestion(qid, qRef.current);
+        if (!samePaper) {
+          setQ(null);
+          setContentLoading(false);
+        } else {
+          setContentLoading(true);
+        }
         setSelected("");
         setShowSolution(false);
         setResult(null);
@@ -244,19 +249,24 @@ export default function PracticeQuestionPage() {
         return cached;
       }
       if (cached && !cacheStale && !opts?.prefetch) {
+        setContentLoading(false);
         setQ(cached);
         return cached;
       }
-      const question = await fetchPracticeQuestion(qid);
-      questionCacheRef.current.set(qid, question);
-      if (!opts?.prefetch) {
-        setSelected("");
-        setShowSolution(false);
-        setResult(null);
-        setVariantCheck(null);
-        setQ(question);
+      try {
+        const question = await fetchPracticeQuestion(qid);
+        questionCacheRef.current.set(qid, question);
+        if (!opts?.prefetch) {
+          setSelected("");
+          setShowSolution(false);
+          setResult(null);
+          setVariantCheck(null);
+          setQ(question);
+        }
+        return question;
+      } finally {
+        if (!opts?.prefetch) setContentLoading(false);
       }
-      return question;
     },
     []
   );
@@ -768,6 +778,9 @@ export default function PracticeQuestionPage() {
     const goVariant = (qid: string) => {
       if (qid !== questionId) navigate(sessionPath(sessionId, qid));
     };
+    const variantLoader = contentLoading
+      ? variantSwitchLoaderForTarget(questionId)
+      : null;
     return (
       <section key={questionId} className="practice-run-question glass-card">
         <div className="practice-run-question__head">
@@ -788,20 +801,19 @@ export default function PracticeQuestionPage() {
           <QuestionVariantSwitcher
             questionId={questionId}
             onSelect={goVariant}
-            onSwitchStateChange={setVariantSwitch}
           />
         )}
         <div
           className={`practice-run-question__media${
-            variantSwitch.active
-              ? variantSwitch.mode === "ai"
+            variantLoader
+              ? variantLoader.mode === "ai"
                 ? " practice-run-question__media--variant-generating"
                 : " practice-run-question__media--variant-loading"
               : ""
           }`}
         >
-          {variantSwitch.active && variantSwitch.mode ? (
-            <VariantSwitchLoader mode={variantSwitch.mode} label={variantSwitch.label} />
+          {variantLoader ? (
+            <VariantSwitchLoader mode={variantLoader.mode} label={variantLoader.label} />
           ) : isImageQuestion(q) ? (
             <img
               src={imageSrc(q.questionImageUrl)}

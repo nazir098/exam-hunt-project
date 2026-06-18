@@ -450,7 +450,7 @@ public class PracticeService {
         List<QuestionAttempt> userAttempts = attempts.findByUserIdOrderByAnsweredAtDesc(userId);
         Set<String> questionIds =
                 userAttempts.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
-        Map<String, Question> questionById = questions.findByQuestionIdIn(questionIds).stream()
+        Map<String, Question> questionById = questions.findAnalyticsFieldsByQuestionIdIn(questionIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
 
         List<QuestionAttempt> analyticsAttempts =
@@ -495,7 +495,7 @@ public class PracticeService {
                 total,
                 correct,
                 total > 0 ? (int) Math.round((correct * 100.0) / total) : 0,
-                recent.stream().map(this::sessionView).toList(),
+                recent.stream().map(this::sessionSummaryView).toList(),
                 byPack.entrySet().stream()
                         .map(e -> new PackProgress(
                                 e.getKey(),
@@ -1051,6 +1051,39 @@ public class PracticeService {
             out.add(toWrongAttemptView(a, q, revisedIds));
         }
         return out.stream().limit(100).toList();
+    }
+
+    private SessionView sessionSummaryView(PracticeSession s) {
+        String current = null;
+        List<String> ids = s.getQuestionIds();
+        if (ids != null && !ids.isEmpty() && s.getCurrentIndex() < ids.size()) {
+            current = ids.get(s.getCurrentIndex());
+        }
+        Map<String, String> filters = s.getFilters() != null ? s.getFilters() : Map.of();
+        List<String> marked =
+                s.getMarkedForReviewIds() != null ? new ArrayList<>(s.getMarkedForReviewIds()) : List.of();
+        return new SessionView(
+                s.getId(),
+                s.getPackId(),
+                s.getExam(),
+                s.getMode() != null ? s.getMode() : MODE_PRACTICE,
+                s.getStatus(),
+                ids != null ? ids.size() : 0,
+                s.getCurrentIndex(),
+                s.getCorrectCount(),
+                s.getWrongCount(),
+                s.getSkipCount(),
+                s.getTotalMarks(),
+                s.getMaxMarks(),
+                s.getAdaptiveLevel(),
+                s.getStartedAt(),
+                s.getCompletedAt(),
+                current,
+                nullToEmpty(filters.get("subject")),
+                nullToEmpty(filters.get("chapter")),
+                nullToEmpty(filters.get("topic")),
+                marked,
+                List.of());
     }
 
     private SessionView sessionView(PracticeSession s) {

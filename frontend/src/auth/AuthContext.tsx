@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const progressInflightRef = useRef<Promise<void> | null>(null);
 
   const logout = useCallback(() => {
     clearToken();
@@ -50,10 +52,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProgress(null);
       return;
     }
+    if (progressInflightRef.current) {
+      await progressInflightRef.current;
+      return;
+    }
+    const job = (async () => {
+      try {
+        setProgress(await fetchProgress());
+      } catch {
+        setProgress(null);
+      }
+    })();
+    progressInflightRef.current = job;
     try {
-      setProgress(await fetchProgress());
-    } catch {
-      setProgress(null);
+      await job;
+    } finally {
+      progressInflightRef.current = null;
     }
   }, []);
 

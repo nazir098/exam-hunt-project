@@ -1,3 +1,6 @@
+import type { QuestionFamily } from "../api";
+import { formatVariantTypeLabel, type VariantSwitchMode } from "./variantLabels";
+
 /** Parent PYQ id for a question URL or loaded detail (PYQ or AI variant). */
 export function familyParentId(questionId: string, parentQuestionId?: string | null): string {
   if (parentQuestionId?.trim()) return parentQuestionId.trim();
@@ -8,4 +11,35 @@ export function familyParentId(questionId: string, parentQuestionId?: string | n
 
 export function isAiVariantQuestionId(questionId: string): boolean {
   return /^AI_.+_V\d+$/.test(questionId);
+}
+
+export function isSamePaperQuestion(
+  nextQuestionId: string,
+  current: { questionId: string; parentQuestionId?: string | null } | null | undefined
+): boolean {
+  if (!current?.questionId) return false;
+  return (
+    familyParentId(nextQuestionId) ===
+    familyParentId(current.questionId, current.parentQuestionId)
+  );
+}
+
+export function variantSwitchLoaderForTarget(
+  targetQuestionId: string,
+  family?: QuestionFamily | null
+): { mode: VariantSwitchMode; label: string } {
+  if (family?.pyq.questionId === targetQuestionId) {
+    return { mode: "normal", label: "" };
+  }
+  const variant = family?.variants.find((v) => v.questionId === targetQuestionId);
+  if (variant) {
+    return {
+      mode: "ai",
+      label: formatVariantTypeLabel(variant.variantType, variant.variantNo),
+    };
+  }
+  if (isAiVariantQuestionId(targetQuestionId)) {
+    return { mode: "ai", label: "Loading variation…" };
+  }
+  return { mode: "normal", label: "" };
 }

@@ -19,22 +19,7 @@ export function formatVariantTypeLabel(variantType?: string | null, variantNo?: 
   return variantNo ? `Variation ${variantNo}` : "AI variation";
 }
 
-export const VARIANT_SWITCH_DELAY_MS = 2000;
-export const ORIGINAL_SWITCH_DELAY_MS = 450;
-
 export type VariantSwitchMode = "ai" | "normal";
-
-export type VariantSwitchState = {
-  active: boolean;
-  mode: VariantSwitchMode | null;
-  label: string;
-};
-
-export const VARIANT_SWITCH_IDLE: VariantSwitchState = {
-  active: false,
-  mode: null,
-  label: "",
-};
 
 function normalizeVariantKey(value?: string | null): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, "_");

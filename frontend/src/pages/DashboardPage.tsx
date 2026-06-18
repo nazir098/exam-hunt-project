@@ -51,7 +51,7 @@ const QUICK_ACTIONS = [
 
 export default function DashboardPage() {
   const { settings } = usePlatformSettings();
-  const { user, progress, loading: authLoading, refreshProgress } = useAuth();
+  const { user, progress, loading: authLoading } = useAuth();
   const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchExams>>>([]);
   const [packs, setPacks] = useState<Awaited<ReturnType<typeof fetchPacks>>>([]);
@@ -62,10 +62,6 @@ export default function DashboardPage() {
       if (p.status === "fulfilled") setPacks(p.value);
     });
   }, []);
-
-  useEffect(() => {
-    if (user) refreshProgress();
-  }, [user, refreshProgress]);
 
   useEffect(() => {
     if (!user) {

@@ -15,12 +15,8 @@ import { bankDisplayPacks, buildRecommendedPractice } from "../utils/practiceHub
 import { primaryWeakChapter } from "../utils/weakChapters";
 
 export default function AnalyticsPage() {
-  const { user, progress, loading, refreshProgress } = useAuth();
+  const { user, progress, loading } = useAuth();
   const [packs, setPacks] = useState<PackSummary[]>([]);
-
-  useEffect(() => {
-    if (user) refreshProgress();
-  }, [user, refreshProgress]);
 
   useEffect(() => {
     fetchPacks()
