@@ -227,12 +227,15 @@ export function formatTestSessionDateModern(session: PracticeSessionView): {
 
 export function formatSessionDuration(session: PracticeSessionView): string | null {
   if (!session.completedAt) return null;
-  const seconds = Math.max(
-    0,
-    Math.round(
-      (new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000
-    )
-  );
+  const seconds =
+    session.activeSeconds && session.activeSeconds > 0
+      ? session.activeSeconds
+      : Math.max(
+          0,
+          Math.round(
+            (new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000
+          )
+        );
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   if (m >= 60) {

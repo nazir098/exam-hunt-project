@@ -39,7 +39,7 @@ export function variantSwitchLoaderForTarget(
     };
   }
   if (isAiVariantQuestionId(targetQuestionId)) {
-    return { mode: "ai", label: "Loading variation…" };
+    return { mode: "ai", label: "" };
   }
   return { mode: "normal", label: "" };
 }

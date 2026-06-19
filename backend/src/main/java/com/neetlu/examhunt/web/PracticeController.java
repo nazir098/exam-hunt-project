@@ -115,6 +115,18 @@ public class PracticeController {
         return practiceService.toggleMarkForReview(userId, sessionId, body.questionId());
     }
 
+    @PostMapping("/sessions/{sessionId}/engage")
+    public PracticeService.SessionView engageSession(
+            @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
+        return practiceService.engageSession(userId, sessionId);
+    }
+
+    @PostMapping("/sessions/{sessionId}/pause")
+    public PracticeService.SessionView pauseSession(
+            @AuthenticationPrincipal String userId, @PathVariable String sessionId) {
+        return practiceService.pauseSession(userId, sessionId);
+    }
+
     @PostMapping("/sessions/{sessionId}/finish")
     public PracticeService.SessionResultView finishSession(
             @AuthenticationPrincipal String userId, @PathVariable String sessionId) {

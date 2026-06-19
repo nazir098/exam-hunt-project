@@ -193,9 +193,12 @@ export default function QuestionPage() {
 
   const goToQuestion = useCallback(
     (id: string) => {
+      if (id !== questionId && isSamePaperQuestion(id, q)) {
+        setContentLoading(true);
+      }
       navigate(`/solve/${id}?${new URLSearchParams(searchParams).toString()}`);
     },
-    [navigate, searchParams]
+    [navigate, searchParams, questionId, q]
   );
 
   const nav = useMemo(() => {

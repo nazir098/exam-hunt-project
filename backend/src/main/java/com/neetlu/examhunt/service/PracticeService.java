@@ -221,13 +221,14 @@ public class PracticeService {
     public PracticeSession requireSession(String userId, String sessionId) {
         PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
-        return reconcileSessionProgress(session);
+        return reconcileSessionProgress(maybeExpireSession(session));
     }
 
     /** Active test sessions skip reconcile on every answer — questions are fixed at creation. */
     private PracticeSession requireSessionForAnswer(String userId, String sessionId) {
         PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        session = maybeExpireSession(session);
         if (MODE_TEST.equals(session.getMode()) && "active".equals(session.getStatus())) {
             return session;
         }
@@ -461,6 +462,7 @@ public class PracticeService {
         long correct = analyticsAttempts.stream().filter(QuestionAttempt::isCorrect).count();
         List<PracticeSession> recent = sessions.findByUserIdOrderByStartedAtDesc(userId).stream()
                 .limit(10)
+                .map(this::maybeExpireSession)
                 .toList();
 
         Map<String, PackStats> byPack = new LinkedHashMap<>();
@@ -726,6 +728,60 @@ public class PracticeService {
         session.setQuestionIds(head);
     }
 
+    /** Start or resume the session timer (user opened a session question page). */
+    public SessionView engageSession(String userId, String sessionId) {
+        PracticeSession session = requireSession(userId, sessionId);
+        if (!"active".equals(session.getStatus())) {
+            return sessionView(session);
+        }
+        Instant now = Instant.now();
+        session.setEngagedSince(now);
+        session.setLastDisengagedAt(null);
+        return sessionView(sessions.save(session));
+    }
+
+    /** Pause the session timer (user left the session question page). */
+    public SessionView pauseSession(String userId, String sessionId) {
+        PracticeSession session = sessions.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+        if (!"active".equals(session.getStatus())) {
+            return sessionView(session);
+        }
+        SessionTiming.flushEngagement(session, Instant.now());
+        return sessionView(sessions.save(session));
+    }
+
+    private PracticeSession maybeExpireSession(PracticeSession session) {
+        if (!"active".equals(session.getStatus())) {
+            return session;
+        }
+        Instant now = Instant.now();
+        boolean wasEngaged = session.getEngagedSince() != null;
+        SessionTiming.ExpiryReason reason = SessionTiming.expiryReason(session, now);
+        if (reason == null) {
+            if (wasEngaged) {
+                return sessions.save(session);
+            }
+            return session;
+        }
+        return completeExpiredSession(session, session.getUserId(), now);
+    }
+
+    private PracticeSession completeExpiredSession(PracticeSession session, String userId, Instant now) {
+        SessionTiming.flushEngagement(session, now);
+        if (MODE_TEST.equals(session.getMode())) {
+            markUnattemptedAsSkipped(session);
+        }
+        session.setStatus("completed");
+        session.setCompletedAt(now);
+        if (session.getQuestionIds() != null) {
+            session.setCurrentIndex(session.getQuestionIds().size());
+        }
+        PracticeSession saved = sessions.save(session);
+        onSessionCompletedAsync(userId, saved);
+        return saved;
+    }
+
     public SessionView toggleMarkForReview(String userId, String sessionId, String questionId) {
         PracticeSession session = requireSession(userId, sessionId);
         if (!MODE_TEST.equals(session.getMode())) {
@@ -753,6 +809,7 @@ public class PracticeService {
         if (!"active".equals(session.getStatus())) {
             return getSessionResult(userId, sessionId);
         }
+        SessionTiming.flushEngagement(session, Instant.now());
         if (MODE_TEST.equals(session.getMode())) {
             markUnattemptedAsSkipped(session);
         }
@@ -817,8 +874,8 @@ public class PracticeService {
                 ? new java.util.HashSet<>(session.getUnansweredQuestionIds())
                 : Set.of();
 
-        long timeTakenSeconds = 0;
-        if (session.getStartedAt() != null && session.getCompletedAt() != null) {
+        long timeTakenSeconds = Math.max(0, session.getActiveSeconds());
+        if (timeTakenSeconds == 0 && session.getStartedAt() != null && session.getCompletedAt() != null) {
             timeTakenSeconds = Math.max(
                     0, session.getCompletedAt().getEpochSecond() - session.getStartedAt().getEpochSecond());
         }
@@ -1083,6 +1140,8 @@ public class PracticeService {
                 nullToEmpty(filters.get("chapter")),
                 nullToEmpty(filters.get("topic")),
                 marked,
+                SessionTiming.currentActiveSeconds(s, Instant.now()),
+                null,
                 List.of());
     }
 
@@ -1152,6 +1211,8 @@ public class PracticeService {
                 nullToEmpty(filters.get("chapter")),
                 nullToEmpty(filters.get("topic")),
                 new ArrayList<>(marked),
+                SessionTiming.currentActiveSeconds(s, Instant.now()),
+                s.getEngagedSince(),
                 tiles);
     }
 
@@ -1286,6 +1347,8 @@ public class PracticeService {
             String filterChapter,
             String filterTopic,
             List<String> markedForReviewIds,
+            int activeSeconds,
+            Instant engagedSince,
             List<SessionQuestionTile> questionTiles) {}
 
     public record ProgressSummary(

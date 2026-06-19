@@ -60,6 +60,7 @@
   max-width: min(100%, 42rem);
   max-height: min(32rem, 68vh);
   object-fit: contain;
+  background-color: #ffffff;
 }
 
 /* Exam / practice content images — deter drag-out; not a security boundary */

@@ -5178,8 +5178,8 @@ a.nav-tip {
   padding: 0.5rem;
   border-radius: 0.85rem;
   overflow: auto;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
   box-sizing: border-box;
 }
 
@@ -5196,6 +5196,7 @@ a.nav-tip {
   max-width: min(100%, 42rem);
   max-height: min(32rem, 68vh);
   object-fit: contain;
+  background-color: #ffffff;
   -webkit-user-drag: none;
   user-drag: none;
   -webkit-user-select: none;

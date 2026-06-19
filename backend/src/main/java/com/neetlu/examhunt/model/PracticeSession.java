@@ -35,6 +35,11 @@ public class PracticeSession {
     private String status = "active";
     private Instant startedAt = Instant.now();
     private Instant completedAt;
+    /** Seconds spent on the session page (timer paused when user navigates away). */
+    private int activeSeconds;
+    /** Non-null while the user is on a session question route. */
+    private Instant engagedSince;
+    private Instant lastDisengagedAt;
 
     public String getId() {
         return id;
@@ -194,5 +199,29 @@ public class PracticeSession {
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public int getActiveSeconds() {
+        return activeSeconds;
+    }
+
+    public void setActiveSeconds(int activeSeconds) {
+        this.activeSeconds = activeSeconds;
+    }
+
+    public Instant getEngagedSince() {
+        return engagedSince;
+    }
+
+    public void setEngagedSince(Instant engagedSince) {
+        this.engagedSince = engagedSince;
+    }
+
+    public Instant getLastDisengagedAt() {
+        return lastDisengagedAt;
+    }
+
+    public void setLastDisengagedAt(Instant lastDisengagedAt) {
+        this.lastDisengagedAt = lastDisengagedAt;
     }
 }

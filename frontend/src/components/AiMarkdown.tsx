@@ -25,6 +25,7 @@ export function normalizeAiText(text: string): string {
   t = normalizeAiSectionHeaders(t);
   t = normalizeInlineFormulaEquations(t);
   t = normalizeLatexDelimiters(t);
+  t = wrapBareLatexSegments(t);
   t = normalizeInlineMath(t);
   return t.trim();
 }
@@ -94,6 +95,7 @@ function normalizeMathContent(text: string): string {
   t = t.replace(/\\}/g, "}");
   t = t.replace(/\\left\s*\\frac/g, "\\left(\\frac");
   t = t.replace(/\\right(?![)\]|.|])/g, "\\right)");
+  t = t.replace(/\\(cos|sin|tan)(\d)/g, "\\$1 $2");
   return t.trim();
 }
 
@@ -127,6 +129,40 @@ function repairJsonEscapedLatex(text: string): string {
   t = t.replace(/\nabla/g, "\\nabla");
   t = t.replace(/\rho/g, "\\rho");
   return t;
+}
+
+function looksLikeBareLatex(segment: string): boolean {
+  const s = segment.trim();
+  if (!s || s.startsWith("$")) return false;
+  if (/\\[a-zA-Z]{2,}/.test(s)) return true;
+  if (/\\cos|\\sin|\\tan|\\Delta|\\theta|\\times|\\cdot|\\frac|\\sqrt|\\circ/.test(s)) return true;
+  if (/\^\{[^}]+\}/.test(s) && /\\/.test(s)) return true;
+  if (/=\s*[^=]*\\times/.test(s)) return true;
+  if (/[=+\-*/^]/.test(s) && /\\[a-zA-Z]/.test(s)) return true;
+  return false;
+}
+
+/** Wrap hint / LLM lines that use LaTeX commands without $ delimiters. */
+function wrapBareLatexSegments(text: string): string {
+  const parts = text.split(/(\$[^$]+\$)/g);
+  return parts
+    .map((part) => {
+      if (part.startsWith("$") && part.endsWith("$")) return part;
+      return part
+        .split(/(?<=[.!?])\s+/)
+        .map((clause) => {
+          const trimmed = clause.trim();
+          if (!looksLikeBareLatex(trimmed)) return clause;
+          const transition = trimmed.match(/^(Thus|So|Hence|Therefore),?\s+/i);
+          if (transition) {
+            const body = trimmed.slice(transition[0].length);
+            return `${transition[0]}$${normalizeMathContent(body)}$`;
+          }
+          return `$${normalizeMathContent(trimmed)}$`;
+        })
+        .join(" ");
+    })
+    .join("");
 }
 
 function normalizeInlineMath(text: string): string {

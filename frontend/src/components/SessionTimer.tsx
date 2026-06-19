@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 type Props = {
-  startedAt: string;
+  activeSeconds: number;
+  engagedSince?: string | null;
   label?: string;
   compact?: boolean;
 };
@@ -16,18 +17,27 @@ function formatElapsed(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export default function SessionTimer({ startedAt, label = "Time", compact }: Props) {
-  const [elapsed, setElapsed] = useState(0);
+export default function SessionTimer({ activeSeconds, engagedSince, label = "Time", compact }: Props) {
+  const [elapsed, setElapsed] = useState(activeSeconds);
 
   useEffect(() => {
-    const start = new Date(startedAt).getTime();
+    const base = Math.max(0, activeSeconds);
+    const engagedAt = engagedSince ? new Date(engagedSince).getTime() : null;
+
     const tick = () => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+      if (!engagedAt) {
+        setElapsed(base);
+        return;
+      }
+      const segment = Math.max(0, Math.floor((Date.now() - engagedAt) / 1000));
+      setElapsed(base + segment);
     };
+
     tick();
+    if (!engagedAt) return;
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [startedAt]);
+  }, [activeSeconds, engagedSince]);
 
   return (
     <span className={`session-timer${compact ? " session-timer--compact" : ""}`} aria-live="polite">

@@ -157,6 +157,8 @@ export type PracticeSessionView = {
   adaptiveLevel: number;
   startedAt: string;
   completedAt: string | null;
+  activeSeconds?: number;
+  engagedSince?: string | null;
   currentQuestionId: string | null;
   filterSubject?: string;
   filterChapter?: string;
@@ -837,6 +839,20 @@ export function finishPracticeSession(sessionId: string) {
 
 export function fetchPracticeSession(sessionId: string) {
   return request<PracticeSessionView>(`/api/practice/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export function engagePracticeSession(sessionId: string) {
+  return request<PracticeSessionView>(
+    `/api/practice/sessions/${encodeURIComponent(sessionId)}/engage`,
+    { method: "POST" }
+  );
+}
+
+export function pausePracticeSession(sessionId: string) {
+  return request<PracticeSessionView>(
+    `/api/practice/sessions/${encodeURIComponent(sessionId)}/pause`,
+    { method: "POST" }
+  );
 }
 
 export function fetchPracticeQuestion(questionId: string) {

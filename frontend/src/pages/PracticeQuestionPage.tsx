@@ -4,9 +4,11 @@ import {
   checkVariantPracticeAnswer,
   fetchPracticeQuestion,
   fetchPracticeSession,
+  fetchQuestionFamily,
   finishPracticeSession,
   PracticeQuestion,
   PracticeSessionView,
+  type QuestionFamily,
   SubmitResult,
   skipPracticeQuestion,
   submitPracticeAnswer,
@@ -26,10 +28,11 @@ import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestRunSidebar from "../components/TestRunSidebar";
 import SessionTimer from "../components/SessionTimer";
+import { useSessionEngagement } from "../hooks/useSessionEngagement";
 import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName } from "../utils/labels";
 import { formatVariantTypeLabel } from "../utils/variantLabels";
-import { isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 
 const OPTIONS = [
   { value: "1", label: "1" },
@@ -191,6 +194,7 @@ export default function PracticeQuestionPage() {
   const [aiTrigger, setAiTrigger] = useState<PracticeAiFeature | null>(null);
   const [variantCheck, setVariantCheck] = useState<VariantCheckResult | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [family, setFamily] = useState<QuestionFamily | null>(null);
   const questionCacheRef = useRef(new Map<string, PracticeQuestion>());
   const qRef = useRef<PracticeQuestion | null>(null);
   const loadedSessionIdRef = useRef<string | null>(null);
@@ -199,6 +203,33 @@ export default function PracticeQuestionPage() {
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
   sessionRef.current = session;
   qRef.current = q;
+  const familyParent = familyParentId(questionId ?? "", q?.parentQuestionId);
+
+  useEffect(() => {
+    if (!questionId) {
+      setFamily(null);
+      return;
+    }
+    let cancelled = false;
+    fetchQuestionFamily(questionId)
+      .then((data) => {
+        if (!cancelled) setFamily(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFamily(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyParent]);
+
+  useEffect(() => {
+    setFamily((prev) =>
+      prev && prev.activeQuestionId !== questionId
+        ? { ...prev, activeQuestionId: questionId }
+        : prev
+    );
+  }, [questionId]);
 
   const resultPath = useCallback(
     (sid: string) => (routeMode === "test" ? `/test/result/${sid}` : `/practice/result/${sid}`),
@@ -294,6 +325,17 @@ export default function PracticeQuestionPage() {
     setSession(s);
     return s;
   }, [sessionId, routeMode]);
+
+  const onSessionEngagementUpdate = useCallback((updated: PracticeSessionView) => {
+    setSession(updated);
+  }, []);
+
+  useSessionEngagement({
+    sessionId,
+    routeMode,
+    enabled: session?.status === "active",
+    onSessionUpdate: onSessionEngagementUpdate,
+  });
 
   const applyQuestion = useCallback(
     async (s: PracticeSessionView, qid: string) => {
@@ -776,10 +818,12 @@ export default function PracticeQuestionPage() {
     const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
     const variantAnswer = variantCheck?.correctAnswer ?? "";
     const goVariant = (qid: string) => {
-      if (qid !== questionId) navigate(sessionPath(sessionId, qid));
+      if (qid === questionId) return;
+      if (isSamePaperQuestion(qid, q)) setContentLoading(true);
+      navigate(sessionPath(sessionId, qid));
     };
     const variantLoader = contentLoading
-      ? variantSwitchLoaderForTarget(questionId)
+      ? variantSwitchLoaderForTarget(questionId, family)
       : null;
     return (
       <section key={questionId} className="practice-run-question glass-card">
@@ -800,6 +844,7 @@ export default function PracticeQuestionPage() {
         {routeMode === "practice" && (
           <QuestionVariantSwitcher
             questionId={questionId}
+            family={family}
             onSelect={goVariant}
           />
         )}
@@ -1108,7 +1153,12 @@ export default function PracticeQuestionPage() {
               <span>Answered: {answered}</span>
               <span>Remaining: {Math.max(0, remaining)}</span>
             </div>
-            <SessionTimer startedAt={session.startedAt} label="Time" compact />
+            <SessionTimer
+              activeSeconds={session.activeSeconds ?? 0}
+              engagedSince={session.engagedSince}
+              label="Time"
+              compact
+            />
           </div>
         ) : (
           <>
@@ -1120,7 +1170,12 @@ export default function PracticeQuestionPage() {
                 </strong>
               </div>
               {session.status === "active" && (
-                <SessionTimer startedAt={session.startedAt} label="Time" compact />
+                <SessionTimer
+                  activeSeconds={session.activeSeconds ?? 0}
+                  engagedSince={session.engagedSince}
+                  label="Time"
+                  compact
+                />
               )}
             </div>
             <div
