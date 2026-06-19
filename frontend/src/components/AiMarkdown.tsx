@@ -93,6 +93,11 @@ function normalizeMathContent(text: string): string {
   t = repairJsonEscapedLatex(t);
   t = t.replace(/\\{/g, "{");
   t = t.replace(/\\}/g, "}");
+  // LLM/export typo: \left$$ or \right)$$ used instead of parentheses
+  t = t.replace(/\\left\$\$/g, "\\left(");
+  t = t.replace(/\\left\$/g, "\\left(");
+  t = t.replace(/\\right\)\$\$/g, "\\right)");
+  t = t.replace(/\\right\$\$/g, "\\right)");
   t = t.replace(/\\left\s*\\frac/g, "\\left(\\frac");
   t = t.replace(/\\right(?![)\]|.|])/g, "\\right)");
   t = t.replace(/\\(cos|sin|tan)(\d)/g, "\\$1 $2");

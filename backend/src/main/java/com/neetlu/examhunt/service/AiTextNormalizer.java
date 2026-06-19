@@ -156,6 +156,11 @@ public final class AiTextNormalizer {
         // Over-escaped braces from bad JSON export: \{GM\} → {GM}
         t = t.replace("\\{", "{");
         t = t.replace("\\}", "}");
+        // LLM/export typo: \left$$ or \right)$$ used instead of parentheses
+        t = t.replaceAll("\\\\left\\$\\$", "\\\\left(");
+        t = t.replaceAll("\\\\left\\$", "\\\\left(");
+        t = t.replaceAll("\\\\right\\)\\$\\$", "\\\\right)");
+        t = t.replaceAll("\\\\right\\$\\$", "\\\\right)");
         // \left\frac → \left(\frac
         t = t.replaceAll("\\\\left\\s*\\\\frac", "\\\\left(\\\\frac");
         // \right with no closing delimiter (e.g. "\right$$" from bad export)
