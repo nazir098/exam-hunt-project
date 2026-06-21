@@ -3,7 +3,6 @@ import { ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
-import ThemeToggle from "./ThemeToggle";
 import {
   BRAND_NAME,
   STITCH_AVATAR_ANALYTICS,
@@ -57,7 +56,6 @@ export default function StitchShell({ children }: Props) {
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
-              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
@@ -74,7 +72,6 @@ export default function StitchShell({ children }: Props) {
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
-              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
@@ -86,7 +83,6 @@ export default function StitchShell({ children }: Props) {
               {BRAND_NAME}
             </Link>
             <div className="flex items-center gap-sm min-w-0">
-              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search question bank">
                 <span className="material-symbols-outlined">search</span>
               </Link>

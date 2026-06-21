@@ -2,7 +2,6 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import GlobalSearch from "./GlobalSearch";
 import ProfileMenu from "./ProfileMenu";
-import ThemeToggle from "./ThemeToggle";
 import { BRAND_NAME } from "../design/stitchAssets";
 import { SITE_NAV } from "../navigation/siteNav";
 
@@ -29,7 +28,6 @@ export default function DesktopSiteHeader({ minimal = false }: Props) {
           </div>
 
           <div className="stitch-desktop-header__actions">
-            <ThemeToggle />
             {user ? (
               <ProfileMenu />
             ) : (
