@@ -11,7 +11,7 @@ import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
 import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
-import { applySeoConfig } from "../components/Seo";
+import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
 import { familyParentId, isAiVariantQuestionId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
@@ -178,16 +178,41 @@ export default function QuestionPage() {
     const variantLabel = isVariant
       ? `${formatVariantTypeLabel(q.variantType, q.variantNo)}`
       : `Question ${q.questionNo}`;
-    const title = `${exam} ${q.subject} ${variantLabel} - ${topic} Solution | EduMaster AI by Techmuzzle`;
     const preview = seoExcerpt(q.questionTextPreview);
+    // Build title: include question text excerpt for SEO relevance
+    const questionSnippet = preview
+      ? preview.length > 60
+        ? `${preview.slice(0, 57)}...`
+        : preview
+      : variantLabel;
+    const title = `${exam} ${q.year} ${q.subject} ${questionSnippet} - ${topic} Solution | EduMaster AI`;
     const description =
       preview ||
       `Practice ${exam} ${q.subject} question ${q.questionNo} from ${topic} with answer checking, solution support, and AI study guidance.`;
+
+    // Build Question schema for Google rich results
+    const questionSchema: QuestionSchemaData = {
+      questionText: q.questionTextPreview || `${exam} ${q.year} ${q.subject} ${variantLabel}`,
+      options: q.options?.map((opt, i) => ({
+        label: String.fromCharCode(65 + i), // A, B, C, D
+        text: opt.text,
+      })),
+      correctAnswer: q.answer,
+      correctAnswerText: q.solutionTextPreview || undefined,
+      exam: examDisplayName(q.exam, q.year),
+      year: q.year,
+      subject: q.subject,
+      chapter: q.chapter,
+      questionNo: q.questionNo,
+      solutionImageUrl: q.solutionImageUrl || undefined,
+    };
+
     applySeoConfig({
       title,
       description,
       path: `/solve/${questionId}`,
       type: "article",
+      questionSchema,
     });
   }, [q, questionId]);
 

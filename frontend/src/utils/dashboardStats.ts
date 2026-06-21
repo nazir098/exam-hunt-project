@@ -113,6 +113,78 @@ export function bestStreakDays(sessions: PracticeSessionView[]): number {
   return best;
 }
 
+/** Questions answered in a day range (0 = today through end exclusive). */
+export function questionsInDayRange(
+  sessions: PracticeSessionView[],
+  startDaysAgo: number,
+  endDaysAgo: number
+): number {
+  const now = Date.now();
+  return meaningfulSessions(sessions)
+    .filter((s) => {
+      const days = Math.floor((now - new Date(s.startedAt).getTime()) / 86_400_000);
+      return days >= startDaysAgo && days < endDaysAgo;
+    })
+    .reduce((sum, s) => sum + s.correctCount + s.wrongCount, 0);
+}
+
+/** Weighted accuracy for sessions in a day range. */
+export function accuracyInDayRange(
+  sessions: PracticeSessionView[],
+  startDaysAgo: number,
+  endDaysAgo: number
+): number {
+  const now = Date.now();
+  let correct = 0;
+  let total = 0;
+  for (const s of meaningfulSessions(sessions)) {
+    const days = Math.floor((now - new Date(s.startedAt).getTime()) / 86_400_000);
+    if (days < startDaysAgo || days >= endDaysAgo) continue;
+    correct += s.correctCount;
+    total += s.correctCount + s.wrongCount;
+  }
+  return total > 0 ? Math.round((correct / total) * 100) : 0;
+}
+
+export function accuracyDeltaLast7Days(sessions: PracticeSessionView[], fallback: number): number {
+  const recent = accuracyInDayRange(sessions, 0, 7);
+  const prior = accuracyInDayRange(sessions, 7, 14);
+  if (recent === 0 && prior === 0) return fallback;
+  if (prior === 0) return recent > 0 ? recent : fallback;
+  return recent - prior;
+}
+
+export function questionsDeltaLast7Days(sessions: PracticeSessionView[]): number {
+  return questionsInDayRange(sessions, 0, 7) - questionsInDayRange(sessions, 7, 14);
+}
+
+/** Last N session accuracy values for sparkline (oldest → newest). */
+export function accuracySparkline(sessions: PracticeSessionView[], points = 7): number[] {
+  const recent = meaningfulSessions(sessions).slice(0, points).reverse();
+  if (recent.length === 0) return Array(points).fill(0);
+  const values = recent.map(sessionAccuracy);
+  while (values.length < points) values.unshift(values[0] ?? 0);
+  return values;
+}
+
+export function rankSubtitle(rank: number | null, scholars: number): string {
+  if (rank == null) return "Complete a session to rank";
+  if (scholars <= 0) return "Among active scholars";
+  const pct = (rank / scholars) * 100;
+  if (pct <= 10) return "Top 10% of users";
+  if (pct <= 25) return "Top 25% of users";
+  return `of ${scholars} scholars`;
+}
+
+export function weakestChapterForSubject(
+  weakChapters: ChapterProgress[] | undefined,
+  subject: string
+): ChapterProgress | null {
+  const rows = (weakChapters ?? []).filter((c) => c.subject === subject);
+  if (rows.length === 0) return null;
+  return [...rows].sort((a, b) => a.accuracyPercent - b.accuracyPercent)[0];
+}
+
 export function buildDashboardStats(progress: ProgressSummary | null): DashboardStats {
   const sessions = meaningfulSessions(progress?.recentSessions ?? []);
   const completed = sessions.filter((s) => s.correctCount + s.wrongCount > 0);

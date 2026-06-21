@@ -72,8 +72,9 @@ export default function AiTutorBar() {
             </span>
           </button>
         ) : (
-          <button type="button" className="lumina-ai-chip" onClick={() => setShowChat(false)}>
-            Close chat
+          <button type="button" className="lumina-ai-chip lumina-ai-chip--close" onClick={() => setShowChat(false)}>
+            <span className="material-symbols-outlined">close</span>
+            <span className="lumina-ai-chip-label">Close chat</span>
           </button>
         )}
         <Link to="/ai-tutor" className="lumina-ai-fab md-hidden" aria-label="Full AI Tutor">

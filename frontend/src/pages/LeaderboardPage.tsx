@@ -342,7 +342,7 @@ export default function LeaderboardPage() {
   useEffect(() => {
     setLoading(true);
     setError("");
-    fetchLeaderboard(50, period)
+    fetchLeaderboard(10, period)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load leaderboard"))
       .finally(() => setLoading(false));
@@ -546,7 +546,7 @@ export default function LeaderboardPage() {
             </div>
             {activity.length > 0 ? (
               <ul className="lb-activity-list">
-                {activity.map((item, i) => (
+                {activity.slice(0, 15).map((item, i) => (
                   <ActivityRow key={`${item.displayName}-${item.relativeTime}-${i}`} item={item} />
                 ))}
               </ul>

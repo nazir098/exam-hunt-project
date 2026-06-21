@@ -14,7 +14,6 @@ type RecCard = {
   desc: string;
   tooltip: string;
   to: string;
-  primary: boolean;
 };
 
 type Props = {
@@ -34,95 +33,89 @@ export default function DashboardRecommendations({
   const weakCard: RecCard = weak
     ? {
         id: "weak",
-        icon: "target",
+        icon: "track_changes",
         title: "Practice weak chapters",
         desc: formatWeakChapterDesc(weak),
-        tooltip: `${formatWeakChapterDesc(weak)}. Opens the question bank filtered to this chapter.`,
+        tooltip: formatWeakChapterTooltip(weak),
         to: weakChapterBankUrl(weak),
-        primary: !activeSession,
       }
-    : hasAttempts
-      ? {
-          id: "weak",
-          icon: "target",
-          title: "Practice weak chapters",
-          desc: "Answer a few more questions in Practice to unlock chapter-level weak spots.",
-          tooltip:
-            "Complete more scored practice sessions so we can rank chapters by accuracy and marks lost.",
-          to: "/practice",
-          primary: !activeSession,
-        }
-      : {
-          id: "weak",
-          icon: "target",
-          title: "Practice weak chapters",
-          desc: "Start a scored session — we'll surface your weakest chapters from real attempts.",
-          tooltip:
-            "Your first practice sessions build a baseline. Weak chapters appear after real attempts with scoring.",
-          to: "/practice",
-          primary: !activeSession,
-        };
+    : {
+        id: "weak",
+        icon: "track_changes",
+        title: "Practice weak chapters",
+        desc: hasAttempts
+          ? "Answer more questions to unlock chapter-level weak spots."
+          : "Start practice — we'll surface your weakest chapters from real attempts.",
+        tooltip: "Opens the question bank filtered to weak chapters.",
+        to: "/practice",
+      };
 
   const cards: RecCard[] = [
+    weakCard,
+    {
+      id: "drill",
+      icon: "lightbulb",
+      title: weak ? `Drill ${weak.chapter}` : "Drill weak topic",
+      desc: weak
+        ? "Practice questions from your weakest chapter."
+        : "Run a focused session after your first attempts.",
+      tooltip: weak ? `Focused drill on ${weak.chapter}` : "Start practice to unlock drill targets.",
+      to: weak ? weakChapterBankUrl(weak) : "/practice",
+    },
     activeSession
       ? {
           id: "resume",
           icon: "play_circle",
-          title: "Continue previous session",
-          desc: `${activeSession.packId.replace("NEET_", "NEET ")} · question ${activeSession.currentIndex + 1} of ${activeSession.questionCount}`,
-          tooltip: `Resume where you left off — question ${activeSession.currentIndex + 1} of ${activeSession.questionCount}. Progress and scoring carry over.`,
+          title: "Continue session",
+          desc: `${activeSession.packId.replace("NEET_", "NEET ")} · Q${activeSession.currentIndex + 1} of ${activeSession.questionCount}`,
+          tooltip: "Resume your in-progress session.",
           to: practiceCta,
-          primary: true,
         }
-      : null,
-    weakCard,
+      : {
+          id: "practice",
+          icon: "bolt",
+          title: "Practice & Bank",
+          desc: "Sessions + PYQ browse in one hub.",
+          tooltip: "Start adaptive practice or browse the question bank.",
+          to: "/practice",
+        },
     {
-      id: "next",
-      icon: "lightbulb",
-      title: weak ? `Drill ${weak.chapter}` : "Suggested next topic",
-      desc: weak
-        ? "Open the question bank filtered to your weakest chapter."
-        : "Run a fresh adaptive NEET session — 20 questions, +4/−1 scoring",
-      tooltip: weak
-        ? `Focused drill on ${weak.subject} · ${weak.chapter} (${weak.accuracyPercent}% accuracy). Browse PYQs for this chapter only.`
-        : "Start a 20-question adaptive practice session. Instant feedback, +4/−1 scoring, counts toward rank.",
-      to: weak ? weakChapterBankUrl(weak) : "/practice",
-      primary: false,
+      id: "analytics",
+      icon: "monitoring",
+      title: "Analytics",
+      desc: "Trends, heatmaps, and weak-area insights.",
+      tooltip: "Accuracy trends, subject breakdowns, and activity heatmaps.",
+      to: "/analytics",
     },
-  ].filter(Boolean) as RecCard[];
+    {
+      id: "leaderboard",
+      icon: "emoji_events",
+      title: "Leaderboard",
+      desc: "Your rank vs peers this period.",
+      tooltip: "Compare marks and accuracy with other scholars.",
+      to: "/leaderboard",
+    },
+  ];
 
   return (
-    <section className="dash-recs" aria-label="Recommended for you">
-      <h2 className="dash-section-title">Recommended for you</h2>
-      {progress?.weakChapters && progress.weakChapters.length > 1 && (
-        <ul className="dash-recs__weak-list muted">
-          {progress.weakChapters.slice(0, 3).map((c) => (
-            <li key={`${c.subject}-${c.chapter}`}>
-              <Link
-                to={weakChapterBankUrl(c)}
-                className="hover-hint dash-recs__weak-link"
-                data-tooltip={formatWeakChapterTooltip(c)}
-              >
-                {c.subject} · {c.chapter} ({c.accuracyPercent}%)
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="dash-recs__grid">
+    <section className="dash-v2-recs" aria-label="Recommended for you">
+      <div className="dash-v2-recs__head">
+        <h2 className="dash-section-title">Recommended for you</h2>
+        <Link to="/practice" className="dash-v2-recs__view-all">
+          View all <span className="material-symbols-outlined">arrow_forward</span>
+        </Link>
+      </div>
+      <div className="dash-v2-recs__track">
         {cards.map((card) => (
           <Link
             key={card.id}
             to={card.to}
-            className={`dash-rec-card glass-card hover-hint ${card.primary ? "dash-rec-card--primary" : ""}`}
+            className="dash-v2-rec-card glass-card hover-hint"
             data-tooltip={card.tooltip}
           >
-            <span className="material-symbols-outlined dash-rec-card__icon">{card.icon}</span>
-            <div>
-              <strong>{card.title}</strong>
-              <p>{card.desc}</p>
-            </div>
-            <span className="material-symbols-outlined dash-rec-card__arrow">chevron_right</span>
+            <span className="material-symbols-outlined dash-v2-rec-card__icon">{card.icon}</span>
+            <strong>{card.title}</strong>
+            <p>{card.desc}</p>
           </Link>
         ))}
       </div>

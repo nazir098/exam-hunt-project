@@ -11,12 +11,26 @@ const DEFAULT_DESCRIPTION =
   "Practice NEET previous year questions (PYQ) from 2016 to 2025 chapter-wise. Take free mock tests, get AI explanations, and track your performance. Best NEET preparation platform for Biology, Physics & Chemistry.";
 const SOCIAL_IMAGE = `${SITE_URL}/og-image.svg`;
 
+export type QuestionSchemaData = {
+  questionText: string;
+  options?: { label: string; text: string }[];
+  correctAnswer?: string;
+  correctAnswerText?: string;
+  exam?: string;
+  year?: number;
+  subject?: string;
+  chapter?: string;
+  questionNo?: number;
+  solutionImageUrl?: string;
+};
+
 export type SeoConfig = {
   title: string;
   description: string;
   path: string;
   robots?: string;
   type?: "website" | "article";
+  questionSchema?: QuestionSchemaData;
 };
 
 function upsertMeta(selector: string, attr: "name" | "property", key: string, content: string) {
@@ -149,6 +163,46 @@ function buildFaqSchema(): Record<string, unknown> {
   };
 }
 
+function buildQuestionSchema(q: QuestionSchemaData, canonicalUrl: string): Record<string, unknown> {
+  const schema: Record<string, unknown> = {
+    "@type": "Question",
+    "@id": `${canonicalUrl}#question`,
+    name: q.questionText.slice(0, 200),
+    text: q.questionText,
+    url: canonicalUrl,
+    answerCount: 1,
+    educationalLevel: "intermediate",
+    learningResourceType: "Question",
+    about: q.subject || "NEET",
+    isPartOf: {
+      "@type": "Quiz",
+      name: q.exam
+        ? `${q.exam} ${q.year || ""} ${q.subject || ""} Question Paper`.trim()
+        : "NEET Previous Year Question Paper",
+    },
+  };
+
+  if (q.options && q.options.length > 0) {
+    schema.suggestedAnswer = q.options.map((opt) => ({
+      "@type": "Answer",
+      text: `${opt.label}. ${opt.text}`,
+    }));
+  }
+
+  if (q.correctAnswer) {
+    schema.acceptedAnswer = {
+      "@type": "Answer",
+      text: q.correctAnswerText || `Correct answer: ${q.correctAnswer}`,
+    };
+  }
+
+  if (q.solutionImageUrl) {
+    schema.image = q.solutionImageUrl;
+  }
+
+  return schema;
+}
+
 export function applySeoConfig(seo: SeoConfig) {
   const canonicalUrl = `${SITE_URL}${seo.path}`;
   const robots = seo.robots || "index, follow";
@@ -183,6 +237,13 @@ export function applySeoConfig(seo: SeoConfig) {
     graph.push(buildFaqSchema());
   } else {
     removeJsonLd("edumaster-ai-jsonld-faq");
+  }
+
+  // Add Question schema for individual question pages
+  if (seo.questionSchema) {
+    graph.push(buildQuestionSchema(seo.questionSchema, canonicalUrl));
+  } else {
+    removeJsonLd("edumaster-ai-jsonld-question");
   }
 
   upsertJsonLd("edumaster-ai-jsonld", {

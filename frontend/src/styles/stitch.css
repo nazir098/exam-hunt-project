@@ -681,6 +681,132 @@ html:not(.dark) .stitch-viewport {
     color: #eed9ff;
   }
 
+  /* Unified mobile app header */
+  .stitch-mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    width: 100%;
+    flex-shrink: 0;
+    background: rgba(20, 20, 36, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    padding-top: env(safe-area-inset-top, 0px);
+    overflow: visible;
+  }
+
+  .stitch-mobile-header__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: var(--app-header-h);
+    padding: 0 1rem;
+  }
+
+  .stitch-mobile-header__brand {
+    min-width: 0;
+    font-size: 1.25rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stitch-mobile-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+  }
+
+  .stitch-mobile-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    border: none;
+    border-radius: 0.65rem;
+    background: transparent;
+    color: #c8cdd8;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .stitch-mobile-icon-btn:hover,
+  .stitch-mobile-icon-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    color: #eed9ff;
+    outline: none;
+  }
+
+  .stitch-mobile-icon-btn .material-symbols-outlined {
+    font-size: 1.35rem;
+    line-height: 1;
+    display: block;
+  }
+
+  .stitch-mobile-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 1rem 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .stitch-mobile-search__icon {
+    flex-shrink: 0;
+    font-size: 1.15rem;
+    color: #9aa4b2;
+  }
+
+  .stitch-mobile-search__input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(12, 12, 24, 0.9);
+    color: #f3f4f6;
+    font-size: 16px;
+  }
+
+  .stitch-mobile-search__input:focus {
+    outline: none;
+    border-color: rgba(167, 139, 250, 0.45);
+    box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.12);
+  }
+
+  .profile-menu__trigger {
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    flex-shrink: 0;
+  }
+
+  .profile-menu__trigger--mobile {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    font-size: 0.88rem;
+    border-width: 1.5px;
+  }
+
+  @media (max-width: 1023px) {
+    .profile-menu--mobile .profile-menu__dropdown {
+      z-index: 100;
+    }
+  }
+
   .stitch-mobile-ai-btn.ai-tutor-btn--header {
     padding: 0.35rem 0.5rem;
     min-height: 2.25rem;
@@ -817,6 +943,21 @@ html:not(.dark) .stitch-viewport {
     margin-right: auto;
     padding-left: 1rem;
     padding-right: 1rem;
+    min-width: 0;
+  }
+
+  @media (max-width: 1023px) {
+    .stitch-page-content {
+      padding-left: max(1rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    }
+
+    .stitch-page-content > main,
+    .stitch-page-content > .bank-page {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -1548,6 +1689,11 @@ html:not(.dark) .stitch-viewport {
     .stitch-shell .stitch-page-content > .practice-run-page {
       padding-bottom: var(--app-bottom-h);
     }
+
+    /* Practice hub needs extra room for sticky start banner + recent sessions */
+    .stitch-shell .stitch-page-content > main.practice-page--hub {
+      padding-bottom: calc(var(--app-bottom-h) + 2rem);
+    }
   }
 
   @media (min-width: 1024px) {
@@ -1556,5 +1702,75 @@ html:not(.dark) .stitch-viewport {
     .stitch-shell .stitch-page-content > .practice-run-page {
       padding-bottom: var(--app-bottom-h);
     }
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Mobile hardening — stitch layer
+   ═══════════════════════════════════════════════════ */
+
+/* Bank results feed: cards full-width on mobile */
+@media (max-width: 639px) {
+  .bank-results-feed__list {
+    gap: 0.65rem;
+  }
+
+  .bank-results-feed__list .glass-card--bank,
+  .bank-results-feed__list .glass-card {
+    padding: 0.75rem 0.85rem;
+  }
+}
+
+/* Glass card tighter padding on mobile */
+@media (max-width: 480px) {
+  .glass-card {
+    padding: 0.85rem 1rem;
+    border-radius: 0.75rem;
+  }
+}
+
+/* Safe area bottom padding for mobile nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .stitch-shell--no-mobile-chrome .stitch-page-content {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Practice run header tighter on mobile */
+@media (max-width: 639px) {
+  .practice-run-header {
+    padding: 0.5rem 0.85rem;
+  }
+
+  .practice-run-header__score-row {
+    gap: 0.5rem;
+  }
+
+  .practice-run-header__stats {
+    gap: 0.35rem;
+  }
+
+  .practice-run-header-chip {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.72rem;
+  }
+}
+
+/* Practice run layout single column below lg */
+@media (max-width: 1023px) {
+  .practice-run-layout {
+    gap: 0.75rem;
+  }
+}
+
+/* Question card: stack meta chips tighter */
+@media (max-width: 400px) {
+  .practice-run-meta {
+    gap: 0.3rem;
+  }
+
+  .practice-run-chip {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.68rem;
   }
 }

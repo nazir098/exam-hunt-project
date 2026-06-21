@@ -1,11 +1,45 @@
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
-export default function ProfileMenu() {
+type Props = {
+  variant?: "desktop" | "mobile";
+};
+
+export default function ProfileMenu({ variant = "desktop" }: Props) {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const isMobile = variant === "mobile";
+
+  useLayoutEffect(() => {
+    if (!open || !isMobile || !rootRef.current) return;
+    function place() {
+      const trigger = rootRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right),
+        left: "auto",
+        width: "min(18rem, calc(100vw - 1.5rem))",
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, isMobile]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -28,19 +62,27 @@ export default function ProfileMenu() {
   const initial = (user.displayName || user.email).charAt(0).toUpperCase();
 
   return (
-    <div className="profile-menu" ref={rootRef}>
+    <div
+      className={`profile-menu${isMobile ? " profile-menu--mobile" : ""}`}
+      ref={rootRef}
+    >
       <button
         type="button"
-        className="profile-menu__trigger stitch-desktop-avatar"
+        className={`profile-menu__trigger stitch-desktop-avatar${isMobile ? " profile-menu__trigger--mobile" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label="Account menu"
         title={user.displayName || user.email}
       >
         {initial}
       </button>
       {open && (
-        <div className="profile-menu__dropdown glass-card" role="menu">
+        <div
+          className="profile-menu__dropdown glass-card"
+          role="menu"
+          style={isMobile ? dropdownStyle : undefined}
+        >
           <div className="profile-menu__identity">
             <strong>{user.displayName || "Student"}</strong>
             <span>{user.email}</span>
