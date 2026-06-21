@@ -1,5 +1,6 @@
 import { touchSessionActivity } from "./auth/session";
 import { getToken } from "./auth/storage";
+import { trackEvent } from "./analytics";
 import { familyParentId } from "./utils/questionFamily";
 
 /** In dev, use Vite proxy (same origin) unless VITE_API_BASE_URL_FORCE is set. */
@@ -713,6 +714,18 @@ export function fetchAdminPacks() {
   return request<{ packs: AdminPackRow[]; count: number }>("/api/admin/packs");
 }
 
+export type AdminAnalyticsSummary = {
+  sampleSize: number;
+  uniqueSessions: number;
+  windowDays: number;
+  topEvents: { name: string; count: number }[];
+  dailyPageViews: { day: string; count: number }[];
+};
+
+export function fetchAdminAnalyticsSummary(days = 7) {
+  return request<AdminAnalyticsSummary>(`/api/admin/analytics/summary?days=${days}`);
+}
+
 export function adminDeletePack(packId: string) {
   return request<AdminActionResult>(`/api/admin/packs/${encodeURIComponent(packId)}`, {
     method: "DELETE",
@@ -749,6 +762,15 @@ export function createPracticeSession(body: {
   return request<PracticeSessionView>("/api/practice/sessions", {
     method: "POST",
     body: JSON.stringify(body),
+  }).then((session) => {
+    trackEvent("session_start", {
+      mode: body.mode ?? "practice",
+      packId: body.packId,
+      exam: body.exam,
+      adaptive: body.adaptive,
+      questionCount: body.questionCount ?? session.questionCount,
+    });
+    return session;
   });
 }
 
@@ -834,7 +856,15 @@ export function finishPracticeSession(sessionId: string) {
   return request<SessionResultView>(
     `/api/practice/sessions/${encodeURIComponent(sessionId)}/finish`,
     { method: "POST" }
-  );
+  ).then((result) => {
+    trackEvent("session_complete", {
+      sessionId,
+      mode: result.session.mode,
+      accuracy: result.accuracyPercent,
+      questions: result.session.questionCount,
+    });
+    return result;
+  });
 }
 
 export function fetchPracticeSession(sessionId: string) {

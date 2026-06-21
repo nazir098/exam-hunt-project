@@ -18,6 +18,7 @@ import {
 } from "../api";
 import { isSessionIdleExpired, touchSessionActivity } from "./session";
 import { clearToken, getToken, setToken } from "./storage";
+import { setAnalyticsUser, trackEvent } from "../analytics";
 
 type AuthContextValue = {
   user: UserProfile | null;
@@ -42,9 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const progressInflightRef = useRef<Promise<void> | null>(null);
 
   const logout = useCallback(() => {
+    trackEvent("logout");
     clearToken();
     setUser(null);
     setProgress(null);
+    setAnalyticsUser(null);
   }, []);
 
   const refreshProgress = useCallback(async () => {
@@ -84,7 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     touchSessionActivity();
     try {
-      setUser(await fetchMe());
+      const me = await fetchMe();
+      setUser(me);
+      setAnalyticsUser(me.id);
       void refreshProgress();
     } catch {
       logout();
@@ -129,7 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiLogin(email, password);
       setToken(res.token);
       setUser(res.user);
+      setAnalyticsUser(res.user.id);
       touchSessionActivity();
+      trackEvent("login");
       await refreshProgress();
       return res.user;
     },
@@ -141,7 +148,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRegister(email, password, displayName);
       setToken(res.token);
       setUser(res.user);
+      setAnalyticsUser(res.user.id);
       touchSessionActivity();
+      trackEvent("sign_up");
       await refreshProgress();
     },
     [refreshProgress]

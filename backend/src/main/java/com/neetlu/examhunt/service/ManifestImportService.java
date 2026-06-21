@@ -1117,7 +1117,7 @@ public class ManifestImportService {
                 continue;
             }
             if (!title.isBlank()) {
-                sb.append("**").append(title).append("**\n\n");
+                sb.append("### ").append(title.strip()).append("\n\n");
             }
             sb.append(content).append("\n\n");
         }

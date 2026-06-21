@@ -7822,6 +7822,35 @@ a.nav-tip {
   margin: 0 0 1rem;
 }
 
+.admin-analytics-summary__meta {
+  margin: 0 0 0.75rem;
+}
+
+.admin-analytics-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  max-width: 24rem;
+}
+
+.admin-analytics-summary__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+  font-size: 0.88rem;
+}
+
+.admin-analytics-summary__list span {
+  color: #9ca3af;
+}
+
 .admin-page__folder {
   display: flex;
   flex-direction: column;

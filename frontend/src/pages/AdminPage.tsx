@@ -9,8 +9,10 @@ import {
   adminImportNeet,
   adminSeedLeaderboardDemo,
   fetchAdminImportFolders,
+  fetchAdminAnalyticsSummary,
   fetchAdminPacks,
   type AdminActionResult,
+  type AdminAnalyticsSummary,
   type AdminPackRow,
   type ImportFolderOption,
   type ImportJobView,
@@ -54,6 +56,8 @@ export default function AdminPage() {
   const [packsLoading, setPacksLoading] = useState(true);
   const [log, setLog] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analyticsSummary, setAnalyticsSummary] = useState<AdminAnalyticsSummary | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   const loadInstalledPacks = useCallback(() => {
     setPacksLoading(true);
@@ -70,6 +74,15 @@ export default function AdminPage() {
       .catch(() => setInstalledPacks([]))
       .finally(() => setPacksLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!user?.admin) return;
+    setAnalyticsLoading(true);
+    fetchAdminAnalyticsSummary(7)
+      .then(setAnalyticsSummary)
+      .catch(() => setAnalyticsSummary(null))
+      .finally(() => setAnalyticsLoading(false));
+  }, [user?.admin]);
 
   useEffect(() => {
     if (!user?.admin) return;
@@ -417,6 +430,37 @@ export default function AdminPage() {
             );
           })}
         </div>
+      </section>
+
+      <section className="admin-page__section">
+        <h2 className="admin-page__section-title">Product analytics (last 7 days)</h2>
+        <p className="admin-card__desc">
+          Page views and product events stored from the frontend beacon. Traffic charts also live in
+          Cloudflare Web Analytics / GA4 when configured.
+        </p>
+        {analyticsLoading ? (
+          <p className="muted">Loading analytics…</p>
+        ) : !analyticsSummary ? (
+          <p className="muted">Analytics summary unavailable.</p>
+        ) : (
+          <div className="admin-analytics-summary">
+            <p className="admin-analytics-summary__meta muted">
+              {analyticsSummary.sampleSize} events · {analyticsSummary.uniqueSessions} sessions
+            </p>
+            {analyticsSummary.topEvents.length > 0 ? (
+              <ul className="admin-analytics-summary__list">
+                {analyticsSummary.topEvents.map((row) => (
+                  <li key={row.name}>
+                    <strong>{row.name}</strong>
+                    <span>{row.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No events recorded yet — deploy the frontend with analytics enabled.</p>
+            )}
+          </div>
+        )}
       </section>
 
       {(log || error) && (

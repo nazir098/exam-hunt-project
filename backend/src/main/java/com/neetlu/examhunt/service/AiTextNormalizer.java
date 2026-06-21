@@ -19,6 +19,7 @@ public final class AiTextNormalizer {
             return text == null ? "" : text;
         }
         String t = text.strip();
+        t = normalizeSolutionSteps(t);
         t = normalizeLatexDelimiters(t);
         t = normalizeInlineMath(t);
         return t;
@@ -29,6 +30,7 @@ public final class AiTextNormalizer {
             return text == null ? "" : text;
         }
         String t = stripMetaPreamble(text.strip());
+        t = normalizeSolutionSteps(t);
         t = normalizeBasicsStructure(t);
         t = normalizeSectionHeaders(t);
         t = normalizeLatexDelimiters(t);
@@ -44,6 +46,17 @@ public final class AiTextNormalizer {
     };
 
     /** Turn **Concept** and inline ### headings into line-start markdown h3 sections. */
+    /** Turn inline {@code **Step N**} markers into markdown h3 headings. */
+    private static String normalizeSolutionSteps(String text) {
+        if (text == null || text.isBlank()) {
+            return text == null ? "" : text;
+        }
+        String t = text.replaceAll("(?i)\\*\\*Step\\s*(\\d+)\\s*:?\\*\\*", "\n\n### Step $1\n\n");
+        t = t.replaceAll("([^\\n])\\s+(### Step \\d+)", "$1\n\n$2");
+        t = t.replaceAll("\\n{3,}", "\n\n");
+        return t.strip();
+    }
+
     private static String normalizeBasicsStructure(String text) {
         String t = text;
         for (String title : BASICS_SECTIONS) {

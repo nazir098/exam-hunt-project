@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { trackPageView } from "../analytics";
 
 const SITE_URL = "https://www.techmuzzle.in";
 const PRODUCT_NAME = "EduMaster AI";
@@ -207,6 +208,7 @@ export default function Seo() {
   useEffect(() => {
     const seo = getSeoConfig(pathname);
     applySeoConfig(seo);
+    trackPageView(pathname, seo.title);
   }, [pathname]);
 
   return null;

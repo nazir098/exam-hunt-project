@@ -16,6 +16,7 @@ export function normalizeAiText(text: string): string {
   );
   t = t.replace(/\bfor a class 11[-–]12 neet student[,]?\s*/gi, "");
   t = t.replace(/\bclass 11[-–]12 neet student[,]?\s*/gi, "");
+  t = normalizeSolutionSteps(t);
   t = normalizeBasicsStructure(t);
   const conceptIdx = t.search(/^###\s+Concept/m);
   if (conceptIdx > 0) {
@@ -37,6 +38,14 @@ function normalizeInlineFormulaEquations(text: string): string {
     (_, prefix: string, latex: string, suffix: string) =>
       `${prefix}${normalizeMathContent(latex)}${suffix}`
   );
+}
+
+/** Turn inline **Step N** markers into block headings so steps do not merge in one paragraph. */
+function normalizeSolutionSteps(text: string): string {
+  let t = text.replace(/\*\*Step\s*(\d+)\s*:?\*\*/gi, (_, n: string) => `\n\n### Step ${n}\n\n`);
+  t = t.replace(/([^\n])\s+(### Step \d+)/g, "$1\n\n$2");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  return t.trim();
 }
 
 /** Fix LLM basics/revision text: **Concept** and inline ### → proper markdown headings. */

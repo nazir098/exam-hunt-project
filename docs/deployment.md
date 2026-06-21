@@ -215,6 +215,38 @@ VITE_API_BASE_URL=https://api.techmuzzle.in
 
 After changing env vars, redeploy the latest production deployment.
 
+### Web & product analytics
+
+**Cloudflare Web Analytics** (recommended for traffic on Pages):
+
+1. Cloudflare dashboard → your zone → **Analytics & logs** → **Web Analytics**
+2. Add site `www.techmuzzle.in` and copy the **JS snippet token**
+3. Cloudflare Pages → **Settings** → **Environment variables** (Production):
+
+```text
+VITE_CF_WEB_ANALYTICS_TOKEN=<token-from-cloudflare>
+VITE_API_BASE_URL=https://api.techmuzzle.in
+```
+
+Optional:
+
+```text
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+VITE_PLAUSIBLE_DOMAIN=techmuzzle.in
+```
+
+Redeploy Pages after saving env vars. Page views are tracked client-side on route changes; product events (`sign_up`, `login`, `session_start`, `session_complete`) batch to the API.
+
+**Backend product events** (AWS EC2):
+
+```env
+ANALYTICS_EVENTS_ENABLED=true
+```
+
+Events are stored in MongoDB collection `analytics_events`. Admin summary: `GET /api/admin/analytics/summary?days=7` (also shown on `/admin`).
+
+Local dev: analytics is off unless `VITE_ANALYTICS_ENABLED=true` in `frontend/.env`.
+
 ## Verification
 
 Backend health:
