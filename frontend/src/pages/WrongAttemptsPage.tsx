@@ -7,11 +7,25 @@ import {
   WrongAttemptView,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
-import { examDisplayName } from "../utils/labels";
+import WrongAttemptCard from "../components/WrongAttemptCard";
+import {
+  countWrongTab,
+  matchesWrongTab,
+  searchWrongAttempts,
+  sortWrongAttempts,
+  type WrongSort,
+  type WrongTab,
+} from "../utils/wrongAttemptsUi";
 
 type ModeFilter = "all" | "practice" | "test";
 type RevisionFilter = "all" | "pending" | "revised";
+
+const TABS: { id: WrongTab; label: string }[] = [
+  { id: "priority", label: "High Priority" },
+  { id: "due-today", label: "Due Today" },
+  { id: "recent", label: "Recently Wrong" },
+  { id: "all", label: "All" },
+];
 
 export default function WrongAttemptsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -22,11 +36,13 @@ export default function WrongAttemptsPage() {
   );
   const [subject, setSubject] = useState(searchParams.get("subject") || "");
   const [chapter, setChapter] = useState(searchParams.get("chapter") || "");
-  const [exam, setExam] = useState(searchParams.get("exam") || "");
-  const [year, setYear] = useState(searchParams.get("year") || "");
+  const [exam] = useState(searchParams.get("exam") || "");
+  const [year] = useState(searchParams.get("year") || "");
   const [sessionId, setSessionId] = useState(searchParams.get("sessionId") || "");
   const [revisionFilter, setRevisionFilter] = useState<RevisionFilter>("all");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<WrongTab>("priority");
+  const [sort, setSort] = useState<WrongSort>("latest");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -78,25 +94,36 @@ export default function WrongAttemptsPage() {
   );
   const chapters = useMemo(
     () =>
-      [...new Set(items.filter((i) => !subject || i.subject === subject).map((i) => i.chapter).filter(Boolean))].sort(),
+      [
+        ...new Set(
+          items.filter((i) => !subject || i.subject === subject).map((i) => i.chapter).filter(Boolean)
+        ),
+      ].sort(),
     [items, subject]
   );
-  const exams = useMemo(
-    () => [...new Set(items.map((i) => i.exam).filter(Boolean))].sort(),
-    [items]
-  );
-  const years = useMemo(
-    () => [...new Set(items.map((i) => String(i.year)).filter(Boolean))].sort((a, b) => Number(b) - Number(a)),
-    [items]
-  );
 
-  const filtered = useMemo(() => {
+  const revisionFiltered = useMemo(() => {
     return items.filter((item) => {
       if (revisionFilter === "pending" && item.revised) return false;
       if (revisionFilter === "revised" && !item.revised) return false;
       return true;
     });
   }, [items, revisionFilter]);
+
+  const tabCounts = useMemo(
+    () =>
+      Object.fromEntries(TABS.map((tab) => [tab.id, countWrongTab(revisionFiltered, tab.id)])) as Record<
+        WrongTab,
+        number
+      >,
+    [revisionFiltered]
+  );
+
+  const displayed = useMemo(() => {
+    const tabbed = revisionFiltered.filter((item) => matchesWrongTab(item, activeTab));
+    const searched = searchWrongAttempts(tabbed, search);
+    return sortWrongAttempts(searched, sort);
+  }, [revisionFiltered, activeTab, search, sort]);
 
   async function toggleRevised(item: WrongAttemptView) {
     setBusyId(item.questionId);
@@ -116,7 +143,7 @@ export default function WrongAttemptsPage() {
 
   if (authLoading || loading) {
     return (
-      <main className="dashboard-page pt-4">
+      <main className="dashboard-page wrong-v2-page pt-4 lg:pt-6">
         <p className="muted">Loading wrong attempts…</p>
       </main>
     );
@@ -124,183 +151,142 @@ export default function WrongAttemptsPage() {
 
   if (!user) {
     return (
-      <main className="dashboard-page pt-4">
-        <p className="muted">
-          <Link to="/login?next=/review/wrong-attempts">Sign in</Link> to review wrong attempts.
-        </p>
+      <main className="dashboard-page wrong-v2-page pt-4 lg:pt-6">
+        <div className="wrong-v2-guest glass-card">
+          <h1 className="practice-page-title">Wrong attempts</h1>
+          <p className="practice-page-desc">
+            Review mistakes from practice and tests. Sign in to track revision and explanations.
+          </p>
+          <div className="wrong-v2-guest__actions">
+            <Link to="/register?next=%2Freview%2Fwrong-attempts" className="btn primary">
+              Get started
+            </Link>
+            <Link to="/login?next=%2Freview%2Fwrong-attempts" className="btn">
+              Sign in
+            </Link>
+          </div>
+        </div>
       </main>
     );
   }
 
-  const pendingCount = items.filter((i) => !i.revised).length;
-
   return (
-    <main className="dashboard-page wrong-review-page pt-4 lg:pt-6">
-      <header className="wrong-review-page__head">
+    <main className="dashboard-page wrong-v2-page pt-4 lg:pt-6">
+      <header className="wrong-v2-page__head">
         <h1 className="practice-page-title">Wrong attempts</h1>
         <p className="practice-page-desc">
-          Review mistakes from Practice and Test. Wrong answers are auto-added to your revision queue.
-          {pendingCount > 0 && ` ${pendingCount} pending revision.`}
+          Review mistakes from practice and tests. Wrong answers are added to your revision queue automatically.
         </p>
       </header>
 
-      <div className="wrong-review-filters glass-card">
-        <label>
-          Mode
-          <select value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)}>
-            <option value="all">Practice + Test</option>
-            <option value="practice">Practice only</option>
-            <option value="test">Test only</option>
-          </select>
+      <div className="wrong-v2-toolbar glass-card">
+        <div className="wrong-v2-filters">
+          <label className="wrong-v2-filter">
+            <span>Mode</span>
+            <select value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)}>
+              <option value="all">Practice + Test</option>
+              <option value="practice">Practice only</option>
+              <option value="test">Test only</option>
+            </select>
+          </label>
+          <label className="wrong-v2-filter">
+            <span>Subject</span>
+            <select value={subject} onChange={(e) => setSubject(e.target.value)}>
+              <option value="">All subjects</option>
+              {subjects.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="wrong-v2-filter">
+            <span>Chapter</span>
+            <select value={chapter} onChange={(e) => setChapter(e.target.value)}>
+              <option value="">All chapters</option>
+              {chapters.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="wrong-v2-filter">
+            <span>Revision Status</span>
+            <select
+              value={revisionFilter}
+              onChange={(e) => setRevisionFilter(e.target.value as RevisionFilter)}
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending revision</option>
+              <option value="revised">Revised</option>
+            </select>
+          </label>
+        </div>
+        <label className="wrong-v2-search">
+          <span className="material-symbols-outlined" aria-hidden>
+            search
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search wrong attempts…"
+            aria-label="Search wrong attempts"
+          />
         </label>
-        <label>
-          Subject
-          <select value={subject} onChange={(e) => setSubject(e.target.value)}>
-            <option value="">All subjects</option>
-            {subjects.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Chapter
-          <select value={chapter} onChange={(e) => setChapter(e.target.value)}>
-            <option value="">All chapters</option>
-            {chapters.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Exam
-          <select value={exam} onChange={(e) => setExam(e.target.value)}>
-            <option value="">All exams</option>
-            {exams.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Year
-          <select value={year} onChange={(e) => setYear(e.target.value)}>
-            <option value="">All years</option>
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Revision
-          <select value={revisionFilter} onChange={(e) => setRevisionFilter(e.target.value as RevisionFilter)}>
-            <option value="all">All</option>
-            <option value="pending">Pending revision</option>
-            <option value="revised">Revised</option>
+      </div>
+
+      <div className="wrong-v2-tabs-bar">
+        <nav className="wrong-v2-tabs" aria-label="Wrong attempt categories">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`wrong-v2-tabs__btn${activeTab === tab.id ? " wrong-v2-tabs__btn--active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label} ({tabCounts[tab.id]})
+            </button>
+          ))}
+        </nav>
+        <label className="wrong-v2-sort">
+          <span>Sort by:</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value as WrongSort)}>
+            <option value="latest">Latest</option>
+            <option value="oldest">Oldest</option>
+            <option value="subject">Subject</option>
           </select>
         </label>
       </div>
 
       {sessionId && (
-        <p className="wrong-review-session-filter muted">
-          Showing mistakes from session ·{" "}
-          <button type="button" className="wrong-review-clear-filter" onClick={() => setSessionId("")}>
-            Clear
+        <p className="wrong-v2-session-banner">
+          Showing mistakes from one session ·{" "}
+          <button type="button" onClick={() => setSessionId("")}>
+            Clear filter
           </button>
         </p>
       )}
 
       {error && <p className="error-text">{error}</p>}
 
-      {filtered.length === 0 ? (
-        <p className="muted wrong-review-empty">No wrong attempts match these filters.</p>
+      {displayed.length === 0 ? (
+        <div className="wrong-v2-empty glass-card">
+          <span className="material-symbols-outlined" aria-hidden>
+            task_alt
+          </span>
+          <p>No wrong attempts match these filters.</p>
+        </div>
       ) : (
-        <ul className="wrong-review-list">
-          {filtered.map((item) => (
-            <li key={item.attemptId} className="wrong-review-item glass-card">
-              <div className="wrong-review-item__head">
-                <strong>
-                  {examDisplayName(item.exam, item.year)} {item.year} · Q{item.questionNo}
-                </strong>
-                <div className="wrong-review-item__badges">
-                  <span className={`wrong-review-item__mode wrong-review-item__mode--${item.mode}`}>
-                    {item.mode === "test" ? "Test" : "Practice"}
-                  </span>
-                  <span
-                    className={`wrong-review-item__revision${item.revised ? " wrong-review-item__revision--done" : ""}`}
-                  >
-                    {item.revised ? "Revised" : "Pending revision"}
-                  </span>
-                </div>
-              </div>
-              <p className="wrong-review-item__meta">
-                {item.subject} · {item.chapter}
-              </p>
-              <dl className="wrong-review-item__facts">
-                <div>
-                  <dt>Your answer</dt>
-                  <dd>{item.selectedAnswer}</dd>
-                </div>
-                <div>
-                  <dt>Correct</dt>
-                  <dd>{item.correctAnswer}</dd>
-                </div>
-              </dl>
-
-              {expandedId === item.attemptId && (
-                <div className="wrong-review-item__explain">
-                  {item.hasSolution && item.solutionImageUrl && (
-                    <img
-                      src={item.solutionImageUrl}
-                      alt="Solution"
-                      className="wrong-review-item__solution"
-                      draggable={false}
-                    />
-                  )}
-                  <PracticeStudyAssistant
-                    questionId={item.questionId}
-                    selectedAnswer={item.selectedAnswer}
-                    submitted
-                    correct={false}
-                    prominent
-                    hasSolution={item.hasSolution}
-                    layout="inline"
-                  />
-                </div>
-              )}
-
-              <div className="wrong-review-item__actions">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => setExpandedId(expandedId === item.attemptId ? null : item.attemptId)}
-                >
-                  {expandedId === item.attemptId ? "Hide explanation" : "Explanation"}
-                </button>
-                <Link to={`/solve/${item.questionId}`} className="btn btn-sm">
-                  Retry question
-                </Link>
-                <Link
-                  to={`/bank?exam=NEET&subject=${encodeURIComponent(item.subject)}&chapter=${encodeURIComponent(item.chapter)}`}
-                  className="btn btn-sm"
-                >
-                  Similar PYQs
-                </Link>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  disabled={busyId === item.questionId}
-                  onClick={() => toggleRevised(item)}
-                >
-                  {item.revised ? "Mark pending" : "Mark as revised"}
-                </button>
-              </div>
+        <ul className="wrong-v2-list">
+          {displayed.map((item) => (
+            <li key={item.attemptId}>
+              <WrongAttemptCard
+                item={item}
+                busy={busyId === item.questionId}
+                onToggleRevised={toggleRevised}
+              />
             </li>
           ))}
         </ul>

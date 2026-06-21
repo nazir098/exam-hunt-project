@@ -5,9 +5,9 @@ import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import QuestionCard from "./QuestionCard";
 
 /** Questions loaded per page from the API. */
-export const BANK_PAGE_SIZE = 10;
+export const BANK_PAGE_SIZE = 5;
 /** Questions visible in the scroll viewport before the user scrolls. */
-export const BANK_VISIBLE_SLOTS = 5;
+export const BANK_VISIBLE_SLOTS = 3;
 
 type Props = {
   questions: QuestionPublic[];
@@ -18,6 +18,8 @@ type Props = {
   packLabel?: string;
   filterCount?: number;
   loading?: boolean;
+  sessionSize?: number;
+  estMinutes?: number;
   onNextPage: () => void;
   onPrevPage: () => void;
 };
@@ -30,8 +32,9 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
     totalPages,
     totalElements,
     packLabel,
-    filterCount = 0,
     loading = false,
+    sessionSize,
+    estMinutes,
     onNextPage,
     onPrevPage,
   },
@@ -54,10 +57,37 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
   const hasMoreInPage = inPageCount > BANK_VISIBLE_SLOTS;
   const remainingInPage = Math.max(0, inPageCount - BANK_VISIBLE_SLOTS);
 
+  const [nestedScroll, setNestedScroll] = useState(false);
+
   useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setNestedScroll(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!nestedScroll) return;
     setReachedEnd(false);
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
-  }, [page, packId, questions.length]);
+  }, [page, packId, questions.length, nestedScroll]);
+
+  useEffect(() => {
+    const root = nestedScroll ? scrollRef.current : null;
+    const sentinel = sentinelRef.current;
+    if (!sentinel || questions.length === 0) {
+      setReachedEnd(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setReachedEnd(entry.isIntersecting),
+      { root, threshold: nestedScroll ? 0.6 : 0.15, rootMargin: nestedScroll ? "0px" : "0px 0px 120px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [questions, page, nestedScroll]);
 
   useEffect(() => {
     if (!user || !settings.bookmarksEnabled || questions.length === 0) {
@@ -84,31 +114,17 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
 
   const bookmarkBatch = Boolean(user && settings.bookmarksEnabled);
 
-  useEffect(() => {
-    const root = scrollRef.current;
-    const sentinel = sentinelRef.current;
-    if (!root || !sentinel || questions.length === 0) {
-      setReachedEnd(false);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setReachedEnd(entry.isIntersecting),
-      { root, threshold: 0.6, rootMargin: "0px" }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [questions, page]);
-
   if (questions.length === 0) {
     return null;
   }
+
+  const compactFeed = nestedScroll && inPageCount < BANK_VISIBLE_SLOTS;
 
   return (
     <section
       ref={ref}
       id="bank-results"
-      className="bank-results-feed bank-results-anchor"
+      className={`bank-results-feed bank-results-anchor${nestedScroll ? " bank-results-feed--nested" : " bank-results-feed--flat"}${compactFeed ? " bank-results-feed--compact" : ""}`}
       aria-label="Question results"
     >
       <div className="bank-results-feed__chrome">
@@ -127,13 +143,12 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
               {packLabel}
             </>
           )}
-          {filterCount > 0 && (
-            <span className="bank-results-feed__caption-muted">
-              {" "}
-              · {filterCount} filter{filterCount === 1 ? "" : "s"}
-            </span>
-          )}
         </p>
+        {sessionSize != null && estMinutes != null && (
+          <p className="bank-results-feed__session-note">
+            Session will use current filters: <strong>{sessionSize} questions</strong> · ~{estMinutes} min
+          </p>
+        )}
       </div>
 
       <div className="bank-results-feed__scroll custom-scrollbar" ref={scrollRef}>
@@ -151,7 +166,7 @@ const BankResultsFeed = forwardRef<HTMLElement, Props>(function BankResultsFeed(
         </div>
         <div ref={sentinelRef} className="bank-results-feed__sentinel" aria-hidden />
 
-        {!reachedEnd && hasMoreInPage && (
+        {!reachedEnd && nestedScroll && hasMoreInPage && (
           <div className="bank-results-feed__scroll-hint" aria-hidden>
             <span className="material-symbols-outlined">south</span>
             <span>Scroll for {remainingInPage} more questions</span>

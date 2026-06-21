@@ -14,7 +14,7 @@ export function weakChapterBankUrl(chapter: ChapterProgress): string {
     subject: chapter.subject,
     chapter: chapter.chapter,
   });
-  return `/bank?${params.toString()}`;
+  return `/practice?${params.toString()}#question-bank`;
 }
 
 export function weakChapterPracticeUrl(chapter: ChapterProgress, packId?: string): string {

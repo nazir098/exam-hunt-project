@@ -36,7 +36,6 @@ Neetlu frontend (public browse, study / practice modes)
 
    - `MONGODB_URI` — Atlas connection string with database name, e.g. `...mongodb.net/neetlu?retryWrites=true&w=majority`
    - `EXTRACTOR_ROOT` — absolute path to your `pdf-qa-extractor` repo
-   - `OPENAI_BASE_URL` — OpenAI-compatible FreeLLMAPI endpoint, e.g. `https://freellmapi-t1pm.onrender.com/v1`
    - Optional `ADMIN_IMPORT_KEY` — if set, import endpoints require header `X-Admin-Key`
 
 3. Load env when starting the API (Spring does not read `.env` automatically):
@@ -57,10 +56,9 @@ mvn spring-boot:run
 **Import manifest** (after extractor publish):
 
 ```bash
-# Starts background job — returns jobId immediately (HTTP 202)
 curl -X POST http://127.0.0.1:8081/api/admin/import/folder/2016
-# Poll until status is SUCCEEDED or FAILED:
-curl http://127.0.0.1:8081/api/admin/import/jobs/JOB_ID
+# or all folders with published/manifest.json:
+curl -X POST http://127.0.0.1:8081/api/admin/import/all
 ```
 
 **Frontend**
@@ -82,9 +80,8 @@ Open http://127.0.0.1:5173 — dev server proxies `/api` to the backend.
 | GET | `/api/packs/{packId}/facets` | Subject/chapter facets |
 | GET | `/api/questions?packId=&subject=&chapter=&page=&size=` | Paginated questions (no answer) |
 | GET | `/api/questions/{questionId}` | Full question + answer (for reveal) |
-| POST | `/api/admin/import/folder/{folder}` | Start async import (202 + `jobId`) |
-| GET | `/api/admin/import/jobs/{jobId}` | Import job status / result |
-| POST | `/api/admin/import/all` | Start async import of all published manifests |
+| POST | `/api/admin/import/folder/{folder}` | Import one year folder |
+| POST | `/api/admin/import/all` | Import all published manifests |
 
 ## Product choices (v1)
 
@@ -94,41 +91,15 @@ Open http://127.0.0.1:5173 — dev server proxies `/api` to the backend.
 - **Practice mode** — submit choice, then show correct answer
 - **Payments** — not in v1
 
-## Production deployment
+## Deploy (outline)
 
-Current production shape:
-
-- **Frontend** — Cloudflare Pages: `https://www.techmuzzle.in`
-- **Fallback frontend** — Cloudflare Pages: `https://exam-hunt-project.pages.dev`
-- **API** — AWS EC2 + Nginx + Let's Encrypt: `https://api.techmuzzle.in`
-- **Spring Boot service** — `exam-hunt` systemd service on local port `8081`
-
-Cloudflare Pages build settings:
-
-| Setting | Value |
-|---------|-------|
-| Root directory | `frontend` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Production env | `VITE_API_BASE_URL=https://api.techmuzzle.in` |
-
-Backend production env must include:
-
-```env
-CORS_ORIGINS=https://www.techmuzzle.in,https://exam-hunt-project.pages.dev,http://localhost:8080,http://localhost:5173
-OPENAI_BASE_URL=https://freellmapi-t1pm.onrender.com/v1
-OPENAI_CHAT_MODEL=auto
-AI_PRACTICE_ENABLED=true
-LEADERBOARD_DEMO_SEED=false
-```
-
-See [docs/deployment.md](docs/deployment.md) for the EC2/Nginx/Certbot runbook and verification commands.
-
-## Build locally
+1. **MongoDB Atlas** — cluster in Mumbai; IP allowlist or VPC; rotate credentials if exposed.
+2. **API** — e.g. Railway / Render / Fly / AWS Mumbai: set `MONGODB_URI`, `EXTRACTOR_ROOT` or use `EXTRACTOR_MANIFEST_BASE_URL` pointing at extractor publish API, `CORS_ORIGINS` = production frontend URL.
+3. **Frontend** — build with `VITE_API_BASE_URL=https://your-api.example.com`, host on Vercel/Netlify/Cloudflare Pages (or serve static from same host).
 
 ```bash
-cd backend && mvn test
 cd frontend && npm run build
+# dist/ → static hosting
 ```
 
 ## Security
@@ -136,5 +107,3 @@ cd frontend && npm run build
 - Do not commit `.env` or Mongo passwords.
 - Restrict admin import in production (`ADMIN_IMPORT_KEY` + network rules).
 - Image URLs come from your R2/public CDN as stored in the manifest.
-- Keep EC2 port `8081` closed publicly; expose the API through Nginx on HTTPS only.
-- Rotate provider/client keys if they are ever pasted into a chat, ticket, log, or screenshot.

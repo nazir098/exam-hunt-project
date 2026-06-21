@@ -171,7 +171,7 @@ export default function RevisionPage() {
           ) : bookmarks.length === 0 ? (
             <div className="glass-card p-lg rounded-xl">
               <p className="text-body text-on-surface-variant">No saved questions yet.</p>
-              <Link to="/bank?exam=NEET" className="btn primary mt-md inline-flex">
+              <Link to="/practice?exam=NEET#question-bank" className="btn primary mt-md inline-flex">
                 Browse question bank
               </Link>
             </div>

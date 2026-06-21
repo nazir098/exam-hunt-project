@@ -76,7 +76,7 @@ function buildGraph(seo: SeoConfig): Record<string, unknown>[] {
       publisher: { "@id": `${SITE_URL}/#organization` },
       potentialAction: {
         "@type": "SearchAction",
-        target: `${SITE_URL}/bank?q={search_term_string}`,
+        target: `${SITE_URL}/practice?q={search_term_string}`,
         "query-input": "required name=search_term_string",
       },
     },
@@ -197,7 +197,7 @@ function getSeoConfig(pathname: string): SeoConfig {
       title: "NEET Question Bank 2016-2025 - PYQ Practice by Chapter | EduMaster AI",
       description:
         "Browse 10,000+ NEET previous year questions by subject, chapter, topic, and difficulty. Practice PYQs with solutions, AI explanations, and performance tracking.",
-      path: "/bank",
+      path: "/practice",
     };
   }
 
@@ -223,9 +223,9 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname === "/practice") {
     return {
-      title: "NEET Practice Sets - Adaptive PYQ Practice | Free Online – EduMaster AI",
+      title: "NEET Practice & Question Bank - Adaptive PYQ Practice | EduMaster AI",
       description:
-        "Start adaptive NEET practice sessions from previous year questions. Get instant feedback, AI coaching, and strengthen weak chapters. Free NEET practice online.",
+        "Start adaptive NEET practice sessions and browse previous year questions by chapter. Instant feedback, solutions, and AI coaching.",
       path: "/practice",
     };
   }

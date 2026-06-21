@@ -360,7 +360,7 @@ export default function TestSessionBuilder({
 
         <p className="muted practice-note practice-advanced__foot">
           <Link to="/practice">Practice mode</Link> counts toward rank ·{" "}
-          <Link to="/bank?exam=NEET">Browse PYQs</Link> for untimed study
+          <Link to="/practice?exam=NEET#question-bank">Browse PYQs</Link> for untimed study
         </p>
       </div>
     </form>

@@ -1,4 +1,4 @@
-import { BANK_MODE_HINT, PRACTICE_MODE_HINT, TEST_MODE_HINT } from "./modeHints";
+import { PRACTICE_MODE_HINT, TEST_MODE_HINT } from "./modeHints";
 
 export type SiteNavItem = {
   to: string;
@@ -6,26 +6,23 @@ export type SiteNavItem = {
   icon: string;
   match: (pathname: string) => boolean;
   disabled?: boolean;
-  /** Shown on hover (nav links). */
   hint?: string;
 };
 
 export const SITE_NAV: SiteNavItem[] = [
   { to: "/", label: "Dashboard", icon: "dashboard", match: (p) => p === "/" },
   {
-    to: "/bank?exam=NEET",
-    label: "Question Bank",
-    icon: "menu_book",
-    match: (p) =>
-      p === "/bank" || p.startsWith("/pack/") || p.startsWith("/question/") || p.startsWith("/solve/"),
-    hint: BANK_MODE_HINT,
-  },
-  {
-    to: "/practice",
+    to: "/practice?exam=NEET",
     label: "Practice",
     icon: "bolt",
-    match: (p) => p === "/practice" || !!p.match(/^\/practice\/[^/]+\//),
-    hint: PRACTICE_MODE_HINT,
+    match: (p) =>
+      p === "/practice" ||
+      !!p.match(/^\/practice\/[^/]+\//) ||
+      p === "/bank" ||
+      p.startsWith("/pack/") ||
+      p.startsWith("/question/") ||
+      p.startsWith("/solve/"),
+    hint: `${PRACTICE_MODE_HINT} Browse PYQs in the same hub.`,
   },
   {
     to: "/test/create",

@@ -15,12 +15,14 @@ type Props = {
   dailyCounts?: number[];
   sessions?: PracticeSessionView[];
   totalQuestions?: number;
+  embedded?: boolean;
 };
 
 export default function WeeklyActivityPanel({
   dailyCounts,
   sessions = [],
   totalQuestions = 0,
+  embedded = false,
 }: Props) {
   const cells = useMemo(() => {
     const counts =
@@ -30,8 +32,8 @@ export default function WeeklyActivityPanel({
   const hasActivity = cells.some((c) => c.questionCount > 0);
 
   return (
-    <section className="analytics-card glass-card">
-      <h3 className="analytics-side-title">Weekly activity</h3>
+    <section className={`analytics-card${embedded ? " analytics-card--embedded" : " glass-card"}`}>
+      {!embedded && <h3 className="analytics-side-title">Weekly activity</h3>}
       {hasActivity ? (
         <>
           <p className="analytics-activity-caption">

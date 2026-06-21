@@ -22,7 +22,7 @@ type Props = {
 export default function DashboardResumeHero({ name, topTier, session, packs, progress }: Props) {
   const resumeUrl = session ? sessionResumeUrl(session) : null;
   const weak = primaryWeakChapter(progress?.weakChapters);
-  const weakUrl = weak ? weakChapterPracticeUrl(weak) : "/bank?exam=NEET";
+  const weakUrl = weak ? weakChapterPracticeUrl(weak) : "/practice?exam=NEET#question-bank";
 
   const packTitle = session ? sessionPackTitle(session.packId, packs) : "";
   const focusLine = session ? sessionFocusLine(session) : null;
@@ -149,7 +149,7 @@ export default function DashboardResumeHero({ name, topTier, session, packs, pro
               <Link to="/practice" className="btn primary dashboard-resume-card__primary">
                 Start practice →
               </Link>
-              <Link to="/bank?exam=NEET" className="btn dashboard-resume-card__secondary">
+              <Link to="/practice?exam=NEET#question-bank" className="btn dashboard-resume-card__secondary">
                 Explore question bank
               </Link>
             </div>

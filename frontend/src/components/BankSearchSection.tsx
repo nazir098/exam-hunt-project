@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import HintTooltip from "./HintTooltip";
 import { BANK_MODE_HINT } from "../navigation/modeHints";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 
 type Props = {
@@ -10,12 +10,13 @@ type Props = {
 
 export default function BankSearchSection({ onOpenFilters }: Props) {
   const { settings } = usePlatformSettings();
-  const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get("q") || "";
   const [glow, setGlow] = useState(false);
-  const basePath = pathname.startsWith("/pack/") ? pathname : "/bank";
+
+  function applySearchParams(next: URLSearchParams) {
+    setSearchParams(next);
+  }
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -25,14 +26,14 @@ export default function BankSearchSection({ onOpenFilters }: Props) {
     else next.delete("q");
     next.set("page", "0");
     if (!next.get("exam")) next.set("exam", "NEET");
-    navigate(`${basePath}?${next.toString()}`);
+    applySearchParams(next);
   }
 
   function applySuggestion(topic: string) {
     const next = new URLSearchParams(searchParams);
     next.set("q", topic);
     next.set("page", "0");
-    navigate(`${basePath}?${next.toString()}`);
+    applySearchParams(next);
   }
 
   return (

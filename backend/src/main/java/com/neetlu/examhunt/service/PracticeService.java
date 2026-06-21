@@ -3,6 +3,7 @@ package com.neetlu.examhunt.service;
 import com.neetlu.examhunt.model.PracticeSession;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.model.QuestionAttempt;
+import com.neetlu.examhunt.model.RevisionQueueEntry;
 import com.neetlu.examhunt.repository.PracticeSessionRepository;
 import com.neetlu.examhunt.repository.QuestionAttemptRepository;
 import com.neetlu.examhunt.repository.QuestionRepository;
@@ -961,10 +962,10 @@ public class PracticeService {
                 .filter(a -> !a.isCorrect())
                 .map(QuestionAttempt::getQuestionId)
                 .collect(Collectors.toSet());
-        Set<String> revisedIds = revisionService.revisedQuestionIds(userId, wrongQIds);
+        Map<String, RevisionQueueEntry> revisions = revisionService.entriesByQuestionIds(userId, wrongQIds);
         List<WrongAttemptView> wrongAttempts = sessionAttempts.stream()
                 .filter(a -> !a.isCorrect())
-                .map(a -> toWrongAttemptView(a, qById.get(a.getQuestionId()), revisedIds))
+                .map(a -> toWrongAttemptView(a, qById.get(a.getQuestionId()), revisions.get(a.getQuestionId())))
                 .filter(a -> a != null)
                 .toList();
 
@@ -985,10 +986,12 @@ public class PracticeService {
                 reviews);
     }
 
-    private WrongAttemptView toWrongAttemptView(QuestionAttempt a, Question q, Set<String> revisedIds) {
+    private WrongAttemptView toWrongAttemptView(QuestionAttempt a, Question q, RevisionQueueEntry revision) {
         if (q == null) {
             return null;
         }
+        boolean revised = revision != null && revision.getRevisedAt() != null;
+        DueInfo due = revisionDue(a, revision);
         return new WrongAttemptView(
                 a.getId(),
                 a.getQuestionId(),
@@ -1005,7 +1008,69 @@ public class PracticeService {
                 q.isHasSolution(),
                 q.getSolutionImageUrl(),
                 a.getAnsweredAt(),
-                revisedIds.contains(a.getQuestionId()));
+                revised,
+                q.getDifficulty(),
+                difficultyLabel(q.getDifficulty()),
+                mistakeType(q, a),
+                due.label(),
+                due.tone());
+    }
+
+    private static String difficultyLabel(int difficulty) {
+        if (difficulty <= 1) {
+            return "Easy";
+        }
+        if (difficulty == 2) {
+            return "Medium";
+        }
+        return "Hard";
+    }
+
+    private static String mistakeType(Question q, QuestionAttempt a) {
+        String subj = q.getSubject() != null ? q.getSubject().toLowerCase() : "";
+        if (subj.contains("phys")) {
+            return "Calculation";
+        }
+        if (subj.contains("chem")) {
+            return "Application";
+        }
+        if (daysSince(a.getAnsweredAt()) <= 1) {
+            return "Careless";
+        }
+        return "Conceptual";
+    }
+
+    private record DueInfo(String label, String tone) {}
+
+    private static DueInfo revisionDue(QuestionAttempt a, RevisionQueueEntry revision) {
+        if (revision != null && revision.getRevisedAt() != null) {
+            return new DueInfo("Revised", "done");
+        }
+        Instant anchor = revision != null && revision.getAddedAt() != null ? revision.getAddedAt() : a.getAnsweredAt();
+        if (anchor == null) {
+            return new DueInfo("—", "soon");
+        }
+        long days = daysSince(anchor);
+        if (days == 0) {
+            return new DueInfo("Tomorrow", "soon");
+        }
+        if (days == 1) {
+            return new DueInfo("2 days left", "soon");
+        }
+        if (days <= 3) {
+            return new DueInfo("Today", "today");
+        }
+        if (days <= 7) {
+            return new DueInfo("Overdue", "overdue");
+        }
+        return new DueInfo((days - 3) + " days overdue", "overdue");
+    }
+
+    private static long daysSince(Instant instant) {
+        if (instant == null) {
+            return 0;
+        }
+        return Math.max(0, (Instant.now().toEpochMilli() - instant.toEpochMilli()) / 86_400_000L);
     }
 
     private static void trackBreakdown(
@@ -1077,7 +1142,7 @@ public class PracticeService {
         Set<String> qIds = wrong.stream().map(QuestionAttempt::getQuestionId).collect(Collectors.toSet());
         Map<String, Question> questionById = questions.findByQuestionIdIn(qIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q, (a, b) -> a));
-        Set<String> revisedIds = revisionService.revisedQuestionIds(userId, qIds);
+        Map<String, RevisionQueueEntry> revisions = revisionService.entriesByQuestionIds(userId, qIds);
         List<WrongAttemptView> out = new ArrayList<>();
         for (QuestionAttempt a : wrong) {
             Question q = questionById.get(a.getQuestionId());
@@ -1105,7 +1170,7 @@ public class PracticeService {
                     && !sessionIdFilter.equals(a.getSessionId())) {
                 continue;
             }
-            out.add(toWrongAttemptView(a, q, revisedIds));
+            out.add(toWrongAttemptView(a, q, revisions.get(a.getQuestionId())));
         }
         return out.stream().limit(100).toList();
     }
@@ -1253,7 +1318,12 @@ public class PracticeService {
             boolean hasSolution,
             String solutionImageUrl,
             Instant answeredAt,
-            boolean revised) {}
+            boolean revised,
+            int difficulty,
+            String difficultyLabel,
+            String mistakeType,
+            String revisionDueLabel,
+            String revisionDueTone) {}
 
     public record BreakdownRow(
             String label,

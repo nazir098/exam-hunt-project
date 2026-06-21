@@ -1,6 +1,6 @@
-import type { ChapterProgress } from "../api";
 import { PackSummary, YearCatalogEntry } from "../api";
 import { formatPackOptionLabel } from "../utils/practiceHub";
+import QuestionCountStepper from "./QuestionCountStepper";
 
 const DIFFICULTIES = [
   { label: "Conceptual (Easy)", value: "Easy" },
@@ -14,6 +14,7 @@ type Props = {
   totalShown: number;
   examFilter: string;
   resolvedPackId: string;
+  activePackYear?: number;
   yearFilter: string;
   subject: string;
   chapter: string;
@@ -27,15 +28,25 @@ type Props = {
   onUpdateParam: (key: string, value: string) => void;
   onPackChange: (packId: string) => void;
   onClose?: () => void;
-  learningInsightText?: string;
-  learningInsightHighlight?: string;
-  weakChapter?: ChapterProgress | null;
-  onApplyWeakChapter?: () => void;
+  questionCount?: number;
+  poolMax?: number;
+  onQuestionCount?: (value: number) => void;
+  adaptive?: boolean;
+  onAdaptiveChange?: (value: boolean) => void;
 };
+
+function pillClass(active: boolean): string {
+  return `practice-filter-pill${active ? " practice-filter-pill--active" : ""}`;
+}
+
+function selectClass(hasValue: boolean): string {
+  return `practice-filter-select w-full rounded-lg px-3 py-2 text-body-sm text-on-surface${hasValue ? " practice-filter-select--active" : ""}`;
+}
 
 export default function FilterPanel({
   totalShown,
   resolvedPackId,
+  activePackYear,
   yearFilter,
   subject,
   chapter,
@@ -49,21 +60,24 @@ export default function FilterPanel({
   onUpdateParam,
   onPackChange,
   onClose,
-  learningInsightText,
-  learningInsightHighlight,
-  weakChapter,
-  onApplyWeakChapter,
+  questionCount,
+  poolMax = 180,
+  onQuestionCount,
+  adaptive = true,
+  onAdaptiveChange,
 }: Props) {
   function set(key: string, value: string) {
     onUpdateParam(key, value);
     if (key !== "page" && onClose) onClose();
   }
 
+  const selectedYear = yearFilter || (activePackYear != null ? String(activePackYear) : "");
+
   return (
-    <div className="space-y-gutter">
+    <div className="practice-filter-panel space-y-gutter">
       {onClose && (
         <div className="flex items-center justify-between lg:hidden">
-          <span className="text-headline-md">Filters</span>
+          <span className="text-headline-md">Filters &amp; session</span>
           <button type="button" className="material-symbols-outlined" onClick={onClose}>
             close
           </button>
@@ -72,20 +86,37 @@ export default function FilterPanel({
 
       <div className="glass-card glass-card--bank p-lg rounded-xl">
         <h3 className="text-label-md font-label-md text-primary mb-md flex items-center justify-between">
-          DEEP FILTERING
+          Filters
           <span className="material-symbols-outlined text-[16px]">filter_list</span>
         </h3>
         <div className="space-y-md">
           <div>
-            <label className="text-caption text-outline mb-2 block">Exam Category</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="bg-primary-container text-on-primary-container text-caption py-2 rounded-lg font-bold">
+            <label className="text-caption text-outline mb-2 block">Exam</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button type="button" className={pillClass(true)}>
                 NEET
               </button>
-              <button type="button" className="bg-surface-container text-on-surface-variant text-caption py-2 rounded-lg" disabled>
+              <button type="button" className={pillClass(false)} disabled>
                 JEE
               </button>
             </div>
+            {neetYears.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {neetYears.map((y) => {
+                  const active = selectedYear === String(y.year);
+                  return (
+                    <button
+                      key={y.year}
+                      type="button"
+                      onClick={() => set("year", active && yearFilter ? "" : String(y.year))}
+                      className={pillClass(active)}
+                    >
+                      {y.year}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div>
@@ -94,7 +125,7 @@ export default function FilterPanel({
             </label>
             <select
               id="filter-pack"
-              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface mb-2"
+              className={selectClass(Boolean(resolvedPackId))}
               value={resolvedPackId}
               onChange={(e) => onPackChange(e.target.value)}
             >
@@ -106,38 +137,13 @@ export default function FilterPanel({
             </select>
           </div>
 
-          {neetYears.length > 0 && (
-            <div>
-              <label className="text-caption text-outline mb-2 block">Year</label>
-              <div className="grid grid-cols-3 gap-2">
-                {neetYears.map((y) => {
-                  const active = yearFilter === String(y.year);
-                  return (
-                    <button
-                      key={y.year}
-                      type="button"
-                      onClick={() => set("year", active ? "" : String(y.year))}
-                      className={
-                        active
-                          ? "text-caption py-2 rounded-lg bg-primary-container text-on-primary-container font-bold"
-                          : "text-caption py-2 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
-                      }
-                    >
-                      {y.year}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <div>
             <label className="text-caption text-outline mb-2 block" htmlFor="filter-subject">
               Subject
             </label>
             <select
               id="filter-subject"
-              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+              className={selectClass(Boolean(subject))}
               value={subject}
               onChange={(e) => set("subject", e.target.value)}
             >
@@ -157,7 +163,7 @@ export default function FilterPanel({
               </label>
               <select
                 id="filter-chapter"
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+                className={selectClass(Boolean(chapter))}
                 value={chapter}
                 onChange={(e) => set("chapter", e.target.value)}
               >
@@ -178,7 +184,7 @@ export default function FilterPanel({
               </label>
               <select
                 id="filter-topic"
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface"
+                className={selectClass(Boolean(topic))}
                 value={topic}
                 onChange={(e) => set("topic", e.target.value)}
               >
@@ -193,57 +199,53 @@ export default function FilterPanel({
           )}
 
           <div>
-            <label className="text-caption text-outline mb-2 block">Difficulty Level</label>
+            <label className="text-caption text-outline mb-2 block">Difficulty</label>
             <div className="flex flex-col gap-1">
-              {DIFFICULTIES.map((d) => (
-                <label
-                  key={d.value}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    className="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0"
-                    checked={difficulty === d.value}
-                    onChange={() => set("difficulty", difficulty === d.value ? "" : d.value)}
-                  />
-                  <span className="text-body-sm">{d.label}</span>
-                </label>
-              ))}
+              {DIFFICULTIES.map((d) => {
+                const selected = difficulty === d.value;
+                return (
+                  <label
+                    key={d.value}
+                    className={`practice-filter-difficulty flex items-center gap-3 p-2 rounded-lg cursor-pointer${selected ? " practice-filter-difficulty--selected" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0"
+                      checked={selected}
+                      onChange={() => set("difficulty", selected ? "" : d.value)}
+                    />
+                    <span className="text-body-sm">{d.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
-
-          {weakChapter && onApplyWeakChapter && (
-            <div>
-              <label className="text-caption text-outline mb-2 block">AI Recommended</label>
-              <button
-                type="button"
-                className="w-full flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-primary/20 hover:border-primary/50 transition-colors text-left"
-                onClick={() => {
-                  onApplyWeakChapter();
-                  if (onClose) onClose();
-                }}
-              >
-                <span className="text-body-sm text-primary">
-                  Target weak: {weakChapter.chapter}
-                </span>
-                <span className="material-symbols-outlined text-primary text-[18px]">arrow_forward</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="glass-card glass-card--bank p-lg rounded-xl border-dashed border-primary/20">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="material-symbols-outlined text-primary">psychology</span>
-          <span className="text-label-md font-label-md">Learning Insights</span>
-        </div>
-        <p className="text-body-sm text-outline leading-relaxed">
-          {learningInsightText || "Focus on your weakest chapters from practice data."}{" "}
-          {learningInsightHighlight && (
-            <span className="text-secondary font-bold">{learningInsightHighlight}</span>
+      <div className="glass-card glass-card--bank p-lg rounded-xl">
+        <h3 className="text-label-md font-label-md text-primary mb-md">Session settings</h3>
+        <div className="space-y-md">
+          {onQuestionCount != null && questionCount != null && (
+            <QuestionCountStepper value={questionCount} poolMax={poolMax} onChange={onQuestionCount} />
           )}
-        </p>
+          {onAdaptiveChange && (
+            <label
+              className={`practice-filter-adaptive flex items-center justify-between gap-3 p-2 rounded-lg cursor-pointer${adaptive ? " practice-filter-adaptive--selected" : ""}`}
+            >
+              <span>
+                <span className="text-body-sm block">Adaptive order</span>
+                <span className="text-caption text-outline">Prioritize weaker topics</span>
+              </span>
+              <input
+                type="checkbox"
+                className="rounded border-outline-variant bg-transparent text-primary-container focus:ring-0"
+                checked={adaptive}
+                onChange={(e) => onAdaptiveChange(e.target.checked)}
+              />
+            </label>
+          )}
+        </div>
       </div>
 
       {onClose && (
@@ -252,7 +254,7 @@ export default function FilterPanel({
           className="w-full py-4 bg-primary text-on-primary font-bold rounded-xl lg:hidden"
           onClick={onClose}
         >
-          Apply Filters ({totalShown})
+          Apply filters ({totalShown})
         </button>
       )}
     </div>

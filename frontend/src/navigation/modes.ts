@@ -22,7 +22,7 @@ export const MODES = {
   test: {
     id: "test" as const,
     label: "Test Mode",
-    button: "Prepare Test",
+    button: "Add to Test",
     helper: "Evaluate — exam simulation. Score and solutions unlock after you submit the test.",
     tooltip: "Create a custom timed test",
     rankImpact: false,

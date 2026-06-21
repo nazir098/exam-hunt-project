@@ -1,5 +1,6 @@
-import type { PracticeSessionView } from "../api";
+import type { ChapterProgress, PracticeSessionView, ProgressSummary } from "../api";
 import type { DashboardStats } from "./dashboardStats";
+import type { MistakeSegment } from "./analyticsDashboard";
 
 /** 4 weeks × 7 days — demo activity pattern (darker toward recent days). */
 export const DEMO_HEATMAP: number[] = [
@@ -14,10 +15,26 @@ export const DEMO_SUBJECTS = [
   { name: "Biology", pct: 82, trend: "+4%", tone: "good" as const },
 ];
 
-export const DEMO_ACCURACY = 68;
-export const DEMO_ATTEMPTS = 247;
+export const DEMO_ACCURACY = 31;
+export const DEMO_ATTEMPTS = 214;
 export const DEMO_TOTAL_MARKS = 412;
-export const DEMO_CORRECT = 168;
+export const DEMO_CORRECT = 66;
+
+export const DEMO_WEAK_CHAPTERS: ChapterProgress[] = [
+  { subject: "Physics", chapter: "Wave Optics", attempts: 5, correct: 0, marks: 0, accuracyPercent: 0 },
+  { subject: "Biology", chapter: "Plant Kingdom", attempts: 12, correct: 3, marks: 12, accuracyPercent: 25 },
+  { subject: "Chemistry", chapter: "Structure of Atom", attempts: 8, correct: 4, marks: 16, accuracyPercent: 50 },
+  { subject: "Physics", chapter: "Laws of Motion", attempts: 15, correct: 9, marks: 36, accuracyPercent: 60 },
+];
+
+export const DEMO_MISTAKE_TOTAL = 100;
+
+export const DEMO_MISTAKE_SEGMENTS: MistakeSegment[] = [
+  { label: "Conceptual", color: "#e573ab", count: 8, pct: 8 },
+  { label: "Application", color: "#6495ed", count: 4, pct: 4 },
+  { label: "Calculation", color: "#f4a460", count: 85, pct: 85 },
+  { label: "Careless", color: "#7ccd7c", count: 3, pct: 3 },
+];
 
 export const DEMO_SESSIONS: PracticeSessionView[] = [
   {
@@ -92,13 +109,23 @@ export const DEMO_SESSIONS: PracticeSessionView[] = [
 
 export const DEMO_STATS: DashboardStats = {
   sessions: DEMO_SESSIONS,
-  bars: [52, 58, 61, 64, 68],
-  trend: 12,
+  bars: [22, 26, 28, 29, 31],
+  trend: 8,
   heatmap: DEMO_HEATMAP,
   totalMarks: DEMO_TOTAL_MARKS,
   maxMarks: 520,
   packs: [],
-  activeSession: null,
+  activeSession: DEMO_SESSIONS[3],
+};
+
+export const DEMO_PROGRESS: ProgressSummary = {
+  totalAttempts: DEMO_ATTEMPTS,
+  correctAttempts: DEMO_CORRECT,
+  accuracyPercent: DEMO_ACCURACY,
+  recentSessions: DEMO_SESSIONS,
+  byPack: [],
+  weakChapters: DEMO_WEAK_CHAPTERS,
+  weeklyActivity: DEMO_HEATMAP,
 };
 
 export const ANALYTICS_FEATURE_CARDS = [

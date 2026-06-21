@@ -122,6 +122,14 @@ public class RevisionService {
                 .collect(Collectors.toSet());
     }
 
+    public Map<String, RevisionQueueEntry> entriesByQuestionIds(String userId, Set<String> questionIds) {
+        if (questionIds == null || questionIds.isEmpty()) {
+            return Map.of();
+        }
+        return revisionQueue.findByUserIdAndQuestionIdIn(userId, questionIds).stream()
+                .collect(Collectors.toMap(RevisionQueueEntry::getQuestionId, e -> e, (a, b) -> a));
+    }
+
     public void enqueueWrongAttemptsForSession(String userId, String sessionId) {
         List<QuestionAttempt> wrong = attempts.findBySessionId(sessionId).stream()
                 .filter(a -> !a.isCorrect())

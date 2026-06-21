@@ -185,6 +185,11 @@ export type WrongAttemptView = {
   solutionImageUrl: string;
   answeredAt: string;
   revised: boolean;
+  difficulty: number;
+  difficultyLabel: string;
+  mistakeType: string;
+  revisionDueLabel: string;
+  revisionDueTone: string;
 };
 
 export type SessionBreakdownRow = {
@@ -550,26 +555,18 @@ export function fetchQuestionFamily(questionId: string): Promise<QuestionFamily>
 
 const familyByParent = new Map<string, { at: number; data: QuestionFamily }>();
 
-async function authRequest<T>(path: string, body: object): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = (err as { message?: string }).message;
-    throw new Error(msg || formatHttpError(res.status, res.statusText, path));
-  }
-  return res.json() as Promise<T>;
-}
-
 export function register(email: string, password: string, displayName?: string) {
-  return authRequest<AuthResult>("/api/auth/register", { email, password, displayName });
+  return request<AuthResult>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, displayName }),
+  });
 }
 
 export function login(email: string, password: string) {
-  return authRequest<AuthResult>("/api/auth/login", { email, password });
+  return request<AuthResult>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 export function fetchMe() {

@@ -15,7 +15,7 @@ export default function GlobalSearch({ className = "", id = "global-search" }: P
     const q = query.trim();
     const params = new URLSearchParams({ exam: "NEET" });
     if (q) params.set("q", q);
-    navigate(`/bank?${params.toString()}`);
+    navigate(`/practice?${params.toString()}#question-bank`);
   }
 
   return (

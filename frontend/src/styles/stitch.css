@@ -79,7 +79,7 @@
 
 /* Scrollable bank results — 5 visible, scroll 5 more, then next set of 10 */
 .bank-results-feed {
-  --bank-feed-visible: 5;
+  --bank-feed-visible: 3;
   --bank-feed-row: 11rem;
   --bank-feed-gap: 1rem;
   --bank-feed-pad: 1rem;

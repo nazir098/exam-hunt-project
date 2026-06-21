@@ -238,7 +238,7 @@ export default function QuestionPage() {
 
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
-    return "/bank?exam=NEET";
+    return "/practice?exam=NEET#question-bank";
   }
 
   const correctAnswer = q?.answer?.trim() ?? "";

@@ -322,7 +322,7 @@ function LeaderboardEmptyState({
             Sign in to save your rank
           </Link>
         ) : (
-          <Link to="/bank?exam=NEET" className="btn">
+          <Link to="/practice?exam=NEET#question-bank" className="btn">
             Browse PYQs first
           </Link>
         )}

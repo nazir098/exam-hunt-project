@@ -12,7 +12,6 @@ import { sessionResumeUrl } from "../utils/practiceHub";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import { buildPlatformStats } from "../utils/platformStats";
 import {
-  BANK_MODE_HINT,
   LEADERBOARD_MODE_HINT,
   PRACTICE_MODE_HINT,
 } from "../navigation/modeHints";
@@ -21,17 +20,10 @@ const QUICK_ACTIONS = [
   {
     to: "/practice",
     icon: "bolt",
-    title: "Practice",
-    desc: "Scored adaptive sessions",
-    hint: PRACTICE_MODE_HINT,
+    title: "Practice & Bank",
+    desc: "Sessions + PYQ browse",
+    hint: `${PRACTICE_MODE_HINT} Browse PYQs in the same hub.`,
     primary: true,
-  },
-  {
-    to: "/bank?exam=NEET",
-    icon: "menu_book",
-    title: "Question Bank",
-    desc: "PYQs with solutions",
-    hint: BANK_MODE_HINT,
   },
   {
     to: "/analytics",

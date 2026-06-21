@@ -18,7 +18,9 @@ type Props = {
 
 function avatarFor(pathname: string): string {
   if (pathname.startsWith("/question/")) return STITCH_AVATAR_DETAIL;
-  if (pathname === "/bank" || pathname.startsWith("/pack/")) return STITCH_AVATAR_BANK;
+  if (pathname === "/practice" || pathname === "/bank" || pathname.startsWith("/pack/")) {
+    return STITCH_AVATAR_BANK;
+  }
   if (pathname === "/analytics") return STITCH_AVATAR_ANALYTICS;
   return STITCH_AVATAR_HOME;
 }
@@ -28,13 +30,13 @@ export default function StitchShell({ children }: Props) {
   const { user } = useAuth();
   const avatar = avatarFor(pathname);
   const isDetail = pathname.startsWith("/question/");
-  const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
+  const isBankBrowse =
+    pathname === "/practice" || pathname === "/bank" || pathname.startsWith("/pack/");
   const isAnalytics = pathname === "/analytics";
   const isHome = pathname === "/";
-  const isPractice =
-    pathname === "/practice" || !!pathname.match(/^\/practice\/[^/]+\//);
+  const isPracticeSession = !!pathname.match(/^\/practice\/[^/]+\//);
   const isLeaderboard = pathname === "/leaderboard";
-  const bankSearchTo = "/bank?exam=NEET";
+  const bankSearchTo = "/practice?exam=NEET#question-bank";
 
   const mobileNavClass =
     "lg:hidden bg-surface-glass backdrop-blur-md border-b border-outline-variant/30 shadow-md flex justify-between items-center w-full px-margin-mobile z-50 sticky top-0 shrink-0";
@@ -120,7 +122,7 @@ export default function StitchShell({ children }: Props) {
               <span
                 className="material-symbols-outlined text-[22px]"
                 style={
-                  active && (isHome || isBank || isAnalytics || isPractice || isLeaderboard)
+                  active && (isHome || isBankBrowse || isAnalytics || isPracticeSession || isLeaderboard)
                     ? { fontVariationSettings: "'FILL' 1" }
                     : undefined
                 }
@@ -128,7 +130,7 @@ export default function StitchShell({ children }: Props) {
                 {tab.icon}
               </span>
               <span className="text-[10px] font-label-md leading-tight text-center truncate max-w-[4.5rem]">
-                {tab.label === "Question Bank" ? "Bank" : tab.label}
+                {tab.label === "Practice" ? "Practice" : tab.label}
               </span>
             </Link>
           );

@@ -111,7 +111,7 @@ export default function InsightChartsPanel({
       {attempts > 0 && weak && (
         <p className="analytics-card-footer">
           <Link
-            to={`/bank?exam=NEET&subject=${encodeURIComponent(weak.subject)}&chapter=${encodeURIComponent(weak.chapter)}`}
+            to={`/practice?exam=NEET&subject=${encodeURIComponent(weak.subject)}&chapter=${encodeURIComponent(weak.chapter)}#question-bank`}
             className="text-primary font-bold"
           >
             Open {weak.chapter} in Question Bank →

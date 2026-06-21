@@ -343,7 +343,7 @@ export default function PracticeAdvancedBuilder({
         </button>
 
         <p className="muted practice-note practice-advanced__foot">
-          <Link to="/bank?exam=NEET">Browse PYQs</Link>
+          <Link to="/practice?exam=NEET#question-bank">Browse PYQs</Link>
         </p>
       </div>
     </section>

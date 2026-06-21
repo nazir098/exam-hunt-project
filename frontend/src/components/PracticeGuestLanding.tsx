@@ -65,7 +65,7 @@ const FEATURE_CARDS = [
     icon: "menu_book",
     title: "NEET Question Bank",
     desc: "Browse official-style PYQs with solutions — study mode without saving marks.",
-    to: "/bank?exam=NEET",
+    to: "/practice?exam=NEET#question-bank",
   },
   {
     icon: "insights",
@@ -124,7 +124,7 @@ export default function PracticeGuestLanding({
           </div>
           <p className="practice-landing-hero__fine">
             Free to join · No card required ·{" "}
-            <Link to="/bank?exam=NEET">Browse PYQs without signing in</Link>
+            <Link to="/practice?exam=NEET#question-bank">Browse PYQs without signing in</Link>
           </p>
         </div>
         <ul className="practice-landing-stats" aria-label="Platform stats">

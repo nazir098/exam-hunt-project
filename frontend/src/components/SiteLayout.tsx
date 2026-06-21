@@ -21,7 +21,10 @@ export default function SiteLayout() {
   const [practiceBusy, setPracticeBusy] = useState(false);
   const { user } = useAuth();
 
-  const isBank = pathname === "/bank" || pathname.startsWith("/pack/");
+  const isPracticeHub =
+    pathname === "/practice" ||
+    pathname === "/bank" ||
+    pathname.startsWith("/pack/");
 
   async function startPracticeFromBank(startQuestionId?: string, packIdOverride?: string) {
     if (practiceBusy) return;
@@ -40,7 +43,7 @@ export default function SiteLayout() {
         packId = packId || packs[0]?.packId || "";
       }
       if (!packId) {
-        navigate("/bank?exam=NEET");
+        navigate("/practice?exam=NEET");
         return;
       }
       const res = await fetchQuestions(packId, {
@@ -78,7 +81,7 @@ export default function SiteLayout() {
       if (!qId) throw new Error("No questions");
       navigate(`/practice/${session.id}/${qId}`);
     } catch {
-      navigate(isBank ? browsePathFromPack(searchParams.get("packId") || "", searchParams.toString()) : "/bank?exam=NEET");
+      navigate(isPracticeHub ? `/practice?${searchParams.toString()}#question-bank` : "/practice?exam=NEET");
     } finally {
       setPracticeBusy(false);
     }
