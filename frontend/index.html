@@ -3,12 +3,19 @@
   <head>
     <script>
       (function () {
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.documentElement.classList.add("dark");
-        document.documentElement.style.colorScheme = "dark";
+        var key = "exam-hunt-theme";
+        var theme = "dark";
         try {
-          localStorage.setItem("exam-hunt-theme", "dark");
+          var stored = localStorage.getItem(key);
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          } else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+            theme = "light";
+          }
         } catch (e) {}
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.classList.toggle("dark", theme === "dark");
+        document.documentElement.style.colorScheme = theme;
       })();
     </script>
     <meta charset="UTF-8" />

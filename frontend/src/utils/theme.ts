@@ -13,7 +13,7 @@ export function getStoredTheme(): Theme | null {
 
 export function getSystemTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function resolveTheme(): Theme {
@@ -24,6 +24,8 @@ export function applyTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.classList.toggle("dark", theme === "dark");
   document.documentElement.style.colorScheme = theme;
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (meta) meta.content = theme === "dark" ? "#111125" : "#f5f4fa";
 }
 
 export function storeTheme(theme: Theme) {

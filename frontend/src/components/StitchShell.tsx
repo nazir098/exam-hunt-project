@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
+import ThemeToggle from "./ThemeToggle";
 import {
   BRAND_NAME,
   STITCH_AVATAR_ANALYTICS,
@@ -37,7 +38,7 @@ export default function StitchShell({ children }: Props) {
   const bankSearchTo = "/bank?exam=NEET";
 
   const mobileNavClass =
-    "lg:hidden bg-surface-glass backdrop-blur-md border-b border-white/10 shadow-md flex justify-between items-center w-full px-margin-mobile z-50 sticky top-0 shrink-0";
+    "lg:hidden bg-surface-glass backdrop-blur-md border-b border-outline-variant/30 shadow-md flex justify-between items-center w-full px-margin-mobile z-50 sticky top-0 shrink-0";
   const mobileNavStyle = { height: "var(--app-header-h)", minHeight: "var(--app-header-h)" } as const;
 
   return (
@@ -56,6 +57,7 @@ export default function StitchShell({ children }: Props) {
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
+              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
@@ -72,6 +74,7 @@ export default function StitchShell({ children }: Props) {
               </Link>
             </div>
             <div className="flex items-center gap-sm shrink-0">
+              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search">
                 <span className="material-symbols-outlined">search</span>
               </Link>
@@ -83,6 +86,7 @@ export default function StitchShell({ children }: Props) {
               {BRAND_NAME}
             </Link>
             <div className="flex items-center gap-sm min-w-0">
+              <ThemeToggle className="stitch-theme-toggle--mobile" />
               <Link to={bankSearchTo} className="stitch-mobile-icon-link" title="Search question bank">
                 <span className="material-symbols-outlined">search</span>
               </Link>

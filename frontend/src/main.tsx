@@ -10,8 +10,6 @@ import "./styles/stitch.css";
 import "./styles/analytics.css";
 import "./styles.css";
 
-document.documentElement.classList.add("dark");
-document.documentElement.setAttribute("data-theme", "dark");
 initTheme();
 initAnalytics();
 

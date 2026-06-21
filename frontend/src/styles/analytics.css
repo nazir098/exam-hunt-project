@@ -6094,6 +6094,19 @@ a.nav-tip {
   padding-bottom: 0.15rem;
 }
 
+[data-theme="light"] .ai-markdown {
+  color: #1f2937;
+}
+
+[data-theme="light"] .ai-markdown h3,
+[data-theme="light"] .ai-markdown strong {
+  color: #111827;
+}
+
+[data-theme="light"] .ai-markdown .katex {
+  color: #1f2937;
+}
+
 .ai-streaming-markdown {
   position: relative;
 }
