@@ -54,9 +54,9 @@ function upsertJsonLd(id: string, data: unknown) {
   element.text = JSON.stringify(data);
 }
 
-function buildGraph(seo: SeoConfig) {
+function buildGraph(seo: SeoConfig): Record<string, unknown>[] {
   const canonicalUrl = `${SITE_URL}${seo.path}`;
-  return [
+  const graph: Record<string, unknown>[] = [
     {
       "@type": "EducationalOrganization",
       "@id": `${SITE_URL}/#organization`,
@@ -89,9 +89,10 @@ function buildGraph(seo: SeoConfig) {
       isPartOf: { "@id": `${SITE_URL}/#website` },
     },
   ];
+  return graph;
 }
 
-function buildFaqSchema() {
+function buildFaqSchema(): Record<string, unknown> {
   return {
     "@type": "FAQPage",
     "@id": `${SITE_URL}/#faq`,
