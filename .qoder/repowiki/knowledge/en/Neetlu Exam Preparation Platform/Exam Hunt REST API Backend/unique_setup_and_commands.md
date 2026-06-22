@@ -1,0 +1,3 @@
+- Docker multi-stage build using `maven:3.9.9-eclipse-temurin-17` builder then `eclipse-temurin:17-jre-jammy` runtime image; Maven dependency cache mounted for faster builds.
+- Environment-driven configuration via `application.yml` with fallback defaults; critical env vars include `MONGODB_URI`, `JWT_SECRET`, `ADMIN_IMPORT_KEY`, `OPENAI_API_KEY`, and `CORS_ORIGINS`.
+- Health check configured against `/actuator/health` endpoint on port 8081 with 60s start period.

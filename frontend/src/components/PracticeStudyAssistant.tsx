@@ -47,6 +47,15 @@ type Props = {
 
 export type PracticeStudyAssistantProps = Props;
 
+const INLINE_COLLAPSE_MQ = "(max-width: 1023px)";
+
+function shouldStartCollapsed(prominent: boolean, layout: Props["layout"]): boolean {
+  if (prominent) return false;
+  if (layout === "sidebar") return false;
+  if (typeof window === "undefined") return true;
+  return window.matchMedia(INLINE_COLLAPSE_MQ).matches;
+}
+
 /** Study tools — enrichment from DB when imported; LLM generates once then caches; explain after submit. */
 const CORE_TABS: TabDef[] = [
   { id: "hint", label: "Hint", short: "Hint", icon: "lightbulb", tier: "primary" },
@@ -143,7 +152,7 @@ export default function PracticeStudyAssistant({
     [formulaRelevant, submitted, correct]
   );
 
-  const [collapsed, setCollapsed] = useState(!prominent);
+  const [collapsed, setCollapsed] = useState(() => shouldStartCollapsed(prominent, layout));
   const [activeTab, setActiveTab] = useState<PracticeAiFeature | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [busy, setBusy] = useState<PracticeAiFeature | null>(null);
@@ -166,7 +175,7 @@ export default function PracticeStudyAssistant({
     setError("");
     setActiveTab(null);
     setPanelOpen(false);
-    setCollapsed(!prominent);
+    setCollapsed(shouldStartCollapsed(prominent, layout));
     setHintStep(1);
     setHintAnimate(true);
     setStreamComplete(false);
@@ -175,7 +184,7 @@ export default function PracticeStudyAssistant({
     setSolutionText("");
     setSolutionError("");
     setSolutionExpanded(false);
-  }, [questionId, submitted, correct, prominent]);
+  }, [questionId, submitted, correct, prominent, layout]);
 
   useEffect(() => {
     if (!formulaRelevant && activeTab === "formula") {
@@ -189,6 +198,14 @@ export default function PracticeStudyAssistant({
       setCollapsed(false);
     }
   }, [prominent]);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((current) => {
+      const next = !current;
+      if (next) setPanelOpen(false);
+      return next;
+    });
+  }, []);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -265,6 +282,7 @@ export default function PracticeStudyAssistant({
 
   const revealFullSolution = useCallback(async () => {
     if (!hasSolution || solutionRevealed) return;
+    if (!submitted && !directSolutionReveal) return;
     const prefetchedImage = prefetchedSolutionImage?.trim() ?? "";
     const prefetchedText = prefetchedSolutionText?.trim() ?? "";
     if (prefetchedImage) {
@@ -311,12 +329,16 @@ export default function PracticeStudyAssistant({
     solutionRevealed,
     prefetchedSolutionImage,
     prefetchedSolutionText,
+    submitted,
+    directSolutionReveal,
   ]);
 
   useEffect(() => {
     if (!triggerFeature) return;
     void runTab(triggerFeature).finally(() => onTriggerConsumed?.());
   }, [triggerFeature, onTriggerConsumed, runTab]);
+
+  const canRevealOfficialSolution = submitted || directSolutionReveal;
 
   const renderTab = (tab: TabDef) => {
     const isActive = activeTab === tab.id && panelOpen;
@@ -454,7 +476,7 @@ export default function PracticeStudyAssistant({
         </div>
         {hasSolution ? (
           <div className="study-assistant__content study-assistant__content--solution-only">
-            {!solutionRevealed ? (
+            {canRevealOfficialSolution && !solutionRevealed ? (
               <button
                 type="button"
                 className="study-assistant__show-solution"
@@ -464,8 +486,12 @@ export default function PracticeStudyAssistant({
                 <span className="material-symbols-outlined">menu_book</span>
                 {solutionBusy ? "Loading solution…" : "Show official solution"}
               </button>
+            ) : !canRevealOfficialSolution ? (
+              <p className="study-assistant__off-text study-assistant__off-text--muted">
+                Official solution unlocks after you check or submit your answer.
+              </p>
             ) : null}
-            {renderOfficialSolution(true)}
+            {canRevealOfficialSolution ? renderOfficialSolution(true) : null}
             <p className="study-assistant__off-text study-assistant__off-text--muted">
               {!settings.aiLlmConfigured
                 ? "AI hints need FreeLLMAPI — official paper solutions still work."
@@ -542,7 +568,13 @@ export default function PracticeStudyAssistant({
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="study-assistant__head">
+      <button
+        type="button"
+        className="study-assistant__head"
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand AI Study Assistant" : "Collapse AI Study Assistant"}
+      >
         <div className="study-assistant__head-left">
           <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
           <div>
@@ -552,24 +584,17 @@ export default function PracticeStudyAssistant({
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="study-assistant__toggle"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand AI assistant" : "Collapse AI assistant"}
-        >
-          <span className="material-symbols-outlined">
-            {collapsed ? "expand_more" : "expand_less"}
-          </span>
-        </button>
-      </div>
+        <span className="material-symbols-outlined study-assistant__head-chevron" aria-hidden>
+          {collapsed ? "expand_more" : "expand_less"}
+        </span>
+      </button>
 
+      <div className="study-assistant__collapsible">
       <div className="study-assistant__tabs" role="tablist" aria-label="AI study tools">
         <div className="study-assistant__tabs-row study-assistant__tabs-row--uniform">
           {tabs.map((tab) => renderTab({ ...tab, tier: "primary" }))}
         </div>
-        {directSolutionReveal && hasSolution && !solutionRevealed && (
+        {directSolutionReveal && canRevealOfficialSolution && hasSolution && !solutionRevealed && (
           <button
             type="button"
             className="study-assistant__show-solution study-assistant__show-solution--toolbar"
@@ -582,7 +607,7 @@ export default function PracticeStudyAssistant({
         )}
       </div>
 
-      {directSolutionReveal && solutionRevealed && (solutionText || solutionImageUrl) && (
+      {directSolutionReveal && canRevealOfficialSolution && solutionRevealed && (solutionText || solutionImageUrl) && (
         <div className="study-assistant__solution-standalone">{renderOfficialSolution(true)}</div>
       )}
 
@@ -664,8 +689,26 @@ export default function PracticeStudyAssistant({
                   </button>
                 )}
 
-                {isHintTab && allHintsShown && (
+                {isHintTab && allHintsShown && !canRevealOfficialSolution && (
                   <p className="study-assistant__hint-done">All hints shown — try solving, then submit.</p>
+                )}
+
+                {isHintTab && allHintsShown && canRevealOfficialSolution && hasSolution && !solutionRevealed && (
+                  <button
+                    type="button"
+                    className="study-assistant__show-solution"
+                    disabled={solutionBusy}
+                    onClick={() => void revealFullSolution()}
+                  >
+                    <span className="material-symbols-outlined">menu_book</span>
+                    {solutionBusy ? "Loading solution…" : "Show official solution"}
+                  </button>
+                )}
+
+                {isHintTab && allHintsShown && canRevealOfficialSolution && solutionRevealed && (
+                  <div className="study-assistant__solution-standalone study-assistant__solution-standalone--inline">
+                    {renderOfficialSolution(true)}
+                  </div>
                 )}
 
                 {!isHintTab && streamComplete && activeResult.similarQuestions.length > 0 && (
@@ -689,6 +732,7 @@ export default function PracticeStudyAssistant({
             )}
           </div>
         )}
+      </div>
       </div>
 
       {solutionExpanded && solutionImageUrl && (

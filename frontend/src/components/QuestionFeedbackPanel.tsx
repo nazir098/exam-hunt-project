@@ -22,6 +22,11 @@ type Props = {
   context: QuestionFeedbackContext;
   compact?: boolean;
   className?: string;
+  expanded?: boolean;
+  onExpandedChange?: (open: boolean) => void;
+  defaultExpanded?: boolean;
+  /** Hide toggle bar; parent opens via Report (form only when expanded). */
+  hideToggle?: boolean;
 };
 
 export default function QuestionFeedbackPanel({
@@ -29,6 +34,10 @@ export default function QuestionFeedbackPanel({
   context,
   compact = false,
   className = "",
+  expanded,
+  onExpandedChange,
+  defaultExpanded = false,
+  hideToggle = false,
 }: Props) {
   const { user, loading: authLoading } = useAuth();
   const [score, setScore] = useState(0);
@@ -38,6 +47,13 @@ export default function QuestionFeedbackPanel({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openInternal, setOpenInternal] = useState(defaultExpanded);
+  const open = expanded ?? openInternal;
+
+  function setOpen(next: boolean) {
+    if (expanded === undefined) setOpenInternal(next);
+    onExpandedChange?.(next);
+  }
 
   useEffect(() => {
     if (authLoading || !user || !questionId) return;
@@ -88,16 +104,41 @@ export default function QuestionFeedbackPanel({
   const rootClass = [
     "question-feedback",
     compact ? "question-feedback--compact" : "",
+    hideToggle ? "question-feedback--report-driven" : "",
+    open ? "question-feedback--open" : "question-feedback--collapsed",
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
-  if (authLoading) {
+  if (authLoading || (hideToggle && !open)) {
     return null;
   }
 
   if (!user) {
+    if (hideToggle) {
+      return (
+        <section className={rootClass} aria-label="Question feedback">
+          <div className="question-feedback__inline-head">
+            <span className="question-feedback__inline-title">Rate &amp; report</span>
+            <button
+              type="button"
+              className="question-feedback__inline-close"
+              onClick={() => setOpen(false)}
+              aria-label="Close feedback form"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <p className="question-feedback__hint muted">
+            <Link to={`/login?next=${encodeURIComponent(window.location.pathname)}`}>
+              Sign in
+            </Link>{" "}
+            to rate or report this question.
+          </p>
+        </section>
+      );
+    }
     return (
       <section className={rootClass} aria-label="Question feedback">
         <p className="question-feedback__hint muted">
@@ -112,17 +153,41 @@ export default function QuestionFeedbackPanel({
 
   return (
     <section className={rootClass} aria-label="Question feedback">
-      <div className="question-feedback__head">
-        <h2 className="question-feedback__title">Rate &amp; report</h2>
-        {aggregate && aggregate.count > 0 && (
-          <p className="question-feedback__aggregate muted">
-            {aggregate.average.toFixed(1)} ★ · {aggregate.count} rating
-            {aggregate.count === 1 ? "" : "s"}
-          </p>
-        )}
-      </div>
+      {!hideToggle && (
+        <button
+          type="button"
+          className="question-feedback__toggle"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+        >
+          <span className="question-feedback__toggle-label">Rate &amp; report</span>
+          {aggregate && aggregate.count > 0 && (
+            <span className="question-feedback__aggregate muted">
+              {aggregate.average.toFixed(1)} ★ · {aggregate.count}
+            </span>
+          )}
+          <span className="material-symbols-outlined question-feedback__toggle-icon" aria-hidden>
+            {open ? "expand_less" : "expand_more"}
+          </span>
+        </button>
+      )}
 
-      <form className="question-feedback__form" onSubmit={handleSubmit}>
+      {open && (
+        <>
+          {hideToggle && (
+            <div className="question-feedback__inline-head">
+              <span className="question-feedback__inline-title">Rate &amp; report</span>
+              <button
+                type="button"
+                className="question-feedback__inline-close"
+                onClick={() => setOpen(false)}
+                aria-label="Close feedback form"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          )}
+        <form className="question-feedback__form" onSubmit={handleSubmit}>
         <div className="practice-run-rating practice-run-rating--compact question-feedback__stars">
           <p className="practice-run-rating__label">Your rating</p>
           <div className="practice-run-rating__stars">
@@ -177,7 +242,9 @@ export default function QuestionFeedbackPanel({
         <button type="submit" className="btn primary question-feedback__submit" disabled={busy}>
           {busy ? "Saving…" : "Submit feedback"}
         </button>
-      </form>
+        </form>
+        </>
+      )}
     </section>
   );
 }

@@ -557,16 +557,18 @@ export default function QuestionBankSection({
       </div>
 
       {onStartSession && (
-        <PracticeBankStartBanner
-          sessionSize={sessionSize}
-          estMinutes={estMinutes}
-          adaptive={adaptive}
-          pack={pack}
-          busy={sessionBusy}
-          disabled={!canStartSession}
-          signedIn={Boolean(user)}
-          onStart={startBankSession}
-        />
+        <div className="practice-bank-start-banner-anchor">
+          <PracticeBankStartBanner
+            sessionSize={sessionSize}
+            estMinutes={estMinutes}
+            adaptive={adaptive}
+            pack={pack}
+            busy={sessionBusy}
+            disabled={!canStartSession}
+            signedIn={Boolean(user)}
+            onStart={startBankSession}
+          />
+        </div>
       )}
     </section>
   );

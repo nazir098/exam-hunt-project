@@ -1,0 +1,1 @@
+Orchestrates a Spring Boot backend and React frontend to deliver a unified NEET exam preparation experience with shared environment configuration and local development proxying.

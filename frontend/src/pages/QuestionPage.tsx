@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchQuestion, fetchQuestionFamily, fetchQuestions, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
-import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
-import BookmarkButton from "../components/BookmarkButton";
+import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
+import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import AiMarkdown from "../components/AiMarkdown";
@@ -10,6 +10,7 @@ import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
 import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
+import ZoomableImage from "../components/ZoomableImage";
 import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
@@ -70,6 +71,7 @@ export default function QuestionPage() {
   const [checked, setChecked] = useState(false);
   const [answerPeek, setAnswerPeek] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
   const returnQs = searchParams.toString();
@@ -126,11 +128,11 @@ export default function QuestionPage() {
   }, [familyParent]);
 
   useEffect(() => {
-    setFamily((prev) =>
-      prev && prev.activeQuestionId !== questionId
-        ? { ...prev, activeQuestionId: questionId }
-        : prev
-    );
+    if (!checked) setSolutionOpen(false);
+  }, [checked, questionId]);
+
+  useEffect(() => {
+    setFeedbackOpen(false);
   }, [questionId]);
 
   useEffect(() => {
@@ -277,7 +279,7 @@ export default function QuestionPage() {
     Boolean(q?.solutionImageUrl?.trim()) ||
     Boolean(q?.solutionTextPreview?.trim());
   const distinctSolution = q ? hasDistinctSolution(q) : false;
-  const showSolutionPanel = solutionOpen && hasSolution && distinctSolution;
+  const showSolutionPanel = solutionOpen && hasSolution && distinctSolution && checked;
 
   const assistantProps = {
     questionId,
@@ -356,10 +358,10 @@ export default function QuestionPage() {
 
   return (
     <main className="solve-page lg:pt-4">
-      <ProductModeBanner mode="solve" />
+      <ProductModeBanner mode="solve" compact />
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg">
-        <div className="flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
+      <div className="solve-page__meta">
+        <div className="solve-page__breadcrumb hidden md:flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
           <Link to={backHref()} className="hover:text-primary transition-colors">
             {q.subject}
           </Link>
@@ -376,12 +378,12 @@ export default function QuestionPage() {
             </>
           )}
         </div>
-        <div className="flex flex-wrap gap-sm">
-          <span className="practice-run-chip">
+        <div className="solve-page__meta-chips">
+          <span className="practice-run-chip practice-run-chip--meta">
             {examDisplayName(q.exam, q.year)} {q.year}
           </span>
-          <span className="practice-run-chip">{diff}</span>
-          <span className="practice-run-chip practice-run-chip--muted">
+          <span className="practice-run-chip practice-run-chip--meta">{diff}</span>
+          <span className="practice-run-chip practice-run-chip--meta practice-run-chip--muted">
             {marksLabel(q.difficulty, q.questionNo)}
           </span>
         </div>
@@ -392,12 +394,13 @@ export default function QuestionPage() {
           <section key={questionId} className="practice-run-question glass-card">
             <div className="practice-run-question__head">
               <div className="practice-run-question__titles">
-                <p className="practice-run-question__eyebrow">Study mode · Question Bank</p>
                 <h1 className="practice-run-question__title">
-                  {isVariant
-                    ? `${formatVariantTypeLabel(q.variantType, q.variantNo)} · Paper Q${q.questionNo}`
-                    : `NEET Paper · Question ${q.questionNo}`}
-                  {q.topic ? ` · ${q.topic}` : ""}
+                  {questionHeadingTitle(
+                    q.exam,
+                    q.questionNo,
+                    q.topic || q.chapter,
+                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+                  )}
                 </h1>
               </div>
             </div>
@@ -420,10 +423,9 @@ export default function QuestionPage() {
               {variantLoader ? (
                 <VariantSwitchLoader mode={variantLoader.mode} label={variantLoader.label} />
               ) : imageMode ? (
-                <img
+                <ZoomableImage
                   src={imageSrc(q.questionImageUrl, questionId)}
                   alt={`Question ${q.questionNo}`}
-                  draggable={false}
                 />
               ) : (
                 <TextMcqQuestion
@@ -466,35 +468,34 @@ export default function QuestionPage() {
               </span>
               {checked ? (isCorrect ? "Correct" : "Checked") : "Check answer"}
             </button>
-            <button
-              type="button"
-              className="practice-run-nav-btn solve-page__peek-btn"
-              onClick={() => setAnswerPeek((v) => !v)}
-              aria-pressed={answerPeek}
-            >
-              <span className="material-symbols-outlined">
-                {answerPeek ? "visibility_off" : "visibility"}
-              </span>
-              {answerPeek ? "Hide answer" : "Show answer"}
-            </button>
-            {distinctSolution && (
-              <button
-                type="button"
-                className="practice-run-nav-btn solve-page__peek-btn"
-                onClick={() => setSolutionOpen((v) => !v)}
-                aria-pressed={solutionOpen}
-              >
-                <span className="material-symbols-outlined">
-                  {solutionOpen ? "menu_book" : "auto_stories"}
-                </span>
-                {solutionOpen ? "Hide solution" : "View solution"}
-              </button>
-            )}
-            <BookmarkButton
-              questionId={questionId}
-              className="practice-run-nav-btn"
-            />
           </div>
+
+          <QuestionSecondaryActions
+            questionId={questionId}
+            hasSolution={distinctSolution}
+            solutionAllowed={checked}
+            solutionOpen={solutionOpen}
+            onToggleSolution={() => {
+              if (!checked) return;
+              setSolutionOpen((v) => !v);
+            }}
+            onReport={() => {
+              setFeedbackOpen(true);
+              requestAnimationFrame(() => {
+                const target =
+                  window.matchMedia("(min-width: 1024px)").matches
+                    ? document.querySelector(".practice-run-aside .solve-page__feedback")
+                    : document.getElementById("question-report");
+                target?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              });
+            }}
+          />
+
+          {!checked && (
+            <p className="solve-page__submit-hint muted">
+              Answer will be revealed after you check.
+            </p>
+          )}
 
           {answerPeek && !checked && correctAnswer && (
             <p className="solve-page__answer-banner" role="status">
@@ -540,23 +541,30 @@ export default function QuestionPage() {
               }`}
             >
               <div className="practice-run-result__banner practice-run-result__banner--compact">
-                <span
-                  className="material-symbols-outlined practice-run-result__icon"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  {isCorrect ? "check_circle" : "cancel"}
+                <span className="practice-run-result__icon-wrap" aria-hidden>
+                  <span
+                    className="material-symbols-outlined practice-run-result__icon"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    {isCorrect ? "check_circle" : "cancel"}
+                  </span>
                 </span>
-                <div>
+                <div className="practice-run-result__content">
                   <h2 className="practice-run-result__title">
                     {isCorrect ? "Correct" : "Incorrect"}
                   </h2>
-                  {!isCorrect && (
-                    <p className="practice-run-result__answer-line">
+                  {!isCorrect && correctAnswer && (
+                    <p className="practice-run-result__answer-line practice-run-result__answer-line--key">
                       Correct answer: {optionLabel(correctAnswer)}
                     </p>
                   )}
-                  {selected && (
-                    <p className="practice-run-result__answer-line muted">
+                  {selected && !isCorrect && (
+                    <p className="practice-run-result__answer-line practice-run-result__answer-line--yours">
+                      You chose {optionLabel(selected)}
+                    </p>
+                  )}
+                  {isCorrect && selected && (
+                    <p className="practice-run-result__answer-line practice-run-result__answer-line--yours">
                       You chose {optionLabel(selected)}
                     </p>
                   )}
@@ -565,46 +573,91 @@ export default function QuestionPage() {
             </section>
           )}
 
-          <QuestionFeedbackPanel
-            questionId={questionId}
-            context="solve"
-            className="glass-card solve-page__feedback"
-          />
-
-          <footer className="solve-page__footer-nav">
+          <footer className="solve-page__footer-nav solve-page__footer-nav--desktop" aria-label="Question navigation">
             <button
               type="button"
-              className="practice-run-nav-btn"
+              className="practice-run-nav-btn solve-page__nav-btn"
               disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
               onClick={() => void goToSibling("prev")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
-              Previous
+              <span className="solve-page__nav-label">Prev</span>
             </button>
-            <span className="text-caption text-outline">
+            <span className="solve-page__nav-pos">
               {nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo}
               {nav.loaded ? ` / ${nav.total}` : siblingsLoading ? " · …" : ""}
             </span>
             <button
               type="button"
-              className="practice-run-nav-btn"
+              className="practice-run-nav-btn solve-page__nav-btn"
               disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
               onClick={() => void goToSibling("next")}
             >
-              Next
+              <span className="solve-page__nav-label">Next</span>
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
           </footer>
         </div>
 
         <aside className="practice-run-aside hidden lg:flex">
+          {feedbackOpen && (
+            <QuestionFeedbackPanel
+              questionId={questionId}
+              context="solve"
+              compact
+              hideToggle
+              expanded={feedbackOpen}
+              onExpandedChange={setFeedbackOpen}
+              className="solve-page__feedback"
+            />
+          )}
           <PracticeStudyAssistant {...assistantProps} layout="sidebar" />
         </aside>
       </div>
 
-      <div className="practice-run-ai-inline lg:hidden">
-        <PracticeStudyAssistant {...assistantProps} layout="inline" />
+      <div className="solve-page__mobile-rail">
+        {feedbackOpen && (
+          <div id="question-report">
+            <QuestionFeedbackPanel
+              questionId={questionId}
+              context="solve"
+              compact
+              hideToggle
+              expanded={feedbackOpen}
+              onExpandedChange={setFeedbackOpen}
+              className="solve-page__feedback"
+            />
+          </div>
+        )}
+        <div className="practice-run-ai-inline">
+          <PracticeStudyAssistant {...assistantProps} layout="inline" />
+        </div>
       </div>
+
+      <footer className="solve-page__footer-nav solve-page__footer-nav--fixed" aria-label="Question navigation">
+        <button
+          type="button"
+          className="practice-run-nav-btn solve-page__nav-btn"
+          disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
+          onClick={() => void goToSibling("prev")}
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+          <span className="solve-page__nav-label">Prev</span>
+        </button>
+        <span className="solve-page__nav-pos">
+          {nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo}
+          {nav.loaded ? ` / ${nav.total}` : siblingsLoading ? " · …" : ""}
+        </span>
+        <button
+          type="button"
+          className="practice-run-nav-btn solve-page__nav-btn"
+          disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
+          onClick={() => void goToSibling("next")}
+        >
+          <span className="solve-page__nav-label">Next</span>
+          <span className="material-symbols-outlined">arrow_forward</span>
+        </button>
+      </footer>
     </main>
   );
 }

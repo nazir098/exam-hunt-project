@@ -6,7 +6,7 @@ import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 
 type Props = {
   questionId: string;
-  variant?: "icon" | "full";
+  variant?: "icon" | "full" | "compact";
   className?: string;
   /** When set, skips per-question status fetch (e.g. bank list batch load). */
   saved?: boolean;
@@ -66,20 +66,32 @@ export default function BookmarkButton({
   if (!settings.bookmarksEnabled) return null;
 
   if (!user) {
+    const guestBody =
+      variant === "icon" ? (
+        <span className="material-symbols-outlined">bookmark</span>
+      ) : variant === "compact" ? (
+        <>
+          <span className="material-symbols-outlined" aria-hidden>
+            bookmark
+          </span>
+          <span className="question-secondary-actions__label">Save</span>
+          <span className="question-secondary-actions__label question-secondary-actions__label--wide">
+            Save for revision
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="material-symbols-outlined">bookmark</span>
+          Save for Revision
+        </>
+      );
     return (
       <Link
         to={`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`}
         className={className}
         title="Sign in to save for revision"
       >
-        {variant === "icon" ? (
-          <span className="material-symbols-outlined">bookmark</span>
-        ) : (
-          <>
-            <span className="material-symbols-outlined">bookmark</span>
-            Save for Revision
-          </>
-        )}
+        {guestBody}
       </Link>
     );
   }
@@ -96,6 +108,31 @@ export default function BookmarkButton({
       >
         <span className="material-symbols-outlined" style={saved ? { fontVariationSettings: "'FILL' 1" } : undefined}>
           bookmark
+        </span>
+      </button>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <button
+        type="button"
+        className={className + (saved ? " is-active" : "")}
+        onClick={onToggle}
+        disabled={busy}
+        aria-pressed={saved}
+        title={saved ? "Remove bookmark" : "Save for revision"}
+      >
+        <span
+          className="material-symbols-outlined"
+          style={saved ? { fontVariationSettings: "'FILL' 1" } : undefined}
+          aria-hidden
+        >
+          bookmark
+        </span>
+        <span className="question-secondary-actions__label">{saved ? "Saved" : "Save"}</span>
+        <span className="question-secondary-actions__label question-secondary-actions__label--wide">
+          {saved ? "Saved" : "Save for revision"}
         </span>
       </button>
     );

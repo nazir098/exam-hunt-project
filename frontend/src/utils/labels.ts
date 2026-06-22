@@ -14,3 +14,23 @@ export function examDisplayName(exam: string, year: number): string {
   if (exam === "NEET") return "NEET";
   return `${exam} ${year}`;
 }
+
+/** e.g. NEET.Q47 */
+export function questionRefLabel(exam: string, questionNo: number): string {
+  const examKey = exam === "JEE" ? "JEE" : exam === "NEET" ? "NEET" : exam;
+  return `${examKey}.Q${questionNo}`;
+}
+
+/** e.g. NEET.Q47 | Magnetic Field and its Effects */
+export function questionHeadingTitle(
+  exam: string,
+  questionNo: number,
+  topic?: string | null,
+  variantPrefix?: string | null
+): string {
+  const ref = variantPrefix
+    ? `${variantPrefix} | ${questionRefLabel(exam, questionNo)}`
+    : questionRefLabel(exam, questionNo);
+  const topicPart = topic?.trim();
+  return topicPart ? `${ref} | ${topicPart}` : ref;
+}

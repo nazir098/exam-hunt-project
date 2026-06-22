@@ -1,0 +1,1 @@
+Development server runs on port 5173 with strict port enforcement. API requests are proxied to `http://127.0.0.1:8081` via Vite config in dev mode. Build command includes type checking: `tsc --noEmit && vite build`.

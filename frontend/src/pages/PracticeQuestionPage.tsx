@@ -22,15 +22,17 @@ import PageLoadShell from "../components/PageLoadShell";
 import PracticeStudyAssistant, { explainFeatureForResult } from "../components/PracticeStudyAssistant";
 import ProductModeBanner from "../components/ProductModeBanner";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
+import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
+import ZoomableImage from "../components/ZoomableImage";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestRunSidebar from "../components/TestRunSidebar";
 import SessionTimer from "../components/SessionTimer";
 import { useSessionEngagement } from "../hooks/useSessionEngagement";
 import { sessionRoute, type ProductMode } from "../navigation/modes";
-import { difficultyLabel, examDisplayName } from "../utils/labels";
+import { difficultyLabel, examDisplayName, questionHeadingTitle } from "../utils/labels";
 import { formatVariantTypeLabel } from "../utils/variantLabels";
 import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 
@@ -191,6 +193,7 @@ export default function PracticeQuestionPage() {
   const [loadTick, setLoadTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [aiTrigger, setAiTrigger] = useState<PracticeAiFeature | null>(null);
   const [variantCheck, setVariantCheck] = useState<VariantCheckResult | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -260,29 +263,27 @@ export default function PracticeQuestionPage() {
   const loadQuestionById = useCallback(
     async (qid: string, opts?: { prefetch?: boolean }) => {
       const cached = questionCacheRef.current.get(qid);
-      if (!opts?.prefetch) {
-        const samePaper = isSamePaperQuestion(qid, qRef.current);
-        if (!samePaper) {
-          setQ(null);
-          setContentLoading(false);
-        } else {
-          setContentLoading(true);
-        }
+      const cacheStale =
+        cached?.sourceType === "ai_variant" &&
+        (!cached.options?.length || !cached.questionFormat);
+
+      if (cached && !cacheStale) {
+        if (opts?.prefetch) return cached;
         setSelected("");
         setShowSolution(false);
         setResult(null);
         setVariantCheck(null);
-      }
-      const cacheStale =
-        cached?.sourceType === "ai_variant" &&
-        (!cached.options?.length || !cached.questionFormat);
-      if (cached && !cacheStale && opts?.prefetch) {
-        return cached;
-      }
-      if (cached && !cacheStale && !opts?.prefetch) {
         setContentLoading(false);
         setQ(cached);
         return cached;
+      }
+
+      if (!opts?.prefetch) {
+        setContentLoading(true);
+        setSelected("");
+        setShowSolution(false);
+        setResult(null);
+        setVariantCheck(null);
       }
       try {
         const question = await fetchPracticeQuestion(qid);
@@ -340,8 +341,13 @@ export default function PracticeQuestionPage() {
   const applyQuestion = useCallback(
     async (s: PracticeSessionView, qid: string) => {
       const tileIds = new Set(s.questionTiles?.map((t) => t.questionId) ?? []);
-      const access = await resolveSessionQuestionAccess(qid, tileIds);
-      const inSession = access.allowed;
+      let accessQuestion: PracticeQuestion | undefined;
+      let inSession = tileIds.has(qid);
+      if (!inSession) {
+        const access = await resolveSessionQuestionAccess(qid, tileIds);
+        inSession = access.allowed;
+        accessQuestion = access.question;
+      }
       if (s.status === "completed" && !inSession) {
         setError("This session has ended. Start a new one from Practice or Test.");
         return;
@@ -355,8 +361,8 @@ export default function PracticeQuestionPage() {
         return;
       }
       try {
-        if (access.question) {
-          questionCacheRef.current.set(qid, access.question);
+        if (accessQuestion) {
+          questionCacheRef.current.set(qid, accessQuestion);
         }
         await loadQuestionById(qid);
       } catch (e) {
@@ -367,13 +373,11 @@ export default function PracticeQuestionPage() {
         }
         throw e;
       }
-      if (routeMode === "test") {
-        const loaded = questionCacheRef.current.get(qid);
-        const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
-        prefetchNextQuestion(s.questionTiles, anchorId);
-      }
+      const loaded = questionCacheRef.current.get(qid);
+      const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
+      prefetchNextQuestion(s.questionTiles, anchorId);
     },
-    [sessionId, navigate, sessionPath, routeMode, loadQuestionById, prefetchNextQuestion]
+    [sessionId, navigate, sessionPath, loadQuestionById, prefetchNextQuestion]
   );
 
   useEffect(() => {
@@ -452,6 +456,9 @@ export default function PracticeQuestionPage() {
       }
       setSession(patchSessionAfterAction(session, questionId, answeredTileStatus(session, res), res));
       setResult(res);
+      if (res.nextQuestionId) {
+        void loadQuestionById(res.nextQuestionId, { prefetch: true });
+      }
       void refreshProgress();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
@@ -494,6 +501,7 @@ export default function PracticeQuestionPage() {
 
   function goNext() {
     if (result?.nextQuestionId) {
+      void loadQuestionById(result.nextQuestionId, { prefetch: true });
       navigate(sessionPath(sessionId, result.nextQuestionId));
     } else {
       navigate(resultPath(sessionId));
@@ -540,13 +548,17 @@ export default function PracticeQuestionPage() {
   function goPrev() {
     const anchorId = sessionAnchorQuestionId(q, questionId);
     const { prevId } = sequentialNav(session?.questionTiles, anchorId);
-    if (prevId) navigate(sessionPath(sessionId, prevId));
+    if (prevId) {
+      void loadQuestionById(prevId, { prefetch: true });
+      navigate(sessionPath(sessionId, prevId));
+    }
   }
 
   function goSequentialNext() {
     const anchorId = sessionAnchorQuestionId(q, questionId);
     const { nextId } = sequentialNav(session?.questionTiles, anchorId);
     if (nextId) {
+      void loadQuestionById(nextId, { prefetch: true });
       navigate(sessionPath(sessionId, nextId));
       return;
     }
@@ -564,15 +576,28 @@ export default function PracticeQuestionPage() {
 
   function goToTile(qid: string) {
     if (qid === sessionAnchorQuestionId(q, questionId)) return;
+    void loadQuestionById(qid, { prefetch: true });
     navigate(sessionPath(sessionId, qid));
   }
 
   const pageLoading =
-    authLoading || (!user && !error) || Boolean(user && !error && (!session || !q));
+    authLoading || (!user && !error) || Boolean(user && !error && !session);
+
+  function questionMatchesRoute(
+    question: PracticeQuestion | null,
+    routeId: string
+  ): boolean {
+    if (!question) return false;
+    if (question.questionId === routeId) return true;
+    if (question.parentQuestionId === routeId) return true;
+    return sessionAnchorQuestionId(question, routeId) === routeId;
+  }
+
+  const questionPending = contentLoading || !questionMatchesRoute(q, questionId);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (busy || pageLoading) return;
+      if (busy || pageLoading || questionPending) return;
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
 
@@ -581,6 +606,7 @@ export default function PracticeQuestionPage() {
         const { prevId: pid } = sequentialNav(session?.questionTiles, anchorId);
         if (pid) {
           e.preventDefault();
+          void loadQuestionById(pid, { prefetch: true });
           navigate(sessionPath(sessionId, pid));
         }
         return;
@@ -591,11 +617,13 @@ export default function PracticeQuestionPage() {
         const { nextId: nid } = sequentialNav(session?.questionTiles, anchorId);
         if (nid) {
           e.preventDefault();
+          void loadQuestionById(nid, { prefetch: true });
           navigate(sessionPath(sessionId, nid));
           return;
         }
         if (routeMode === "practice" && result?.nextQuestionId) {
           e.preventDefault();
+          void loadQuestionById(result.nextQuestionId, { prefetch: true });
           navigate(sessionPath(sessionId, result.nextQuestionId));
         }
       }
@@ -613,6 +641,8 @@ export default function PracticeQuestionPage() {
     sessionPath,
     routeMode,
     result,
+    questionPending,
+    loadQuestionById,
   ]);
 
   const isMarked =
@@ -661,7 +691,7 @@ export default function PracticeQuestionPage() {
     );
   }
 
-  if (error || !user || !q || !session) {
+  if (error || !user || !session) {
     return (
       <PageLoadShell
         error={error || "This session could not be loaded."}
@@ -673,6 +703,35 @@ export default function PracticeQuestionPage() {
       >
         {null}
       </PageLoadShell>
+    );
+  }
+
+  if (!q) {
+    return (
+      <main className={`practice-run-page practice-run-page--${routeMode}`}>
+        <ProductModeBanner mode={routeMode} compact />
+        <header className="practice-run-header sticky-below-header">
+          <div className="practice-run-header__top">
+            <Link to={backTo} className="practice-run-header__back">
+              <span className="material-symbols-outlined">arrow_back</span>
+              {backLabel}
+            </Link>
+          </div>
+        </header>
+        <div className="practice-run-layout">
+          <div className="practice-run-main">
+            <section className="glass-card content-loader-panel">
+              <AppLoader
+                variant="inline"
+                label="Loading question…"
+                hint="Fetching question content"
+                mode={routeMode === "test" ? "test" : "practice"}
+                icon={routeMode === "test" ? "timer" : "school"}
+              />
+            </section>
+          </div>
+        </div>
+      </main>
     );
   }
 
@@ -820,11 +879,13 @@ export default function PracticeQuestionPage() {
     const goVariant = (qid: string) => {
       if (qid === questionId) return;
       if (isSamePaperQuestion(qid, q)) setContentLoading(true);
+      void loadQuestionById(qid, { prefetch: true });
       navigate(sessionPath(sessionId, qid));
     };
-    const variantLoader = contentLoading
-      ? variantSwitchLoaderForTarget(questionId, family)
-      : null;
+    const pendingVariantSwitch =
+      questionPending && isSamePaperQuestion(questionId, q)
+        ? variantSwitchLoaderForTarget(questionId, family)
+        : null;
     return (
       <section key={questionId} className="practice-run-question glass-card">
         <div className="practice-run-question__head">
@@ -834,9 +895,12 @@ export default function PracticeQuestionPage() {
               {session.filterSubject ? ` · ${session.filterSubject}` : ""}
             </p>
             <h1 className="practice-run-question__title">
-              {isVariant
-                ? `${formatVariantTypeLabel(q.variantType, q.variantNo)} · Paper Q${q.questionNo}`
-                : `NEET Paper · Question ${q.questionNo}`}
+              {questionHeadingTitle(
+                q.exam,
+                q.questionNo,
+                q.topic || q.chapter,
+                isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+              )}
             </h1>
           </div>
           {includeMarkReview && renderTestMarkReview()}
@@ -850,20 +914,28 @@ export default function PracticeQuestionPage() {
         )}
         <div
           className={`practice-run-question__media${
-            variantLoader
-              ? variantLoader.mode === "ai"
+            questionPending
+              ? pendingVariantSwitch?.mode === "ai"
                 ? " practice-run-question__media--variant-generating"
                 : " practice-run-question__media--variant-loading"
               : ""
           }`}
         >
-          {variantLoader ? (
-            <VariantSwitchLoader mode={variantLoader.mode} label={variantLoader.label} />
+          {questionPending ? (
+            pendingVariantSwitch?.mode === "ai" ? (
+              <VariantSwitchLoader mode={pendingVariantSwitch.mode} label={pendingVariantSwitch.label} />
+            ) : (
+              <AppLoader
+                variant="compact"
+                label="Loading question…"
+                mode={routeMode === "test" ? "test" : "practice"}
+                icon="description"
+              />
+            )
           ) : isImageQuestion(q) ? (
-            <img
+            <ZoomableImage
               src={imageSrc(q.questionImageUrl)}
               alt={`Question ${q.questionNo}`}
-              draggable={false}
             />
           ) : (
             <TextMcqQuestion
@@ -989,6 +1061,7 @@ export default function PracticeQuestionPage() {
       return;
     }
     if (nextId) {
+      void loadQuestionById(nextId, { prefetch: true });
       navigate(sessionPath(sessionId, nextId));
     }
   }
@@ -1078,56 +1151,96 @@ export default function PracticeQuestionPage() {
   }
 
   function renderQuestionNavRow() {
+    const submitLabel = variantPreview
+      ? busy
+        ? "Checking…"
+        : selected
+          ? "Check answer"
+          : "Select option"
+      : busy
+        ? "Submitting…"
+        : selected
+          ? "Submit"
+          : "Select option";
+
     return (
       <>
-      {variantPreview && !variantChecked && (
-        <p className="practice-run-variant-preview-hint muted">
-          Practice this AI variation with <strong>Check answer</strong>. Switch to{" "}
-          <strong>Original</strong> when you&apos;re ready to submit for session marks.
-        </p>
-      )}
-      <div className="practice-run-actions practice-run-actions--trio">
-        <button
-          type="button"
-          className="practice-run-nav-btn"
-          disabled={!prevId || busy}
-          onClick={goPrev}
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-          Previous
-        </button>
-        {variantPreview ? (
-          <button
-            type="button"
-            className="practice-submit-btn practice-run-submit practice-run-submit--center practice-run-submit--variant"
-            disabled={!canCheckVariant}
-            onClick={checkVariant}
-          >
-            <span className="material-symbols-outlined">done</span>
-            {busy ? "Checking…" : selected ? "Check answer" : "Select option"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="practice-submit-btn practice-run-submit practice-run-submit--center"
-            disabled={!canSubmit}
-            onClick={submit}
-          >
-            <span className="material-symbols-outlined">send</span>
-            {busy ? "Submitting…" : selected ? "Submit" : "Select option"}
-          </button>
+        {variantPreview && !variantChecked && (
+          <p className="practice-run-variant-preview-hint muted">
+            Practice this AI variation with <strong>Check answer</strong>. Switch to{" "}
+            <strong>Original</strong> when you&apos;re ready to submit for session marks.
+          </p>
         )}
-        <button
-          type="button"
-          className="practice-run-nav-btn"
-          disabled={!canGoNext || busy}
-          onClick={handleNextQuestion}
-        >
-          Next
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </button>
-      </div>
-      <p className="practice-run-keyboard-hint muted">Use ← → arrow keys to move between questions</p>
+        <div className="solve-page__actions practice-run-submit-row">
+          {variantPreview ? (
+            <button
+              type="button"
+              className="practice-submit-btn solve-page__check-btn practice-run-submit--variant"
+              disabled={!canCheckVariant}
+              onClick={checkVariant}
+            >
+              <span className="material-symbols-outlined">done</span>
+              {submitLabel}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="practice-submit-btn solve-page__check-btn"
+              disabled={!canSubmit}
+              onClick={submit}
+            >
+              <span className="material-symbols-outlined">done</span>
+              {submitLabel}
+            </button>
+          )}
+        </div>
+
+        {routeMode === "practice" && !result && !variantChecked && (
+          <>
+            <QuestionSecondaryActions
+              questionId={questionId}
+              onReport={() => {
+                setFeedbackOpen(true);
+                requestAnimationFrame(() => {
+                  document.getElementById("question-report")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                });
+              }}
+            />
+            <p className="solve-page__submit-hint muted">
+              Answer will be revealed after you submit.
+            </p>
+          </>
+        )}
+
+        <div className="practice-run-actions practice-run-actions--pair solve-page__footer-nav practice-run-footer-nav">
+          <button
+            type="button"
+            className="practice-run-nav-btn"
+            disabled={!prevId || busy}
+            onClick={goPrev}
+          >
+            <span className="material-symbols-outlined">arrow_back</span>
+            Previous
+          </button>
+          <span className="text-caption text-outline practice-run-footer-nav__pos">
+            {session
+              ? `${activeTile?.number ?? session.currentIndex + 1} / ${session.questionCount}`
+              : ""}
+          </span>
+          <button
+            type="button"
+            className="practice-run-nav-btn"
+            disabled={!canGoNext || busy}
+            onClick={handleNextQuestion}
+          >
+            Next
+            <span className="material-symbols-outlined">arrow_forward</span>
+          </button>
+        </div>
+        <p className="practice-run-keyboard-hint muted">Use ← → arrow keys to move between questions</p>
       </>
     );
   }
@@ -1267,7 +1380,7 @@ export default function PracticeQuestionPage() {
             <>
               {renderQuestionBlock(isTestActive)}
 
-              {isImageQuestion(q) && (
+              {!questionPending && isImageQuestion(q) && (
                 <section className="practice-run-options" aria-label="Answer options">
                   <p className="practice-run-options__label">Select one option</p>
                   <div className="practice-run-options__list">
@@ -1298,10 +1411,22 @@ export default function PracticeQuestionPage() {
                 </section>
               )}
 
-              {error && <p className="practice-run-error">{error}</p>}
+              {error && !questionPending && <p className="practice-run-error">{error}</p>}
 
-              {renderQuestionNavRow()}
-              {renderVariantPracticeResult()}
+              {!questionPending && renderQuestionNavRow()}
+              {!questionPending && routeMode === "practice" && !result && !variantChecked && (
+                <div id="question-report">
+                  <QuestionFeedbackPanel
+                    questionId={questionId}
+                    context="practice"
+                    compact
+                    expanded={feedbackOpen}
+                    onExpandedChange={setFeedbackOpen}
+                    className="solve-page__feedback"
+                  />
+                </div>
+              )}
+              {!questionPending && renderVariantPracticeResult()}
             </>
           )}
 

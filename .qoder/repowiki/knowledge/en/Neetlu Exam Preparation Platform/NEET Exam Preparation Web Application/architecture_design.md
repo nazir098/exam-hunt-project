@@ -1,0 +1,6 @@
+- Entry point: `src/main.tsx` bootstraps the app with `BrowserRouter`, `PlatformSettingsProvider`, and `AuthProvider`.
+- Routing: `src/App.tsx` defines all routes using `react-router-dom`, nested under `SiteLayout` for consistent UI chrome.
+- State Management: Context API is used for global state (`AuthContext` for user/session, `PlatformSettingsContext` for config).
+- Data Layer: `src/api.ts` centralizes all backend communication via a typed `request` helper, handling auth tokens, timeouts, and error formatting.
+- UI Structure: `src/components/SiteLayout.tsx` manages the main layout shell, conditionally rendering mobile/desktop headers and footers via `StitchShell`/`StitchViewport`.
+- Feature Organization: Code is split into `pages` (route handlers), `components` (reusable UI), `hooks` (custom logic), `utils` (pure helpers), and domain-specific folders like `auth` and `navigation`.

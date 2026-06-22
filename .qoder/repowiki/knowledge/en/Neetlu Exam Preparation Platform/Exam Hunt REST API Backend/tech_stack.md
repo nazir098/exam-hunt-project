@@ -1,0 +1,1 @@
+Spring Boot 3.3.5 on Java 17 with Spring Security, Spring Data MongoDB, JJWT 0.12.6 for HS256 JWT signing/verification, BCrypt password encoding, and Spring Actuator health endpoints.

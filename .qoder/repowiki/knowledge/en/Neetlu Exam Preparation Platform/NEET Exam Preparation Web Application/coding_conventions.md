@@ -1,0 +1,4 @@
+- API functions in `src/api.ts` use a centralized `request` helper that automatically injects auth tokens from `src/auth/storage.ts` and handles session activity tracking.
+- Page components in `src/pages/` are default-exported React functional components that primarily orchestrate data fetching and layout, delegating UI rendering to specialized components in `src/components/`.
+- Custom hooks in `src/hooks/` follow the `use` prefix convention and encapsulate reusable stateful logic like theme management or typewriter effects.
+- Utility functions in `src/utils/` are pure, side-effect-free helpers organized by domain (e.g., `analyticsInsights.ts`, `practice.ts`) and imported where needed for data transformation.

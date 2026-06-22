@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: build_system
+title: Monorepo Build System with Maven, Vite, and Docker CI/CD
+scope: []
+source_files:
+    - backend/pom.xml
+    - backend/Dockerfile
+    - frontend/package.json
+    - frontend/vite.config.ts
+    - .github/workflows/publish-backend-image.yml
+    - deploy/ec2/docker-compose.yml
+    - scripts/dev-api.sh
+    - README.md
+depends_on: []
+related_to: []

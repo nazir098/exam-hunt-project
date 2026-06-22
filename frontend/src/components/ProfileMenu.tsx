@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
@@ -12,10 +13,11 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const isMobile = variant === "mobile";
 
   useLayoutEffect(() => {
-    if (!open || !isMobile || !rootRef.current) return;
+    if (!open || !rootRef.current) return;
     function place() {
       const trigger = rootRef.current;
       if (!trigger) return;
@@ -26,6 +28,7 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
         right: Math.max(12, window.innerWidth - rect.right),
         left: "auto",
         width: "min(18rem, calc(100vw - 1.5rem))",
+        zIndex: 500,
       });
     }
     place();
@@ -35,7 +38,7 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, isMobile]);
+  }, [open]);
 
   useEffect(() => {
     setOpen(false);
@@ -44,7 +47,10 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -60,6 +66,42 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
   if (!user) return null;
 
   const initial = (user.displayName || user.email).charAt(0).toUpperCase();
+
+  const dropdown = open ? (
+    <div
+      ref={dropdownRef}
+      className="profile-menu__dropdown"
+      role="menu"
+      style={dropdownStyle}
+    >
+      <div className="profile-menu__identity">
+        <strong>{user.displayName || "Student"}</strong>
+        <span>{user.email}</span>
+      </div>
+      <Link to="/revision" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
+        <span className="material-symbols-outlined">bookmark</span>
+        Revision list
+      </Link>
+      <Link to="/analytics" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
+        <span className="material-symbols-outlined">insights</span>
+        Analytics &amp; progress
+      </Link>
+      <Link to="/leaderboard" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
+        <span className="material-symbols-outlined">emoji_events</span>
+        Leaderboard
+      </Link>
+      {user.admin && (
+        <Link to="/admin" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
+          <span className="material-symbols-outlined">admin_panel_settings</span>
+          Admin tools
+        </Link>
+      )}
+      <button type="button" className="profile-menu__item profile-menu__item--danger" role="menuitem" onClick={logout}>
+        <span className="material-symbols-outlined">logout</span>
+        Log out
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div
@@ -77,40 +119,7 @@ export default function ProfileMenu({ variant = "desktop" }: Props) {
       >
         {initial}
       </button>
-      {open && (
-        <div
-          className="profile-menu__dropdown glass-card"
-          role="menu"
-          style={isMobile ? dropdownStyle : undefined}
-        >
-          <div className="profile-menu__identity">
-            <strong>{user.displayName || "Student"}</strong>
-            <span>{user.email}</span>
-          </div>
-          <Link to="/revision" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
-            <span className="material-symbols-outlined">bookmark</span>
-            Revision list
-          </Link>
-          <Link to="/analytics" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
-            <span className="material-symbols-outlined">insights</span>
-            Analytics &amp; progress
-          </Link>
-          <Link to="/leaderboard" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
-            <span className="material-symbols-outlined">emoji_events</span>
-            Leaderboard
-          </Link>
-          {user.admin && (
-            <Link to="/admin" className="profile-menu__item" role="menuitem" onClick={() => setOpen(false)}>
-              <span className="material-symbols-outlined">admin_panel_settings</span>
-              Admin tools
-            </Link>
-          )}
-          <button type="button" className="profile-menu__item profile-menu__item--danger" role="menuitem" onClick={logout}>
-            <span className="material-symbols-outlined">logout</span>
-            Log out
-          </button>
-        </div>
-      )}
+      {dropdown && createPortal(dropdown, document.body)}
     </div>
   );
 }

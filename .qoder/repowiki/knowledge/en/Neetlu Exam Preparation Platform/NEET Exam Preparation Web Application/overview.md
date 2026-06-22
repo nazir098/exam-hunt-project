@@ -1,0 +1,1 @@
+A React-based single-page application for NEET exam preparation, featuring practice sessions, analytics, AI tutoring, and admin tools.

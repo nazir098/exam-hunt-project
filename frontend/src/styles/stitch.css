@@ -67,6 +67,8 @@
 .exam-paper-image,
 .study-assistant-solution-modal__image,
 .practice-run-question__media img,
+.practice-run-question__media .zoomable-image img,
+.image-lightbox__img,
 .test-review-question__media img,
 .session-review-panel__solution img,
 .variant-diagram__img,
@@ -799,12 +801,6 @@ html:not(.dark) .stitch-viewport {
     min-height: 2.75rem;
     font-size: 0.88rem;
     border-width: 1.5px;
-  }
-
-  @media (max-width: 1023px) {
-    .profile-menu--mobile .profile-menu__dropdown {
-      z-index: 100;
-    }
   }
 
   .stitch-mobile-ai-btn.ai-tutor-btn--header {
@@ -1690,9 +1686,9 @@ html:not(.dark) .stitch-viewport {
       padding-bottom: var(--app-bottom-h);
     }
 
-    /* Practice hub needs extra room for sticky start banner + recent sessions */
+    /* Practice hub needs extra room for fixed start banner dock */
     .stitch-shell .stitch-page-content > main.practice-page--hub {
-      padding-bottom: calc(var(--app-bottom-h) + 2rem);
+      padding-bottom: calc(var(--app-bottom-h) + var(--practice-start-banner-h, 6rem) + 1.25rem);
     }
   }
 

@@ -1,0 +1,19 @@
+schema_version: 1
+module_path: configuration_system
+title: Monorepo Configuration System with Root .env Loading and Spring Boot Properties
+scope: []
+source_files:
+    - .env.example
+    - deploy/ec2/.env.example
+    - backend/src/main/resources/application.yml
+    - backend/src/main/java/com/neetlu/examhunt/config/RootEnvLoader.java
+    - backend/src/main/java/com/neetlu/examhunt/config/AppProperties.java
+    - backend/src/main/java/com/neetlu/examhunt/config/PublicApiCacheProperties.java
+    - backend/src/main/java/com/neetlu/examhunt/config/AnalyticsProperties.java
+    - backend/src/main/java/com/neetlu/examhunt/config/AppConfig.java
+    - backend/src/main/java/com/neetlu/examhunt/ExamHuntApplication.java
+    - frontend/vite.config.ts
+    - frontend/src/api.ts
+    - frontend/src/settings/PlatformSettingsContext.tsx
+depends_on: []
+related_to: []

@@ -1,0 +1,1 @@
+Developers must manually source the root `.env` file (`set -a && source .env && set +a`) before starting the backend to ensure Spring Boot picks up MongoDB and AI service credentials, as Spring does not auto-load `.env` files.
