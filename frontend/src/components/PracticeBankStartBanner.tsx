@@ -9,7 +9,10 @@ type Props = {
   busy: boolean;
   disabled: boolean;
   signedIn: boolean;
+  filterCount?: number;
+  scopeLabel?: string;
   onStart: () => void;
+  onEditSelection?: () => void;
 };
 
 export default function PracticeBankStartBanner({
@@ -20,32 +23,52 @@ export default function PracticeBankStartBanner({
   busy,
   disabled,
   signedIn,
+  filterCount = 0,
+  scopeLabel,
   onStart,
+  onEditSelection,
 }: Props) {
   const packLabel = pack ? formatPackLabel(pack.packId) : "NEET";
-  const meta = [packLabel, adaptive ? "Adaptive" : "Fixed order", `~${estMinutes} min`].join(" · ");
+  const meta = [
+    scopeLabel || packLabel,
+    adaptive ? "Adaptive" : "Fixed",
+    `~${estMinutes} min`,
+  ].join(" · ");
 
   return (
     <section className="practice-bank-start-banner" aria-label="Start practice session">
-      <div className="practice-bank-start-banner__info">
-        <span className="practice-bank-start-banner__icon material-symbols-outlined" aria-hidden>
-          bolt
+      <button
+        type="button"
+        className="practice-bank-start-banner__selection"
+        onClick={onEditSelection}
+        disabled={!onEditSelection}
+        aria-label="Change filters, topics, and question count"
+      >
+        <span className="practice-bank-start-banner__count" aria-hidden>
+          {sessionSize}
         </span>
-        <div>
-          <p className="practice-bank-start-banner__title">
-            <strong>{sessionSize}</strong> questions selected
-          </p>
-          <p className="practice-bank-start-banner__meta">{meta}</p>
-        </div>
-      </div>
+        <span className="practice-bank-start-banner__copy">
+          <span className="practice-bank-start-banner__title">questions selected</span>
+          <span className="practice-bank-start-banner__meta">{meta}</span>
+        </span>
+        <span className="practice-bank-start-banner__edit">
+          <span className="material-symbols-outlined" aria-hidden>
+            tune
+          </span>
+          <span className="practice-bank-start-banner__edit-label">Change</span>
+          {filterCount > 0 && (
+            <span className="practice-bank-start-banner__filter-badge">{filterCount}</span>
+          )}
+        </span>
+      </button>
       <button
         type="button"
         className="practice-bank-start-banner__cta"
         disabled={disabled || busy}
         onClick={onStart}
       >
-        {busy ? "Starting…" : signedIn ? "Start Practice Now" : "Sign in to practice"}
-        {!busy && (
+        {busy ? "Starting…" : signedIn ? "Start" : "Sign in"}
+        {!busy && signedIn && (
           <span className="material-symbols-outlined" aria-hidden>
             arrow_forward
           </span>

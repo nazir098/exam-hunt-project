@@ -3821,56 +3821,135 @@ a.nav-tip {
 /* Start practice banner */
 .practice-bank-start-banner {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.25rem;
+  align-items: stretch;
+  gap: 0.5rem;
   margin-top: 1rem;
-  padding: 0.9rem 1.15rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(139, 92, 246, 0.45);
-  background: linear-gradient(135deg, rgba(109, 40, 217, 0.35), rgba(76, 29, 149, 0.55));
-  box-shadow: 0 8px 28px rgba(109, 40, 217, 0.2);
+  padding: 0.55rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: linear-gradient(135deg, rgba(109, 40, 217, 0.28), rgba(76, 29, 149, 0.42));
+  box-shadow: 0 6px 20px rgba(109, 40, 217, 0.16);
 }
 
-.practice-bank-start-banner__info {
+.practice-bank-start-banner__selection {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-width: 0;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.practice-bank-start-banner__icon {
-  font-size: 1.75rem;
-  color: #e9d5ff;
+.practice-bank-start-banner__selection:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.practice-bank-start-banner__selection:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.practice-bank-start-banner__count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.35rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #faf5ff;
+  line-height: 1;
+}
+
+.practice-bank-start-banner__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .practice-bank-start-banner__title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: #f5f3ff;
-}
-
-.practice-bank-start-banner__title strong {
-  font-size: 1.1rem;
-  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .practice-bank-start-banner__meta {
-  margin: 0.15rem 0 0;
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.72);
+  margin: 0;
+  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.practice-bank-start-banner__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e9d5ff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.practice-bank-start-banner__edit .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+.practice-bank-start-banner__edit-label {
+  display: none;
+}
+
+.practice-bank-start-banner__filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #fff;
 }
 
 .practice-bank-start-banner__cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.7rem 1.35rem;
+  gap: 0.25rem;
+  padding: 0 1rem;
+  min-width: 5.25rem;
   border: none;
-  border-radius: 0.75rem;
-  font-size: 0.9rem;
+  border-radius: 0.65rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: #1e1033;
   background: linear-gradient(135deg, #f5f3ff, #ddd6fe);
@@ -3881,7 +3960,7 @@ a.nav-tip {
 
 .practice-bank-start-banner__cta:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.12);
 }
 
 .practice-bank-start-banner__cta:disabled {
@@ -3890,7 +3969,7 @@ a.nav-tip {
 }
 
 .practice-bank-start-banner__cta .material-symbols-outlined {
-  font-size: 1.15rem;
+  font-size: 1rem;
 }
 
 /* Coach rail widgets */
@@ -4193,16 +4272,13 @@ a.nav-tip {
   }
 }
 
+@media (min-width: 480px) {
+  .practice-bank-start-banner__edit-label {
+    display: inline;
+  }
+}
+
 @media (max-width: 640px) {
-  .practice-bank-start-banner {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .practice-bank-start-banner__cta {
-    width: 100%;
-  }
-
   .practice-recent-table th:nth-child(2),
   .practice-recent-table td:nth-child(2) {
     display: none;
@@ -4695,13 +4771,13 @@ a.nav-tip {
 
 .practice-page--hub {
   overflow-x: hidden;
-  --practice-start-banner-h: 6rem;
+  --practice-start-banner-h: 4.25rem;
 }
 
 @media (max-width: 1023px) {
   .stitch-shell .stitch-page-content > main.practice-page--hub {
-    padding-bottom: calc(var(--app-bottom-h) + var(--practice-start-banner-h) + 1.25rem);
-    scroll-padding-bottom: calc(var(--app-bottom-h) + var(--practice-start-banner-h));
+    padding-bottom: calc(var(--mobile-tab-bar-h, 4.25rem) + var(--practice-start-banner-h) + 0.65rem);
+    scroll-padding-bottom: calc(var(--mobile-tab-bar-h, 4.25rem) + var(--practice-start-banner-h) + 0.65rem);
   }
 
   .practice-page--hub .practice-bank-section {
@@ -4716,17 +4792,31 @@ a.nav-tip {
 
   .practice-page--hub .practice-bank-start-banner-anchor .practice-bank-start-banner {
     position: fixed;
-    left: max(1rem, env(safe-area-inset-left, 0px));
-    right: max(1rem, env(safe-area-inset-right, 0px));
-    bottom: var(--app-bottom-h);
-    z-index: 30;
+    left: max(0.65rem, env(safe-area-inset-left, 0px));
+    right: max(0.65rem, env(safe-area-inset-right, 0px));
+    bottom: var(--mobile-tab-bar-h, calc(4.25rem + env(safe-area-inset-bottom, 0px)));
+    z-index: 48;
     margin: 0;
     width: auto;
+    max-width: 430px;
+    margin-inline: auto;
+    padding: 0.45rem;
     pointer-events: auto;
-    background: linear-gradient(135deg, rgba(109, 40, 217, 0.96), rgba(76, 29, 149, 0.98));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
+    border-radius: 0.75rem;
+    background: rgba(22, 16, 40, 0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+  }
+
+  .practice-page--hub .practice-bank-start-banner__selection {
+    padding: 0.35rem 0.45rem;
+  }
+
+  .practice-page--hub .practice-bank-start-banner__cta {
+    min-width: 4.75rem;
+    padding: 0 0.75rem;
   }
 
   .practice-page--hub .practice-bank-coach-mobile {

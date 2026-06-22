@@ -304,6 +304,16 @@ export default function QuestionBankSection({
     if (primary) applyWeakChapter(primary);
   }
 
+  const openSelectionEditor = useCallback(() => {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      document
+        .querySelector(".practice-bank-rail--filters")
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+    setFiltersOpen(true);
+  }, []);
+
   const startBankSession = useCallback(() => {
     if (!resolvedPackId || !onStartSession) return;
     onStartSession({
@@ -566,7 +576,14 @@ export default function QuestionBankSection({
             busy={sessionBusy}
             disabled={!canStartSession}
             signedIn={Boolean(user)}
+            filterCount={filterCount}
+            scopeLabel={
+              subject
+                ? [subject, chapter].filter(Boolean).join(" › ") || subject
+                : undefined
+            }
             onStart={startBankSession}
+            onEditSelection={openSelectionEditor}
           />
         </div>
       )}
