@@ -1,1 +1,0 @@
-React 18 with TypeScript, Vite for build/dev server, Tailwind CSS for styling, React Router DOM for navigation, and KaTeX/React Markdown for rendering scientific content.

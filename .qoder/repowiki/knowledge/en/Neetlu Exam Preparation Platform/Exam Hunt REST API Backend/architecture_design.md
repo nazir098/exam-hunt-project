@@ -1,5 +1,0 @@
-- Layered architecture with clear package boundaries: `web` (REST controllers), `service` (business logic), `repository` (Spring Data MongoDB interfaces), `model` (domain entities), `security` (auth filters), and `config` (Spring beans).
-- Security chain uses two custom OncePerRequestFilter implementations (`JwtAuthFilter`, `AdminKeyAuthFilter`) inserted before Spring's UsernamePasswordAuthenticationFilter; role-based access enforced via `SecurityConfig` with `/api/admin/**` restricted to ADMIN role.
-- Controllers delegate to services which orchestrate repositories; services use constructor injection exclusively. Domain models are mutable POJOs annotated with `@Document`; repositories extend `MongoRepository`.
-- Global exception handling via `@RestControllerAdvice` (`ApiExceptionHandler`) translating `ResponseStatusException`, `AuthenticationException`, and `AccessDeniedException` into uniform JSON error responses.
-- Application bootstrap (`ExamHuntApplication`) loads environment defaults through a custom `RootEnvLoader` before starting the Spring context.

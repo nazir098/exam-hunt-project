@@ -1,5 +1,0 @@
-- Controllers use constructor injection for all dependencies and expose request/response DTOs as Java records defined inline within the controller class.
-- Services throw `ResponseStatusException` with appropriate HTTP status codes for validation failures and business-rule violations rather than returning error wrappers.
-- Repository interfaces extend `MongoRepository<Entity, String>` and declare query methods following Spring Data naming conventions (e.g., `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`).
-- Domain model classes are mutable POJOs with getter/setter pairs, default field initializers, and null-safety guards in accessor methods.
-- Security filters extend `OncePerRequestFilter` and override `shouldNotFilter` to skip authentication for public endpoints or non-applicable request paths.

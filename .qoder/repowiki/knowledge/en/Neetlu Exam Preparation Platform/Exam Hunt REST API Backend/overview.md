@@ -1,1 +1,0 @@
-Spring Boot REST API serving NEET exam question catalogs, adaptive practice sessions, AI-tutor interactions, and admin content management backed by MongoDB.

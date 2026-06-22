@@ -1,3 +1,0 @@
-- Shared root-level `.env` file centralizes configuration for both backend (MongoDB, AI API) and frontend (API base URL), requiring manual sourcing for the Spring Boot process.
-- Local development relies on the Vite dev server in the frontend module to proxy `/api` requests to the backend running on port 8081, abstracting cross-origin concerns during development.
-- The backend serves as the single source of truth for content, ingesting data from an external `pdf-qa-extractor` tool via admin endpoints, which the frontend then consumes through REST APIs.
