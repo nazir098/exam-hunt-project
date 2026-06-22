@@ -801,12 +801,6 @@ html:not(.dark) .stitch-viewport {
     border-width: 1.5px;
   }
 
-  @media (max-width: 1023px) {
-    .profile-menu--mobile .profile-menu__dropdown {
-      z-index: 100;
-    }
-  }
-
   .stitch-mobile-ai-btn.ai-tutor-btn--header {
     padding: 0.35rem 0.5rem;
     min-height: 2.25rem;
