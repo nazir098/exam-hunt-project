@@ -65,6 +65,7 @@ export default function QuestionPage() {
   const [q, setQ] = useState<QuestionDetail | null>(null);
   const [siblings, setSiblings] = useState<QuestionPublic[] | null>(null);
   const [siblingsLoading, setSiblingsLoading] = useState(false);
+  const lastNavTotalRef = useRef(0);
   const siblingsLoadRef = useRef<Promise<QuestionPublic[]> | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
@@ -242,6 +243,20 @@ export default function QuestionPage() {
     };
   }, [siblings, questionId]);
 
+  if (nav.loaded && nav.total > 0) {
+    lastNavTotalRef.current = nav.total;
+  }
+
+  const pyqSiblingNav = !isAiVariantQuestionId(questionId) && !q?.parentQuestionId;
+
+  const navPositionLabel = useMemo(() => {
+    if (!pyqSiblingNav || !q) return String(q?.questionNo ?? "");
+    const current = nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo;
+    const total = nav.loaded ? nav.total : lastNavTotalRef.current;
+    if (total > 0) return `${current} / ${total}`;
+    return `${current} / …`;
+  }, [pyqSiblingNav, nav, q]);
+
   const goToSibling = useCallback(
     async (direction: "prev" | "next") => {
       if (isAiVariantQuestionId(questionId) || q?.parentQuestionId) return;
@@ -262,6 +277,12 @@ export default function QuestionPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [goToSibling]);
+
+  useEffect(() => {
+    if (!q?.packId) return;
+    if (isAiVariantQuestionId(questionId) || q.parentQuestionId) return;
+    void loadSiblings();
+  }, [q?.packId, questionId, q?.parentQuestionId, loadSiblings]);
 
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
@@ -294,6 +315,8 @@ export default function QuestionPage() {
     if (!contentLoading) return null;
     return variantSwitchLoaderForTarget(questionId, family);
   }, [contentLoading, questionId, family]);
+
+  const questionPending = Boolean(q && contentLoading && q.questionId !== questionId);
 
   function renderImageOptions() {
     return (
@@ -329,8 +352,9 @@ export default function QuestionPage() {
     return (
       <main className="solve-page pt-24">
         <p className="text-error">{error}</p>
-        <Link to={backHref()} className="glass-card inline-block px-md py-sm rounded-xl mt-md">
-          ← Back
+        <Link to={backHref()} className="practice-run-header__back solve-page__back glass-card inline-flex mt-md">
+          <span className="material-symbols-outlined">arrow_back</span>
+          Back to question bank
         </Link>
       </main>
     );
@@ -339,6 +363,10 @@ export default function QuestionPage() {
   if (!q) {
     return (
       <main className="solve-page pt-24">
+        <Link to={backHref()} className="practice-run-header__back solve-page__back">
+          <span className="material-symbols-outlined">arrow_back</span>
+          Back to question bank
+        </Link>
         <section className="glass-card content-loader-panel">
           <AppLoader
             variant="inline"
@@ -353,7 +381,6 @@ export default function QuestionPage() {
 
   const diff = difficultyLabel(q.difficulty);
   const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
-  const pyqSiblingNav = !isAiVariantQuestionId(questionId) && !q.parentQuestionId;
   const imageMode = isImageQuestion(q);
 
   return (
@@ -361,10 +388,12 @@ export default function QuestionPage() {
       <ProductModeBanner mode="solve" compact />
 
       <div className="solve-page__meta">
+        <Link to={backHref()} className="practice-run-header__back solve-page__back">
+          <span className="material-symbols-outlined">arrow_back</span>
+          Back to question bank
+        </Link>
         <div className="solve-page__breadcrumb hidden md:flex flex-wrap items-center gap-xs text-on-surface-variant font-label-md">
-          <Link to={backHref()} className="hover:text-primary transition-colors">
-            {q.subject}
-          </Link>
+          <span>{q.subject}</span>
           {q.chapter && (
             <>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -395,33 +424,40 @@ export default function QuestionPage() {
             <div className="practice-run-question__head">
               <div className="practice-run-question__titles">
                 <h1 className="practice-run-question__title">
-                  {questionHeadingTitle(
-                    q.exam,
-                    q.questionNo,
-                    q.topic || q.chapter,
-                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
-                  )}
+                  {questionPending
+                    ? "Loading question…"
+                    : questionHeadingTitle(
+                        q.exam,
+                        q.questionNo,
+                        q.topic || q.chapter,
+                        isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+                      )}
                 </h1>
               </div>
             </div>
 
-            <QuestionVariantSwitcher
-              questionId={questionId}
-              family={family}
-              onSelect={goToQuestion}
-            />
+            {!questionPending && (
+              <QuestionVariantSwitcher
+                questionId={questionId}
+                family={family}
+                onSelect={goToQuestion}
+              />
+            )}
 
             <div
               className={`practice-run-question__media${
-                variantLoader
-                  ? variantLoader.mode === "ai"
+                variantLoader || questionPending
+                  ? variantLoader?.mode === "ai" || questionPending
                     ? " practice-run-question__media--variant-generating"
                     : " practice-run-question__media--variant-loading"
                   : ""
               }`}
             >
-              {variantLoader ? (
-                <VariantSwitchLoader mode={variantLoader.mode} label={variantLoader.label} />
+              {variantLoader || questionPending ? (
+                <VariantSwitchLoader
+                  mode={variantLoader?.mode ?? "normal"}
+                  label={variantLoader?.label ?? ""}
+                />
               ) : imageMode ? (
                 <ZoomableImage
                   src={imageSrc(q.questionImageUrl, questionId)}
@@ -452,8 +488,10 @@ export default function QuestionPage() {
             </div>
           </section>
 
-          {imageMode && renderImageOptions()}
+          {!questionPending && imageMode && renderImageOptions()}
 
+          {!questionPending && (
+          <>
           <div className="solve-page__actions">
             <button
               type="button"
@@ -582,10 +620,7 @@ export default function QuestionPage() {
               <span className="material-symbols-outlined">arrow_back</span>
               <span className="solve-page__nav-label">Prev</span>
             </button>
-            <span className="solve-page__nav-pos">
-              {nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo}
-              {nav.loaded ? ` / ${nav.total}` : siblingsLoading ? " · …" : ""}
-            </span>
+            <span className="solve-page__nav-pos">{navPositionLabel}</span>
             <button
               type="button"
               className="practice-run-nav-btn solve-page__nav-btn"
@@ -596,10 +631,12 @@ export default function QuestionPage() {
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
           </footer>
+          </>
+          )}
         </div>
 
         <aside className="practice-run-aside hidden lg:flex">
-          {feedbackOpen && (
+          {!questionPending && feedbackOpen && (
             <QuestionFeedbackPanel
               questionId={questionId}
               context="solve"
@@ -610,12 +647,12 @@ export default function QuestionPage() {
               className="solve-page__feedback"
             />
           )}
-          <PracticeStudyAssistant {...assistantProps} layout="sidebar" />
+          {!questionPending && <PracticeStudyAssistant {...assistantProps} layout="sidebar" />}
         </aside>
       </div>
 
       <div className="solve-page__mobile-rail">
-        {feedbackOpen && (
+        {!questionPending && feedbackOpen && (
           <div id="question-report">
             <QuestionFeedbackPanel
               questionId={questionId}
@@ -628,9 +665,11 @@ export default function QuestionPage() {
             />
           </div>
         )}
+        {!questionPending && (
         <div className="practice-run-ai-inline">
           <PracticeStudyAssistant {...assistantProps} layout="inline" />
         </div>
+        )}
       </div>
 
       <footer className="solve-page__footer-nav solve-page__footer-nav--fixed" aria-label="Question navigation">
@@ -643,10 +682,7 @@ export default function QuestionPage() {
           <span className="material-symbols-outlined">arrow_back</span>
           <span className="solve-page__nav-label">Prev</span>
         </button>
-        <span className="solve-page__nav-pos">
-          {nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo}
-          {nav.loaded ? ` / ${nav.total}` : siblingsLoading ? " · …" : ""}
-        </span>
+        <span className="solve-page__nav-pos">{navPositionLabel}</span>
         <button
           type="button"
           className="practice-run-nav-btn solve-page__nav-btn"

@@ -16,6 +16,7 @@ import RevisionPage from "./pages/RevisionPage";
 import TestCreatePage from "./pages/TestCreatePage";
 import WrongAttemptsPage from "./pages/WrongAttemptsPage";
 import SessionResultPage from "./pages/SessionResultPage";
+import PracticeReviewPage from "./pages/PracticeReviewPage";
 import TestReviewPage from "./pages/TestReviewPage";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/question/:questionId" element={<QuestionPage />} />
         <Route path="/practice" element={<PracticePage />} />
         <Route path="/practice/result/:sessionId" element={<SessionResultPage mode="practice" />} />
+        <Route path="/practice/result/:sessionId/review" element={<PracticeReviewPage />} />
         <Route path="/practice/:sessionId/:questionId" element={<PracticeQuestionPage />} />
         <Route path="/test/create" element={<TestCreatePage />} />
         <Route path="/test/result/:sessionId/review" element={<TestReviewPage />} />

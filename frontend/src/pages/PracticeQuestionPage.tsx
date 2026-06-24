@@ -83,15 +83,6 @@ function optionLabel(value: string) {
   return `Option ${value}`;
 }
 
-function formatAnswerValue(
-  value: string | undefined | null,
-  q: PracticeQuestion
-) {
-  if (!value) return "—";
-  if (isImageQuestion(q)) return value;
-  return optionLabel(value);
-}
-
 type PracticeAnswerReview = {
   correct: boolean;
   correctAnswer: string;
@@ -160,22 +151,37 @@ type SessionCounts = {
   nextQuestionId: string | null;
 };
 
+type TilePatchDetails = {
+  selectedAnswer?: string;
+  correctAnswer?: string;
+  solutionImageUrl?: string;
+};
+
 function patchSessionAfterAction(
   session: PracticeSessionView,
   actedQuestionId: string,
   tileStatus: "correct" | "wrong" | "skipped",
-  res: SessionCounts
+  res: SessionCounts,
+  details?: TilePatchDetails
 ): PracticeSessionView {
   const nextId = res.nextQuestionId;
   const tiles = session.questionTiles?.map((t) => {
-    if (t.questionId === actedQuestionId) return { ...t, status: tileStatus };
+    if (t.questionId === actedQuestionId) {
+      return {
+        ...t,
+        status: tileStatus,
+        ...(details?.selectedAnswer !== undefined ? { selectedAnswer: details.selectedAnswer } : {}),
+        ...(details?.correctAnswer !== undefined ? { correctAnswer: details.correctAnswer } : {}),
+        ...(details?.solutionImageUrl !== undefined ? { solutionImageUrl: details.solutionImageUrl } : {}),
+      };
+    }
     if (nextId && t.questionId === nextId) return { ...t, status: "current" as const };
     if (t.status === "current") return { ...t, status: "unattempted" as const };
     return t;
   });
   const nextIndex = nextId
     ? (tiles?.findIndex((t) => t.questionId === nextId) ?? session.currentIndex)
-    : session.questionCount;
+    : Math.max(0, (tiles?.length ?? session.questionCount) - 1);
   return {
     ...session,
     correctCount: res.correctCount,
@@ -185,17 +191,31 @@ function patchSessionAfterAction(
     maxMarks: res.sessionMaxMarks,
     adaptiveLevel: res.adaptiveLevel,
     status: res.sessionStatus,
-    currentQuestionId: nextId,
-    currentIndex: nextIndex >= 0 ? nextIndex : session.questionCount,
+    currentQuestionId: nextId ?? actedQuestionId,
+    currentIndex: nextIndex >= 0 ? nextIndex : Math.max(0, session.questionCount - 1),
     questionTiles: tiles,
   };
 }
 
-function answeredTileStatus(
-  session: PracticeSessionView,
-  res: Pick<SubmitResult, "correctCount" | "wrongCount">
+function tileStatusFromSubmit(
+  res: Pick<SubmitResult, "correct" | "correctCount" | "wrongCount">,
+  session: PracticeSessionView
 ): "correct" | "wrong" {
+  if (typeof res.correct === "boolean") {
+    return res.correct ? "correct" : "wrong";
+  }
   return res.wrongCount > session.wrongCount ? "wrong" : "correct";
+}
+
+function submitTileDetails(
+  res: Pick<SubmitResult, "correctAnswer" | "solutionImageUrl">,
+  selectedAnswer: string
+): TilePatchDetails {
+  return {
+    selectedAnswer,
+    correctAnswer: res.correctAnswer,
+    solutionImageUrl: res.solutionImageUrl,
+  };
 }
 
 export default function PracticeQuestionPage() {
@@ -255,6 +275,13 @@ export default function PracticeQuestionPage() {
 
   useEffect(() => {
     setFeedbackOpen(false);
+  }, [questionId]);
+
+  useEffect(() => {
+    setResult(null);
+    setVariantCheck(null);
+    setShowSolution(false);
+    setSelected("");
   }, [questionId]);
 
   const resultPath = useCallback(
@@ -363,7 +390,16 @@ export default function PracticeQuestionPage() {
 
   const applyQuestion = useCallback(
     async (s: PracticeSessionView, qid: string) => {
-      const tileIds = new Set(s.questionTiles?.map((t) => t.questionId) ?? []);
+      let sessionSnapshot = s;
+      if (routeMode === "practice") {
+        try {
+          sessionSnapshot = await fetchPracticeSession(sessionId);
+          setSession(sessionSnapshot);
+        } catch {
+          /* keep local snapshot */
+        }
+      }
+      const tileIds = new Set(sessionSnapshot.questionTiles?.map((t) => t.questionId) ?? []);
       let accessQuestion: PracticeQuestion | undefined;
       let inSession = tileIds.has(qid);
       if (!inSession) {
@@ -371,15 +407,15 @@ export default function PracticeQuestionPage() {
         inSession = access.allowed;
         accessQuestion = access.question;
       }
-      if (s.status === "completed" && !inSession) {
+      if (sessionSnapshot.status === "completed" && !inSession) {
         setError("This session has ended. Start a new one from Practice or Test.");
         return;
       }
-      if (s.status === "active" && !inSession && s.currentQuestionId) {
-        navigate(sessionPath(sessionId, s.currentQuestionId), { replace: true });
+      if (sessionSnapshot.status === "active" && !inSession && sessionSnapshot.currentQuestionId) {
+        navigate(sessionPath(sessionId, sessionSnapshot.currentQuestionId), { replace: true });
         return;
       }
-      if (s.status === "active" && !s.currentQuestionId) {
+      if (sessionSnapshot.status === "active" && !sessionSnapshot.currentQuestionId) {
         setError("This session has ended.");
         return;
       }
@@ -390,16 +426,16 @@ export default function PracticeQuestionPage() {
         await loadQuestionById(qid);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load question";
-        if (msg.toLowerCase().includes("not found") && s.currentQuestionId) {
-          navigate(sessionPath(sessionId, s.currentQuestionId), { replace: true });
+        if (msg.toLowerCase().includes("not found") && sessionSnapshot.currentQuestionId) {
+          navigate(sessionPath(sessionId, sessionSnapshot.currentQuestionId), { replace: true });
           return;
         }
         throw e;
       }
       const loaded = questionCacheRef.current.get(qid);
       const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
-      prefetchNextQuestion(s.questionTiles, anchorId);
-      const tile = s.questionTiles?.find((t) => t.questionId === anchorId);
+      prefetchNextQuestion(sessionSnapshot.questionTiles, anchorId);
+      const tile = sessionSnapshot.questionTiles?.find((t) => t.questionId === anchorId);
       if (
         routeMode === "practice" &&
         tile &&
@@ -461,21 +497,19 @@ export default function PracticeQuestionPage() {
 
   async function submit() {
     if (!selected || !session) return;
+    const anchorQid = q ? sessionAnchorQuestionId(q, questionId) : questionId;
     setBusy(true);
     setError("");
     try {
       const res = await submitPracticeAnswer({
         sessionId: session.id,
-        questionId,
+        questionId: anchorQid,
         selectedAnswer: selected,
       });
+      const tileStatus = tileStatusFromSubmit(res, session);
+      const tileDetails = submitTileDetails(res, selected);
       if (routeMode === "test") {
-        const patched = patchSessionAfterAction(
-          session,
-          questionId,
-          answeredTileStatus(session, res),
-          res
-        );
+        const patched = patchSessionAfterAction(session, anchorQid, tileStatus, res, tileDetails);
         setSession(patched);
         setBusy(false);
         if (res.nextQuestionId) {
@@ -486,7 +520,7 @@ export default function PracticeQuestionPage() {
         }
         return;
       }
-      setSession(patchSessionAfterAction(session, questionId, answeredTileStatus(session, res), res));
+      setSession(patchSessionAfterAction(session, anchorQid, tileStatus, res, tileDetails));
       setResult(res);
       if (res.nextQuestionId) {
         void loadQuestionById(res.nextQuestionId, { prefetch: true });
@@ -520,9 +554,6 @@ export default function PracticeQuestionPage() {
       if (res.nextQuestionId) {
         void loadQuestionById(res.nextQuestionId, { prefetch: true });
         navigate(sessionPath(sessionId, res.nextQuestionId));
-      } else {
-        void refreshProgress();
-        navigate(resultPath(session.id));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not skip question");
@@ -548,6 +579,31 @@ export default function PracticeQuestionPage() {
       setSession(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update review mark");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitPracticeSession() {
+    if (!session || routeMode !== "practice" || session.status !== "active") return;
+    const unanswered =
+      session.questionCount -
+      session.correctCount -
+      session.wrongCount -
+      (session.skipCount ?? 0);
+    const msg =
+      unanswered > 0
+        ? `Submit practice session? ${unanswered} question(s) will remain unanswered.`
+        : "Submit practice session and view your results?";
+    if (!window.confirm(msg)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await finishPracticeSession(session.id);
+      void refreshProgress();
+      navigate(resultPath(session.id), { state: { result } });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not submit session");
     } finally {
       setBusy(false);
     }
@@ -581,7 +637,6 @@ export default function PracticeQuestionPage() {
     const anchorId = sessionAnchorQuestionId(q, questionId);
     const { prevId } = sequentialNav(session?.questionTiles, anchorId);
     if (prevId) {
-      void loadQuestionById(prevId, { prefetch: true });
       navigate(sessionPath(sessionId, prevId));
     }
   }
@@ -590,7 +645,6 @@ export default function PracticeQuestionPage() {
     const anchorId = sessionAnchorQuestionId(q, questionId);
     const { nextId } = sequentialNav(session?.questionTiles, anchorId);
     if (nextId) {
-      void loadQuestionById(nextId, { prefetch: true });
       navigate(sessionPath(sessionId, nextId));
       return;
     }
@@ -608,7 +662,6 @@ export default function PracticeQuestionPage() {
 
   function goToTile(qid: string) {
     if (qid === sessionAnchorQuestionId(q, questionId)) return;
-    void loadQuestionById(qid, { prefetch: true });
     navigate(sessionPath(sessionId, qid));
   }
 
@@ -638,7 +691,6 @@ export default function PracticeQuestionPage() {
         const { prevId: pid } = sequentialNav(session?.questionTiles, anchorId);
         if (pid) {
           e.preventDefault();
-          void loadQuestionById(pid, { prefetch: true });
           navigate(sessionPath(sessionId, pid));
         }
         return;
@@ -649,13 +701,11 @@ export default function PracticeQuestionPage() {
         const { nextId: nid } = sequentialNav(session?.questionTiles, anchorId);
         if (nid) {
           e.preventDefault();
-          void loadQuestionById(nid, { prefetch: true });
           navigate(sessionPath(sessionId, nid));
           return;
         }
         if (routeMode === "practice" && result?.nextQuestionId) {
           e.preventDefault();
-          void loadQuestionById(result.nextQuestionId, { prefetch: true });
           navigate(sessionPath(sessionId, result.nextQuestionId));
         }
       }
@@ -674,7 +724,6 @@ export default function PracticeQuestionPage() {
     routeMode,
     result,
     questionPending,
-    loadQuestionById,
   ]);
 
   const isMarked =
@@ -787,23 +836,23 @@ export default function PracticeQuestionPage() {
     variantPreview;
   const activeTile = session.questionTiles?.find((t) => t.questionId === sessionAnchorId);
   const practiceAnswerReview: PracticeAnswerReview | null =
-    routeMode === "practice" && result
+    routeMode === "practice" &&
+    activeTile &&
+    (activeTile.status === "correct" || activeTile.status === "wrong")
       ? {
-          correct: result.correct,
-          correctAnswer: result.correctAnswer,
-          selectedAnswer: selected,
-          hasSolution: result.hasSolution,
-          solutionImageUrl: result.solutionImageUrl,
+          correct: activeTile.status === "correct",
+          correctAnswer: activeTile.correctAnswer ?? "",
+          selectedAnswer: activeTile.selectedAnswer ?? selected,
+          hasSolution: q.hasSolution,
+          solutionImageUrl: activeTile.solutionImageUrl ?? "",
         }
-      : routeMode === "practice" &&
-          activeTile &&
-          (activeTile.status === "correct" || activeTile.status === "wrong")
+      : routeMode === "practice" && result
         ? {
-            correct: activeTile.status === "correct",
-            correctAnswer: activeTile.correctAnswer ?? "",
-            selectedAnswer: activeTile.selectedAnswer ?? selected,
-            hasSolution: q.hasSolution,
-            solutionImageUrl: activeTile.solutionImageUrl ?? "",
+            correct: result.correct,
+            correctAnswer: result.correctAnswer,
+            selectedAnswer: selected,
+            hasSolution: result.hasSolution,
+            solutionImageUrl: result.solutionImageUrl,
           }
         : null;
   const practiceRevealed = !!practiceAnswerReview;
@@ -811,7 +860,7 @@ export default function PracticeQuestionPage() {
   const isAnsweredTile =
     activeTile?.status === "correct" || activeTile?.status === "wrong" || activeTile?.status === "skipped";
   const tileLocked =
-    routeMode === "practice" &&
+    routeMode === "test" &&
     !practiceRevealed &&
     session.status === "active" &&
     activeTile?.status === "skipped";
@@ -819,12 +868,22 @@ export default function PracticeQuestionPage() {
   const remaining =
     session.questionCount - answered - (session.skipCount ?? 0);
   const { prevId, nextId } = sequentialNav(session.questionTiles, sessionAnchorId);
+  const tileIndex =
+    session.questionTiles?.findIndex((t) => t.questionId === sessionAnchorId) ?? -1;
+  const navPosition =
+    activeTile?.number ??
+    (tileIndex >= 0 ? tileIndex + 1 : session.currentIndex + 1);
+  const isLastQuestion =
+    navPosition >= session.questionCount ||
+    (tileIndex >= 0 && tileIndex >= session.questionCount - 1);
   const isSessionCurrentQuestion = session.currentQuestionId === sessionAnchorId;
   const canGoNext =
-    !!nextId || (isSessionCurrentQuestion && session.status === "active" && !result);
+    !!nextId || (isTestActive && isSessionCurrentQuestion && session.status === "active" && !result);
+  const showPracticeSubmit =
+    routeMode === "practice" && session.status === "active" && isLastQuestion;
   const showPracticeAssistant =
     routeMode === "practice" && (practiceRevealed || variantChecked);
-  const showAssistantPanel = routeMode === "practice" || isTestActive;
+  const showAssistantPanel = (routeMode === "practice" || isTestActive) && !questionPending;
   const feedbackCorrect = practiceAnswerReview
     ? practiceAnswerReview.correct
     : activeTile?.status === "correct";
@@ -929,6 +988,24 @@ export default function PracticeQuestionPage() {
           {isMarked ? "Flagged" : "Flag"}
         </span>
       </button>
+    );
+  }
+
+  function renderQuestionLoadingShell() {
+    return (
+      <section
+        className="glass-card content-loader-panel practice-run-question-skeleton"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <AppLoader
+          variant="compact"
+          label="Loading question…"
+          hint="Fetching question content"
+          mode={routeMode === "test" ? "test" : "practice"}
+          icon="description"
+        />
+      </section>
     );
   }
 
@@ -1068,8 +1145,6 @@ export default function PracticeQuestionPage() {
 
   function renderPracticeInlineFeedback(review: PracticeAnswerReview) {
     if (!q) return null;
-    const yours = formatAnswerValue(review.selectedAnswer, q);
-    const correct = formatAnswerValue(review.correctAnswer, q);
     return (
       <section
         className={`practice-run-result practice-run-result--compact practice-run-result--inline glass-card is-revealed${
@@ -1091,17 +1166,6 @@ export default function PracticeQuestionPage() {
               {review.correct ? "Correct!" : "Incorrect"}
             </h2>
             <p className="practice-run-result__delta">{review.correct ? "+4 Marks" : "−1 Mark"}</p>
-            <p className="practice-run-result__answer-line practice-run-result__answer-line--compare">
-              <span>
-                Your answer: <strong>{yours}</strong>
-              </span>
-              <span className="practice-run-result__answer-line-sep" aria-hidden>
-                |
-              </span>
-              <span>
-                Correct answer: <strong>{correct}</strong>
-              </span>
-            </p>
           </div>
           {hasSolution && (
             <button
@@ -1159,12 +1223,15 @@ export default function PracticeQuestionPage() {
       if (nextId) navigate(sessionPath(sessionId, nextId));
       return;
     }
+    if (showPracticeSubmit) {
+      await submitPracticeSession();
+      return;
+    }
     if (isSessionCurrentQuestion && session.status === "active" && !result && !variantPreview) {
       await skipQuestion();
       return;
     }
     if (nextId) {
-      void loadQuestionById(nextId, { prefetch: true });
       navigate(sessionPath(sessionId, nextId));
     }
   }
@@ -1241,19 +1308,29 @@ export default function PracticeQuestionPage() {
           <span className="solve-page__nav-label">Prev</span>
         </button>
         <span className="solve-page__nav-pos">
-          {session
-            ? `${activeTile?.number ?? session.currentIndex + 1} / ${session.questionCount}`
-            : ""}
+          {session ? `${navPosition} / ${session.questionCount}` : ""}
         </span>
-        <button
-          type="button"
-          className="practice-run-nav-btn solve-page__nav-btn"
-          disabled={!canGoNext || busy}
-          onClick={handleNextQuestion}
-        >
-          <span className="solve-page__nav-label">Next</span>
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </button>
+        {showPracticeSubmit ? (
+          <button
+            type="button"
+            className="practice-run-nav-btn solve-page__nav-btn practice-run-nav-btn--submit"
+            disabled={busy}
+            onClick={() => void submitPracticeSession()}
+          >
+            <span className="solve-page__nav-label">Submit session</span>
+            <span className="material-symbols-outlined">task_alt</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="practice-run-nav-btn solve-page__nav-btn"
+            disabled={!canGoNext || busy}
+            onClick={() => void handleNextQuestion()}
+          >
+            <span className="solve-page__nav-label">Next</span>
+            <span className="material-symbols-outlined">arrow_forward</span>
+          </button>
+        )}
       </footer>
     );
   }
@@ -1374,6 +1451,16 @@ export default function PracticeQuestionPage() {
               {backLabel}
             </Link>
             <ProductModeBanner mode={routeMode} inline />
+            {routeMode === "practice" && session.status === "active" && (
+              <button
+                type="button"
+                className="practice-run-submit-session"
+                disabled={busy}
+                onClick={() => void submitPracticeSession()}
+              >
+                Submit session
+              </button>
+            )}
             {routeMode === "test" && session.status === "active" && (
               <button type="button" className="practice-run-submit-test" disabled={busy} onClick={submitTestEarly}>
                 Submit test
@@ -1457,6 +1544,7 @@ export default function PracticeQuestionPage() {
               markedIds={session.markedForReviewIds}
               visitedIds={visitedIds}
               examMode={isTestActive}
+              practiceMode={routeMode === "practice"}
               hideHeadMeta={routeMode === "practice"}
             />
           )}
@@ -1465,7 +1553,7 @@ export default function PracticeQuestionPage() {
 
       <div className={`practice-run-layout${showPracticeAssistant ? " practice-run-layout--result" : ""}`}>
         <div className="practice-run-main practice-run-main--busy-host">
-          {routeMode !== "test" && (
+          {routeMode !== "test" && !questionPending && (
             <div className="practice-run-meta">
               <span className="practice-run-chip">{examDisplayName(q.exam, q.year)} {q.year}</span>
               <span className="practice-run-chip practice-run-chip--paper">
@@ -1483,21 +1571,31 @@ export default function PracticeQuestionPage() {
           )}
 
           {testAnswerSaved ? (
-            <>
-              {renderQuestionBlock(true)}
-              {renderTestRevisitNav()}
-            </>
+            questionPending ? (
+              renderQuestionLoadingShell()
+            ) : (
+              <>
+                {renderQuestionBlock(true)}
+                {renderTestRevisitNav()}
+              </>
+            )
           ) : tileLocked ? (
-            <>
-              {renderQuestionBlock(false)}
-              {renderPracticeSkippedReview()}
-              {!questionPending && renderSessionFooterNav("solve-page__footer-nav--desktop")}
-            </>
+            questionPending ? (
+              renderQuestionLoadingShell()
+            ) : (
+              <>
+                {renderQuestionBlock(false)}
+                {renderPracticeSkippedReview()}
+                {renderSessionFooterNav("solve-page__footer-nav--desktop")}
+              </>
+            )
+          ) : questionPending ? (
+            renderQuestionLoadingShell()
           ) : (
             <>
               {renderQuestionBlock(isTestActive)}
 
-              {!questionPending && isImageQuestion(q) && (
+              {isImageQuestion(q) && (
                 <section className="practice-run-options" aria-label="Answer options">
                   <p className="practice-run-options__label">Select one option</p>
                   <div className="practice-run-options__list">
@@ -1534,10 +1632,10 @@ export default function PracticeQuestionPage() {
                 </section>
               )}
 
-              {error && !questionPending && <p className="practice-run-error">{error}</p>}
+              {error && <p className="practice-run-error">{error}</p>}
 
-              {!questionPending && renderQuestionNavRow()}
-              {!questionPending && renderVariantPracticeResult()}
+              {renderQuestionNavRow()}
+              {renderVariantPracticeResult()}
             </>
           )}
 

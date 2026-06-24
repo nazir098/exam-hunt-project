@@ -1,21 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   fetchSessionResult,
-  SessionQuestionReview,
   SessionResultView,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import ProductModeBanner from "../components/ProductModeBanner";
 import PageLoadShell from "../components/PageLoadShell";
+import PracticeResultView from "../components/PracticeResultView";
 import SessionQuestionNav from "../components/SessionQuestionNav";
-import SessionQuestionReviewPanel from "../components/SessionQuestionReviewPanel";
 import TestResultFollowUp from "../components/TestResultFollowUp";
 import TestResultReviewEntry from "../components/TestResultReviewEntry";
 import TestResultInsightChips from "../components/TestResultInsightChips";
 import TestResultRecoveryCard from "../components/TestResultRecoveryCard";
-import { MODES, testReviewRoute, type ProductMode } from "../navigation/modes";
-import { weakChapterPracticeUrl } from "../utils/weakChapters";
+import { practiceReviewRoute, testReviewRoute, type ProductMode } from "../navigation/modes";
 
 type Props = {
   mode: ProductMode;
@@ -41,7 +38,6 @@ export default function SessionResultPage({ mode }: Props) {
     prefetched?.session.id === sessionId ? prefetched : null
   );
   const [error, setError] = useState("");
-  const [review, setReview] = useState<SessionQuestionReview | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -62,10 +58,6 @@ export default function SessionResultPage({ mode }: Props) {
   }, [user, authLoading, sessionId, navigate, mode, refreshProgress, prefetched]);
 
   const tiles = useMemo(() => result?.session.questionTiles ?? [], [result]);
-  const weak = result?.weakChaptersInSession?.[0] ?? null;
-  const practiceWeakUrl = weak
-    ? weakChapterPracticeUrl(weak, result?.session.packId)
-    : "/practice";
 
   if (authLoading || (!result && !error)) {
     return (
@@ -109,8 +101,7 @@ export default function SessionResultPage({ mode }: Props) {
   const isPractice = mode === "practice";
 
   function openReview(questionId: string) {
-    const item = result?.questionReviews.find((r) => r.questionId === questionId);
-    if (item) setReview(item);
+    navigate(practiceReviewRoute(sessionId, questionId));
   }
 
   if (!isPractice) {
@@ -198,131 +189,12 @@ export default function SessionResultPage({ mode }: Props) {
   }
 
   return (
-    <main className={`session-result-page session-result-page--${mode} pt-4 lg:pt-6`}>
-      <ProductModeBanner mode={mode} />
-
-      <header className="session-result-hero glass-card">
-        <p className="session-result-hero__eyebrow">Practice complete</p>
-        <h1 className="session-result-hero__title">Practice Complete</h1>
-        <p className="session-result-hero__subline">
-          {session.totalMarks}/{session.maxMarks} marks · {result.accuracyPercent}% accuracy
-        </p>
-        <p className="session-result-hero__sub">
-          {result.countsForRank
-            ? "This session counts toward your leaderboard rank."
-            : "Scored session complete."}
-        </p>
-        <dl className="session-result-stats">
-          <div>
-            <dt>Correct</dt>
-            <dd>{session.correctCount}</dd>
-          </div>
-          <div>
-            <dt>Wrong</dt>
-            <dd>{session.wrongCount}</dd>
-          </div>
-          <div>
-            <dt>Skipped</dt>
-            <dd>{session.skipCount ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Time</dt>
-            <dd>{formatDuration(result.timeTakenSeconds)}</dd>
-          </div>
-          <div>
-            <dt>Rank impact</dt>
-            <dd>{result.countsForRank ? "+/− marks applied" : "None"}</dd>
-          </div>
-        </dl>
-      </header>
-
-      {tiles.length > 0 && (
-        <section className="glass-card session-result-tiles">
-          <h2 className="session-result-section__title">Question overview</h2>
-          <p className="muted session-result-section__hint">Tap a tile to review that question.</p>
-          <SessionQuestionNav
-            tiles={tiles}
-            activeQuestionId={review?.questionId ?? ""}
-            onSelect={openReview}
-          />
-        </section>
-      )}
-
-      {result.aiInsights.length > 0 && (
-        <section className="glass-card session-result-insights">
-          <h2 className="session-result-section__title">AI insights</h2>
-          <ul className="session-result-insights__list">
-            {result.aiInsights.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="session-result-cards">
-        {result.weakChaptersInSession.length > 0 && (
-          <section className="glass-card session-result-card">
-            <h2 className="session-result-section__title">Weak chapters</h2>
-            <ul className="session-result-chapters">
-              {result.weakChaptersInSession.map((c) => (
-                <li key={`${c.subject}-${c.chapter}`}>
-                  <span>{c.chapter}</span>
-                  <span className="session-result-chapters__pct">{c.accuracyPercent}%</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {result.strongChaptersInSession.length > 0 && (
-          <section className="glass-card session-result-card">
-            <h2 className="session-result-section__title">Strong chapters</h2>
-            <ul className="session-result-chapters">
-              {result.strongChaptersInSession.map((c) => (
-                <li key={`${c.subject}-${c.chapter}`}>
-                  <span>{c.chapter}</span>
-                  <span className="session-result-chapters__pct session-result-chapters__pct--good">
-                    {c.accuracyPercent}%
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
-
-      {weak && (
-        <section className="glass-card session-result-card">
-          <h2 className="session-result-section__title">Recommended next practice</h2>
-          <p className="muted">
-            Drill {weak.chapter} — {weak.accuracyPercent}% accuracy this session.
-          </p>
-          <Link to={practiceWeakUrl} className="btn primary">
-            Practice weak area
-          </Link>
-        </section>
-      )}
-
-      <section className="session-result-actions glass-card">
-        <h2 className="session-result-section__title">What&apos;s next?</h2>
-        <div className="session-result-actions__grid">
-          <Link
-            to={`/review/wrong-attempts?${new URLSearchParams({ sessionId, mode: "practice" }).toString()}`}
-            className="btn primary"
-          >
-            Review mistakes
-          </Link>
-          <Link to={practiceWeakUrl} className="btn">
-            Retry session
-          </Link>
-          <Link to="/practice" className="btn">
-            Back to Practice Hub
-          </Link>
-        </div>
-        <p className="muted session-result-actions__hint">{MODES[mode].helper}</p>
-      </section>
-
-      {review && <SessionQuestionReviewPanel review={review} onClose={() => setReview(null)} />}
+    <main className="session-result-page session-result-page--practice pt-4 lg:pt-6">
+      <PracticeResultView
+        result={result}
+        sessionId={sessionId}
+        onOpenReview={openReview}
+      />
     </main>
   );
 }

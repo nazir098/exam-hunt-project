@@ -31,6 +31,7 @@ import {
   formatPackLabel,
   practicePoolMax,
 } from "../utils/practiceHub";
+import { parseBankSearchQuery } from "../utils/bankSearch";
 
 export type { BankSessionStart };
 
@@ -57,7 +58,10 @@ export default function QuestionBankSection({
   const chapter = searchParams.get("chapter") || "";
   const topic = searchParams.get("topic") || "";
   const difficulty = searchParams.get("difficulty") || "";
-  const qSearch = (searchParams.get("q") || "").toLowerCase();
+  const qRaw = searchParams.get("q") || "";
+  const parsedSearch = useMemo(() => parseBankSearchQuery(qRaw), [qRaw]);
+  const effectiveYearFilter =
+    yearFilter || (parsedSearch.year ? String(parsedSearch.year) : "");
   const page = Number(searchParams.get("page") || "0");
   const pageSize = BANK_PAGE_SIZE;
   const activePackId = searchParams.get("packId") || "";
@@ -131,14 +135,14 @@ export default function QuestionBankSection({
   const resolvedPackId = useMemo(() => {
     if (showComingSoon) return "";
     if (activePackId && packs.some((p) => p.packId === activePackId)) return activePackId;
-    if (yearFilter) {
+    if (effectiveYearFilter) {
       const fromCatalog = neetYears.find(
-        (y) => String(y.year) === yearFilter && y.status === "available" && y.packId
+        (y) => String(y.year) === effectiveYearFilter && y.status === "available" && y.packId
       );
       if (fromCatalog?.packId) return fromCatalog.packId;
     }
     return packs[0]?.packId || "";
-  }, [showComingSoon, activePackId, packs, yearFilter, neetYears]);
+  }, [showComingSoon, activePackId, packs, effectiveYearFilter, neetYears]);
 
   const pack = useMemo(
     () => packs.find((p) => p.packId === resolvedPackId) ?? null,
@@ -187,7 +191,8 @@ export default function QuestionBankSection({
       chapter: chapter || undefined,
       topic: topic || undefined,
       difficulty: difficulty || undefined,
-      q: qSearch || undefined,
+      q: parsedSearch.text || undefined,
+      questionNo: parsedSearch.questionNo,
       page,
       size: pageSize,
     })
@@ -198,7 +203,7 @@ export default function QuestionBankSection({
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [resolvedPackId, subject, chapter, topic, difficulty, qSearch, page, pageSize, showComingSoon]);
+  }, [resolvedPackId, subject, chapter, topic, difficulty, parsedSearch, page, pageSize, showComingSoon]);
 
   useEffect(() => {
     if (loading || !resolvedPackId) return;
@@ -207,7 +212,7 @@ export default function QuestionBankSection({
       return;
     }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [page, subject, chapter, topic, difficulty, qSearch, resolvedPackId, loading]);
+  }, [page, subject, chapter, topic, difficulty, qRaw, resolvedPackId, loading]);
 
   function goToPage(nextPage: number) {
     updateParam("page", String(Math.max(0, nextPage)));
@@ -354,11 +359,12 @@ export default function QuestionBankSection({
     Boolean(resolvedPackId) && sessionSize > 0 && totalElements > 0 && Boolean(onStartSession);
 
   const activeChips: { key: string; label: string }[] = [];
-  if (yearFilter) activeChips.push({ key: "year", label: yearFilter });
+  if (effectiveYearFilter) activeChips.push({ key: "year", label: effectiveYearFilter });
   if (subject) activeChips.push({ key: "subject", label: subject });
   if (chapter) activeChips.push({ key: "chapter", label: chapter });
   if (topic) activeChips.push({ key: "topic", label: topic });
   if (difficulty) activeChips.push({ key: "difficulty", label: difficulty });
+  if (qRaw) activeChips.push({ key: "q", label: `Search: ${qRaw}` });
 
   if (showComingSoon) {
     return (
@@ -531,7 +537,13 @@ export default function QuestionBankSection({
           )}
 
           {!loading && neetAvailable && resolvedPackId && questions.length > 0 && (
-            <BankResultsFeed
+            <>
+              {qRaw.trim() && (
+                <p className="bank-search-results-hint muted">
+                  Showing closest matches for &ldquo;{qRaw.trim()}&rdquo; — best match first.
+                </p>
+              )}
+              <BankResultsFeed
               ref={resultsRef}
               questions={questions}
               packId={resolvedPackId}
@@ -546,10 +558,15 @@ export default function QuestionBankSection({
               onNextPage={() => goToPage(page + 1)}
               onPrevPage={() => goToPage(page - 1)}
             />
+            </>
           )}
 
           {!loading && questions.length === 0 && resolvedPackId && neetAvailable && (
-            <p className="muted state-msg">No questions match these filters.</p>
+            <p className="muted state-msg">
+              {qRaw.trim()
+                ? `No close matches for “${qRaw.trim()}”. Try fewer words or a topic name.`
+                : "No questions match these filters."}
+            </p>
           )}
 
           <aside className="practice-bank-coach-mobile lg:hidden" aria-label="Practice coach">

@@ -38,11 +38,19 @@ export default function AiStreamingMarkdown({
     }
   }, [complete, onComplete]);
 
+  if (!text.trim()) {
+    return null;
+  }
+
   return (
     <div
       className={`ai-streaming-markdown${complete ? "" : " is-streaming"}${className ? ` ${className}` : ""}`}
     >
-      <AiMarkdown text={visibleText} />
+      {complete ? (
+        <AiMarkdown text={text} />
+      ) : (
+        <p className="ai-streaming-markdown__plain">{visibleText}</p>
+      )}
       {!complete && <span className="ai-streaming-markdown__cursor" aria-hidden />}
     </div>
   );

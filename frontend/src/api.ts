@@ -524,6 +524,7 @@ export function fetchQuestions(
     topic?: string;
     difficulty?: string;
     q?: string;
+    questionNo?: number;
     page?: number;
     size?: number;
   }
@@ -534,6 +535,7 @@ export function fetchQuestions(
   if (params.topic) q.set("topic", params.topic);
   if (params.difficulty) q.set("difficulty", params.difficulty);
   if (params.q) q.set("q", params.q);
+  if (params.questionNo != null) q.set("questionNo", String(params.questionNo));
   if (params.page != null) q.set("page", String(params.page));
   if (params.size != null) q.set("size", String(params.size));
   return getJson<PageResponse<QuestionPublic>>(`/api/questions?${q}`);

@@ -269,6 +269,15 @@ public class PracticeService {
             }
             idx++;
         }
+        String mode = session.getMode() != null ? session.getMode() : MODE_PRACTICE;
+        if (!MODE_TEST.equals(mode)) {
+            int lastIdx = Math.max(0, ids.size() - 1);
+            if (session.getCurrentIndex() != lastIdx) {
+                session.setCurrentIndex(lastIdx);
+                return sessions.save(session);
+            }
+            return session;
+        }
         session.setStatus("completed");
         session.setCompletedAt(Instant.now());
         session.setCurrentIndex(ids.size());
@@ -302,6 +311,14 @@ public class PracticeService {
         attempt.setMode(session.getMode() != null ? session.getMode() : MODE_PRACTICE);
         attempts.save(attempt);
 
+        if (session.getSkippedQuestionIds() != null
+                && session.getSkippedQuestionIds().remove(req.questionId())) {
+            session.setSkipCount(Math.max(0, session.getSkipCount() - 1));
+            if (session.getUnansweredQuestionIds() != null) {
+                session.getUnansweredQuestionIds().remove(req.questionId());
+            }
+        }
+
         if (correct) {
             session.setCorrectCount(session.getCorrectCount() + 1);
         } else {
@@ -315,13 +332,11 @@ public class PracticeService {
 
         int idx = session.getQuestionIds().indexOf(req.questionId());
         if (idx >= session.getCurrentIndex()) {
-            session.setCurrentIndex(idx + 1);
-        }
-        if (session.getCurrentIndex() >= session.getQuestionIds().size()) {
+            int nextIdx = idx + 1;
             if (!MODE_TEST.equals(session.getMode())) {
-                session.setStatus("completed");
-                session.setCompletedAt(Instant.now());
+                nextIdx = Math.min(nextIdx, Math.max(0, session.getQuestionIds().size() - 1));
             }
+            session.setCurrentIndex(nextIdx);
         }
         sessions.save(session);
         if ("completed".equals(session.getStatus())) {
@@ -420,13 +435,11 @@ public class PracticeService {
         if (!session.getSkippedQuestionIds().contains(req.questionId())) {
             session.getSkippedQuestionIds().add(req.questionId());
         }
-        session.setCurrentIndex(session.getCurrentIndex() + 1);
-        if (session.getCurrentIndex() >= ids.size()) {
-            if (!MODE_TEST.equals(session.getMode())) {
-                session.setStatus("completed");
-                session.setCompletedAt(Instant.now());
-            }
+        int nextIdx = session.getCurrentIndex() + 1;
+        if (!MODE_TEST.equals(session.getMode())) {
+            nextIdx = Math.min(nextIdx, Math.max(0, ids.size() - 1));
         }
+        session.setCurrentIndex(nextIdx);
         sessions.save(session);
         if ("completed".equals(session.getStatus())) {
             onSessionCompletedAsync(userId, session);

@@ -19,9 +19,16 @@ const DESKTOP_MQ = "(min-width: 768px)";
 function tileLabel(
   tile: SessionQuestionTile,
   examMode: boolean,
+  practiceMode: boolean,
   flagged: boolean,
   visited: boolean
 ): string {
+  if (practiceMode) {
+    const status = practiceTileStatus(tile);
+    if (status === "correct") return "Correct";
+    if (status === "wrong") return "Wrong";
+    return "Not attempted";
+  }
   if (examMode && isAnsweredTile(tile)) return STATUS_LABELS.answered;
   if (flagged) return STATUS_LABELS.marked;
   if (examMode && visited) return STATUS_LABELS.visited;
@@ -35,11 +42,12 @@ function paperNoLabel(tile: SessionQuestionTile): string {
 function tileTooltip(
   tile: SessionQuestionTile,
   examMode: boolean,
+  practiceMode: boolean,
   flagged: boolean,
   visited: boolean
 ): string {
   const paper = paperNoLabel(tile);
-  const status = tileLabel(tile, examMode, flagged, visited);
+  const status = tileLabel(tile, examMode, practiceMode, flagged, visited);
   const variant =
     tile.sourceType === "ai_variant" && tile.variantNo
       ? `AI V${tile.variantNo}`
@@ -67,13 +75,24 @@ function isAnsweredTile(tile: SessionQuestionTile): boolean {
   return tile.status === "correct" || tile.status === "wrong" || tile.status === "skipped";
 }
 
+/** Practice: only correct, wrong, or unattempted (skipped/current/etc. count as unattempted). */
+function practiceTileStatus(tile: SessionQuestionTile): "correct" | "wrong" | "unattempted" {
+  if (tile.status === "correct") return "correct";
+  if (tile.status === "wrong") return "wrong";
+  return "unattempted";
+}
+
 /** Backend "current" is session pointer — UI current ring comes from activeQuestionId only. */
 function tileStatusClass(
   tile: SessionQuestionTile,
   examMode: boolean,
+  practiceMode: boolean,
   flagged: boolean,
   visited: boolean
 ): string {
+  if (practiceMode) {
+    return ` session-qnav__tile--${practiceTileStatus(tile)}`;
+  }
   const raw = examMode ? examTileStatus(tile, flagged, visited) : tile.status;
   const normalized = raw === "current" ? "unattempted" : raw;
   return ` session-qnav__tile--${normalized}`;
@@ -111,6 +130,8 @@ type Props = {
   markedIds?: string[];
   /** Questions opened during test but not yet answered. */
   visitedIds?: string[];
+  /** Practice run: correct / wrong / unattempted tiles only. */
+  practiceMode?: boolean;
   /** Hide correct/wrong/skipped styling during an active test. */
   examMode?: boolean;
   /** Result page copy: "Reviewed X of Y Questions". */
@@ -126,6 +147,7 @@ export default function SessionQuestionNav({
   showMarked = false,
   markedIds = [],
   visitedIds = [],
+  practiceMode = false,
   examMode = false,
   resultOverview = false,
   hideHeadMeta = false,
@@ -163,22 +185,39 @@ export default function SessionQuestionNav({
     const flagged = showMarked && markedIds.includes(tile.questionId) && !answered;
     const visited =
       examMode && visitedIds.includes(tile.questionId) && !answered && !flagged;
-    const statusClass = tileStatusClass(tile, examMode, flagged, visited);
+    const statusClass = tileStatusClass(tile, examMode, practiceMode, flagged, visited);
     const activeClass = isActive ? " session-qnav__tile--current" : "";
-    const tooltip = tileTooltip(tile, examMode, flagged, visited);
+    const tooltip = tileTooltip(tile, examMode, practiceMode, flagged, visited);
+    const overviewPractice = resultOverview && practiceMode;
+    const pStatus = practiceMode ? practiceTileStatus(tile) : null;
+    const label =
+      tile.sourceType === "ai_variant" && tile.variantNo
+        ? `V${tile.variantNo}`
+        : `Q${tile.number}`;
+
     return (
       <button
         key={tile.questionId}
         type="button"
-        className={`session-qnav__tile${statusClass}${activeClass}`}
+        className={`session-qnav__tile${statusClass}${activeClass}${
+          overviewPractice ? " session-qnav__tile--overview" : ""
+        }`}
         onClick={() => onSelect(tile.questionId)}
         title={tooltip}
         aria-label={tooltip}
         aria-current={isActive ? "step" : undefined}
       >
-        {tile.sourceType === "ai_variant" && tile.variantNo
-          ? `V${tile.variantNo}`
-          : `Q${tile.number}`}
+        <span className="session-qnav__tile-label">{label}</span>
+        {overviewPractice && pStatus === "correct" && (
+          <span className="session-qnav__tile-icon material-symbols-outlined" aria-hidden>
+            check
+          </span>
+        )}
+        {overviewPractice && pStatus === "wrong" && (
+          <span className="session-qnav__tile-icon material-symbols-outlined" aria-hidden>
+            close
+          </span>
+        )}
       </button>
     );
   }
@@ -190,23 +229,34 @@ export default function SessionQuestionNav({
         expanded ? "session-qnav--expanded" : "session-qnav--preview",
         canExpand ? "session-qnav--expandable" : "",
         hideHeadMeta ? "session-qnav--compact-head" : "",
+        practiceMode ? "session-qnav--practice" : "",
+        resultOverview && practiceMode ? "session-qnav--result-practice" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       aria-label="Question navigation"
     >
       <div className="session-qnav__head">
-        <span className="session-qnav__head-label">
-          {resultOverview ? "Question review" : "Questions"}
-        </span>
-        {!hideHeadMeta && (
-          <span className="session-qnav__head-meta">
-            {resultOverview
-              ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
-              : activePaper
-                ? `Session Q${activeNumber} · ${activePaper} · ${answeredCount}/${tiles.length}`
-                : `Session Q${activeNumber} · ${answeredCount}/${tiles.length}`}
-          </span>
+        {resultOverview && practiceMode ? (
+          <div className="session-qnav__head-copy">
+            <span className="session-qnav__head-label">Question overview</span>
+            <span className="session-qnav__head-meta">Tap a question to review it.</span>
+          </div>
+        ) : (
+          <>
+            <span className="session-qnav__head-label">
+              {resultOverview ? "Question review" : "Questions"}
+            </span>
+            {!hideHeadMeta && (
+              <span className="session-qnav__head-meta">
+                {resultOverview
+                  ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
+                  : activePaper
+                    ? `Session Q${activeNumber} · ${activePaper} · ${answeredCount}/${tiles.length}`
+                    : `Session Q${activeNumber} · ${answeredCount}/${tiles.length}`}
+              </span>
+            )}
+          </>
         )}
         {canExpand && (
           <button

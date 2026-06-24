@@ -47,12 +47,13 @@ public class QuestionController {
             @RequestParam(required = false) String topic,
             @RequestParam(required = false) String difficulty,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) Integer questionNo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "24") int size
     ) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("questionNo"));
         Page<Question> result = questionBrowseService.browse(
-                packId, subject, chapter, topic, difficulty, q, pageable);
+                packId, subject, chapter, topic, difficulty, q, questionNo, pageable);
         return result.map(QuestionPublic::from);
     }
 
