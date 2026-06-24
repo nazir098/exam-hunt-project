@@ -968,17 +968,22 @@ export function submitQuestionFeedback(
     context?: QuestionFeedbackContext;
   }
 ) {
-  return request<QuestionFeedbackView>(
-    `/api/questions/${encodeURIComponent(questionId)}/feedback`,
-    {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }
-  );
+  const path = `/api/questions/${encodeURIComponent(questionId)}/feedback`;
+  return request<QuestionFeedbackView>(path, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  }).then((res) => {
+    shortLivedGetCache.delete(path);
+    return res;
+  });
+}
+
+export function hasQuestionFeedback(view: QuestionFeedbackView): boolean {
+  return view.yourScore > 0 || (view.comment?.trim().length ?? 0) >= 3;
 }
 
 export function fetchQuestionFeedback(questionId: string) {
-  return getJsonCached<QuestionFeedbackView>(
+  return getJson<QuestionFeedbackView>(
     `/api/questions/${encodeURIComponent(questionId)}/feedback`
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   fetchQuestionFeedback,
+  hasQuestionFeedback,
   submitQuestionFeedback,
   type QuestionFeedbackCategory,
   type QuestionFeedbackContext,
@@ -29,6 +30,10 @@ type Props = {
   hideToggle?: boolean;
 };
 
+function categoryLabel(value: string | null) {
+  return CATEGORIES.find((c) => c.value === value)?.label ?? value ?? "General feedback";
+}
+
 export default function QuestionFeedbackPanel({
   questionId,
   context,
@@ -45,7 +50,8 @@ export default function QuestionFeedbackPanel({
   const [category, setCategory] = useState<QuestionFeedbackCategory>("general");
   const [aggregate, setAggregate] = useState<{ count: number; average: number } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openInternal, setOpenInternal] = useState(defaultExpanded);
   const open = expanded ?? openInternal;
@@ -58,7 +64,7 @@ export default function QuestionFeedbackPanel({
   useEffect(() => {
     if (authLoading || !user || !questionId) return;
     let cancelled = false;
-    setSaved(false);
+    setLoading(true);
     setError(null);
     fetchQuestionFeedback(questionId)
       .then((r) => {
@@ -67,9 +73,13 @@ export default function QuestionFeedbackPanel({
         setComment(r.comment ?? "");
         if (r.category) setCategory(r.category as QuestionFeedbackCategory);
         setAggregate(r.aggregate);
+        setAlreadySubmitted(hasQuestionFeedback(r));
       })
       .catch(() => {
-        /* optional */
+        if (!cancelled) setAlreadySubmitted(false);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -78,10 +88,9 @@ export default function QuestionFeedbackPanel({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user || alreadySubmitted) return;
     setBusy(true);
     setError(null);
-    setSaved(false);
     try {
       const res = await submitQuestionFeedback(questionId, {
         score: score > 0 ? score : undefined,
@@ -93,7 +102,7 @@ export default function QuestionFeedbackPanel({
       setComment(res.comment ?? "");
       if (res.category) setCategory(res.category as QuestionFeedbackCategory);
       setAggregate(res.aggregate);
-      setSaved(true);
+      setAlreadySubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit feedback");
     } finally {
@@ -106,6 +115,7 @@ export default function QuestionFeedbackPanel({
     compact ? "question-feedback--compact" : "",
     hideToggle ? "question-feedback--report-driven" : "",
     open ? "question-feedback--open" : "question-feedback--collapsed",
+    alreadySubmitted ? "question-feedback--submitted" : "",
     className,
   ]
     .filter(Boolean)
@@ -151,9 +161,60 @@ export default function QuestionFeedbackPanel({
     );
   }
 
+  function renderInlineHead() {
+    return (
+      <div className="question-feedback__inline-head">
+        <span className="question-feedback__inline-title">Rate &amp; report</span>
+        <button
+          type="button"
+          className="question-feedback__inline-close"
+          onClick={() => setOpen(false)}
+          aria-label="Close feedback form"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    );
+  }
+
+  function renderAlreadySubmitted() {
+    return (
+      <div className="question-feedback__submitted" role="status">
+        <p className="question-feedback__saved">
+          Thanks — you already submitted feedback for this question.
+        </p>
+        {(score > 0 || comment.trim()) && (
+          <dl className="question-feedback__submitted-summary">
+            {score > 0 && (
+              <div>
+                <dt>Your rating</dt>
+                <dd>{"★".repeat(score)}{"☆".repeat(5 - score)}</dd>
+              </div>
+            )}
+            {category && (
+              <div>
+                <dt>Report type</dt>
+                <dd>{categoryLabel(category)}</dd>
+              </div>
+            )}
+            {comment.trim() && (
+              <div>
+                <dt>Your feedback</dt>
+                <dd>{comment.trim()}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </div>
+    );
+  }
+
+  const isExpandedControlled = expanded !== undefined;
+  const showPanelBody = hideToggle ? open : isExpandedControlled ? open : true;
+
   return (
     <section className={rootClass} aria-label="Question feedback">
-      {!hideToggle && (
+      {!hideToggle && !alreadySubmitted && (
         <button
           type="button"
           className="question-feedback__toggle"
@@ -172,77 +233,66 @@ export default function QuestionFeedbackPanel({
         </button>
       )}
 
-      {open && (
+      {showPanelBody && (
         <>
-          {hideToggle && (
-            <div className="question-feedback__inline-head">
-              <span className="question-feedback__inline-title">Rate &amp; report</span>
-              <button
-                type="button"
-                className="question-feedback__inline-close"
-                onClick={() => setOpen(false)}
-                aria-label="Close feedback form"
-              >
-                <span className="material-symbols-outlined">close</span>
+          {hideToggle && renderInlineHead()}
+          {loading ? (
+            <p className="question-feedback__hint muted">Loading…</p>
+          ) : alreadySubmitted ? (
+            renderAlreadySubmitted()
+          ) : (
+            <form className="question-feedback__form" onSubmit={handleSubmit}>
+              <div className="practice-run-rating practice-run-rating--compact question-feedback__stars">
+                <p className="practice-run-rating__label">Your rating</p>
+                <div className="practice-run-rating__stars">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`practice-run-rating__star${score >= n ? " is-on" : ""}`}
+                      onClick={() => setScore(n)}
+                      aria-label={`${n} stars`}
+                      aria-pressed={score >= n}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="question-feedback__field">
+                <span className="question-feedback__label">Report type</span>
+                <select
+                  className="question-feedback__select"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as QuestionFeedbackCategory)}
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="question-feedback__field">
+                <span className="question-feedback__label">Your feedback</span>
+                <textarea
+                  className="question-feedback__textarea"
+                  rows={compact ? 2 : 3}
+                  placeholder="Describe the issue or share suggestions…"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                />
+              </label>
+
+              {error && <p className="question-feedback__error">{error}</p>}
+
+              <button type="submit" className="btn primary question-feedback__submit" disabled={busy}>
+                {busy ? "Saving…" : "Submit feedback"}
               </button>
-            </div>
+            </form>
           )}
-        <form className="question-feedback__form" onSubmit={handleSubmit}>
-        <div className="practice-run-rating practice-run-rating--compact question-feedback__stars">
-          <p className="practice-run-rating__label">Your rating</p>
-          <div className="practice-run-rating__stars">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`practice-run-rating__star${score >= n ? " is-on" : ""}`}
-                onClick={() => setScore(n)}
-                aria-label={`${n} stars`}
-                aria-pressed={score >= n}
-              >
-                ★
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="question-feedback__field">
-          <span className="question-feedback__label">Report type</span>
-          <select
-            className="question-feedback__select"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as QuestionFeedbackCategory)}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="question-feedback__field">
-          <span className="question-feedback__label">Your feedback</span>
-          <textarea
-            className="question-feedback__textarea"
-            rows={compact ? 2 : 3}
-            placeholder="Describe the issue or share suggestions…"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-          />
-        </label>
-
-        {error && <p className="question-feedback__error">{error}</p>}
-        {saved && !error && (
-          <p className="question-feedback__saved" role="status">
-            Thanks — your feedback was saved.
-          </p>
-        )}
-
-        <button type="submit" className="btn primary question-feedback__submit" disabled={busy}>
-          {busy ? "Saving…" : "Submit feedback"}
-        </button>
-        </form>
         </>
       )}
     </section>

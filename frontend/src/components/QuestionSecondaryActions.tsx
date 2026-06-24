@@ -61,10 +61,16 @@ export default function QuestionSecondaryActions({
       />
       <button
         type="button"
-        className="question-secondary-actions__btn question-secondary-actions__btn--report"
+        className="question-secondary-actions__btn"
         onClick={scrollToReport}
       >
-        <span className="question-secondary-actions__label question-secondary-actions__label--report">Report</span>
+        <span className="material-symbols-outlined" aria-hidden>
+          flag
+        </span>
+        <span className="question-secondary-actions__label">Report</span>
+        <span className="question-secondary-actions__label question-secondary-actions__label--wide">
+          Rate &amp; report
+        </span>
       </button>
     </div>
   );

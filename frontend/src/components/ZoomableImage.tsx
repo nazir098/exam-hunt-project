@@ -6,6 +6,12 @@ type Props = {
   className?: string;
 };
 
+type FitSize = { w: number; h: number };
+
+const MOBILE_MQ = "(max-width: 639px)";
+const MIN_SCALE = 0.75;
+const MAX_SCALE = 4;
+
 function touchDistance(touches: React.TouchList | TouchList): number {
   if (touches.length < 2) return 0;
   const a = touches[0];
@@ -13,18 +19,66 @@ function touchDistance(touches: React.TouchList | TouchList): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_MQ).matches;
+}
+
+function viewportBounds() {
+  return {
+    w: Math.max(240, window.innerWidth - 32),
+    h: Math.max(240, window.innerHeight - 100),
+  };
+}
+
+function fitContain(naturalW: number, naturalH: number, maxW: number, maxH: number): FitSize {
+  if (naturalW <= 0 || naturalH <= 0) return { w: 0, h: 0 };
+  let w = naturalW;
+  let h = naturalH;
+  if (w > maxW) {
+    h *= maxW / w;
+    w = maxW;
+  }
+  if (h > maxH) {
+    w *= maxH / h;
+    h = maxH;
+  }
+  return { w, h };
+}
+
+function initialMobileScale(base: FitSize, maxW: number) {
+  if (base.w <= 0) return 1;
+  return Math.min(MAX_SCALE, Math.max(1, maxW / base.w));
+}
+
 export default function ZoomableImage({ src, alt, className = "" }: Props) {
   const [open, setOpen] = useState(false);
-  const [pinchScale, setPinchScale] = useState(1);
+  const [scale, setScale] = useState(1);
+  const [baseSize, setBaseSize] = useState<FitSize | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const pinchStart = useRef({ distance: 0, scale: 1 });
+  const scaleRef = useRef(scale);
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  const applyImageMetrics = useCallback((img: HTMLImageElement) => {
+    const { w: maxW, h: maxH } = viewportBounds();
+    const base = fitContain(img.naturalWidth, img.naturalHeight, maxW, maxH);
+    if (base.w <= 0 || base.h <= 0) return;
+    setBaseSize(base);
+    setScale(isMobileViewport() ? initialMobileScale(base, maxW) : 1);
+  }, []);
 
   const close = useCallback(() => {
     setOpen(false);
-    setPinchScale(1);
+    setScale(1);
+    setBaseSize(null);
   }, []);
 
   const openLightbox = useCallback(() => {
-    setPinchScale(1);
+    setScale(1);
+    setBaseSize(null);
     setOpen(true);
   }, []);
 
@@ -42,11 +96,26 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
     };
   }, [close, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const img = imgRef.current;
+    if (!img) return;
+
+    const syncMetrics = () => applyImageMetrics(img);
+
+    if (img.complete && img.naturalWidth > 0) {
+      syncMetrics();
+    } else {
+      img.addEventListener("load", syncMetrics);
+      return () => img.removeEventListener("load", syncMetrics);
+    }
+  }, [applyImageMetrics, open, src]);
+
   function onTouchStart(e: React.TouchEvent) {
     if (e.touches.length === 2) {
       pinchStart.current = {
         distance: touchDistance(e.touches),
-        scale: pinchScale,
+        scale: scaleRef.current,
       };
     }
   }
@@ -57,19 +126,22 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
     const distance = touchDistance(e.touches);
     if (pinchStart.current.distance <= 0) return;
     const ratio = distance / pinchStart.current.distance;
-    const next = Math.min(4, Math.max(0.75, pinchStart.current.scale * ratio));
-    setPinchScale(next);
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinchStart.current.scale * ratio));
+    setScale(next);
   }
 
   function onTouchEnd(e: React.TouchEvent) {
     if (e.touches.length < 2) {
-      pinchStart.current = { distance: 0, scale: 1 };
+      pinchStart.current = { distance: 0, scale: scaleRef.current };
     }
   }
 
   function onDoubleClick() {
-    setPinchScale((s) => (s > 1 ? 1 : 1.75));
+    setScale((s) => (s > 1 ? 1 : 1.75));
   }
+
+  const displayW = baseSize ? baseSize.w * scale : undefined;
+  const displayH = baseSize ? baseSize.h * scale : undefined;
 
   return (
     <>
@@ -84,7 +156,7 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
 
       {open && (
         <div
-          className="image-lightbox"
+          className={`image-lightbox${isMobileViewport() ? " image-lightbox--mobile" : ""}`}
           role="dialog"
           aria-modal="true"
           aria-label={alt}
@@ -107,11 +179,19 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
               onDoubleClick={onDoubleClick}
             >
               <img
-                className="image-lightbox__img"
+                ref={imgRef}
+                className={`image-lightbox__img${baseSize ? " is-sized" : ""}`}
                 src={src}
                 alt={alt}
                 draggable={false}
-                style={pinchScale !== 1 ? { transform: `scale(${pinchScale})` } : undefined}
+                style={
+                  displayW && displayH
+                    ? {
+                        width: displayW,
+                        height: displayH,
+                      }
+                    : undefined
+                }
               />
             </div>
           </div>
