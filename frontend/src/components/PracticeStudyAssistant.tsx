@@ -11,6 +11,7 @@ import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
 import AiMarkdown from "./AiMarkdown";
 import AiStreamingMarkdown from "./AiStreamingMarkdown";
+import ZoomableImage from "./ZoomableImage";
 
 type TabDef = {
   id: PracticeAiFeature;
@@ -168,7 +169,6 @@ export default function PracticeStudyAssistant({
   const [solutionText, setSolutionText] = useState("");
   const [solutionBusy, setSolutionBusy] = useState(false);
   const [solutionError, setSolutionError] = useState("");
-  const [solutionExpanded, setSolutionExpanded] = useState(false);
 
   useEffect(() => {
     setResults({});
@@ -183,7 +183,6 @@ export default function PracticeStudyAssistant({
     setSolutionImageUrl("");
     setSolutionText("");
     setSolutionError("");
-    setSolutionExpanded(false);
   }, [questionId, submitted, correct, prominent, layout]);
 
   useEffect(() => {
@@ -411,14 +410,6 @@ export default function PracticeStudyAssistant({
               Official solution
             </span>
             <div className="study-assistant__solution-actions">
-              <button
-                type="button"
-                className="study-assistant__solution-action"
-                onClick={() => setSolutionExpanded(true)}
-              >
-                <span className="material-symbols-outlined">fullscreen</span>
-                Enlarge
-              </button>
               <a
                 href={imageSrc(solutionImageUrl)}
                 target="_blank"
@@ -430,21 +421,13 @@ export default function PracticeStudyAssistant({
               </a>
             </div>
           </div>
-          <button
-            type="button"
-            className="study-assistant__solution-viewport"
-            onClick={() => setSolutionExpanded(true)}
-            aria-label="Enlarge official solution"
-          >
-            <div className="exam-paper-image-frame study-assistant__solution-frame">
-              <img
-                className="exam-paper-image study-assistant__solution-image"
-                src={imageSrc(solutionImageUrl)}
-                alt="Official solution"
-                draggable={false}
-              />
-            </div>
-          </button>
+          <div className="study-assistant__solution-viewport">
+            <ZoomableImage
+              className="study-assistant__solution-zoom"
+              src={imageSrc(solutionImageUrl)}
+              alt="Official solution"
+            />
+          </div>
           {!compact && (
             <p className="study-assistant__hint-done">
               Official published solution — tap image to enlarge.
@@ -734,38 +717,6 @@ export default function PracticeStudyAssistant({
         )}
       </div>
       </div>
-
-      {solutionExpanded && solutionImageUrl && (
-        <div
-          className="study-assistant-solution-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Official solution enlarged"
-          onClick={() => setSolutionExpanded(false)}
-        >
-          <div
-            className="study-assistant-solution-modal__inner"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="study-assistant-solution-modal__close"
-              onClick={() => setSolutionExpanded(false)}
-              aria-label="Close enlarged solution"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-            <div className="study-assistant-solution-modal__frame">
-              <img
-                className="study-assistant-solution-modal__image"
-                src={imageSrc(solutionImageUrl)}
-                alt="Official solution enlarged"
-                draggable={false}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {layout === "inline" && panelOpen && (
         <div

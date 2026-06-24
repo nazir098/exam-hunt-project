@@ -3905,28 +3905,69 @@ a.nav-tip {
 }
 
 .practice-bank-start-banner__edit {
+  position: relative;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
+  justify-content: center;
+  gap: 0.08rem;
   flex-shrink: 0;
-  padding: 0.2rem 0.35rem;
-  border-radius: 0.45rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: #e9d5ff;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  margin-left: auto;
+  min-width: 2.65rem;
+  min-height: 2.65rem;
+  padding: 0.28rem 0.42rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(196, 181, 253, 0.55);
+  background: linear-gradient(160deg, rgba(139, 92, 246, 0.38), rgba(109, 40, 217, 0.22));
+  color: #f3e8ff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.22),
+    0 0 14px rgba(139, 92, 246, 0.28);
+  animation: practice-bank-filter-pulse 2.8s ease-in-out infinite;
 }
 
-.practice-bank-start-banner__edit .material-symbols-outlined {
-  font-size: 0.95rem;
+.practice-bank-start-banner__selection:hover:not(:disabled) .practice-bank-start-banner__edit {
+  border-color: rgba(221, 214, 254, 0.75);
+  background: linear-gradient(160deg, rgba(139, 92, 246, 0.48), rgba(109, 40, 217, 0.3));
+}
+
+.practice-bank-start-banner__edit-icon {
+  font-size: 1.2rem;
+  font-variation-settings: "FILL" 1;
+  color: #ede9fe;
+  line-height: 1;
 }
 
 .practice-bank-start-banner__edit-label {
-  display: none;
+  display: block;
+  font-size: 0.52rem;
+  line-height: 1;
+  color: #e9d5ff;
+}
+
+@keyframes practice-bank-filter-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.22),
+      0 0 10px rgba(139, 92, 246, 0.2);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(196, 181, 253, 0.45),
+      0 0 18px rgba(139, 92, 246, 0.38);
+  }
 }
 
 .practice-bank-start-banner__filter-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3934,10 +3975,12 @@ a.nav-tip {
   height: 1.1rem;
   padding: 0 0.25rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
-  font-size: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: #f5f3ff;
+  font-size: 0.58rem;
   font-weight: 800;
-  color: #fff;
+  color: #5b21b6;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .practice-bank-start-banner__cta {
@@ -4273,8 +4316,16 @@ a.nav-tip {
 }
 
 @media (min-width: 480px) {
+  .practice-bank-start-banner__edit {
+    flex-direction: row;
+    gap: 0.2rem;
+    min-width: auto;
+    min-height: 2.35rem;
+    padding: 0.3rem 0.55rem;
+  }
+
   .practice-bank-start-banner__edit-label {
-    display: inline;
+    font-size: 0.64rem;
   }
 }
 
@@ -5450,10 +5501,6 @@ a.nav-tip {
   }
 
   /* Practice run — compact upper chrome so AI assistant fits below fold */
-  .practice-run-page--practice .product-mode-banner {
-    display: none;
-  }
-
   .practice-run-page--practice .practice-run-header {
     margin-bottom: 0.4rem;
     padding-bottom: 0.3rem;
@@ -7180,6 +7227,33 @@ a.nav-tip {
   border-radius: 0.35rem;
 }
 
+.solve-page__solution-media .zoomable-image,
+.study-assistant__solution-viewport .zoomable-image {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  line-height: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.solve-page__solution-media .zoomable-image img,
+.study-assistant__solution-viewport .zoomable-image img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: min(52vh, 30rem);
+  object-fit: contain;
+  background-color: #ffffff;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 .image-lightbox {
   position: fixed;
   inset: 0;
@@ -7192,7 +7266,6 @@ a.nav-tip {
   animation: variant-diagram-fade-in 0.2s ease;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: none;
 }
 
 .image-lightbox__inner {
@@ -7235,15 +7308,27 @@ a.nav-tip {
   width: 100%;
   height: 100%;
   overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  display: block;
   padding: calc(3.25rem + env(safe-area-inset-top, 0px)) 0.75rem
     calc(0.75rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-  touch-action: pan-x pan-y;
+  touch-action: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  cursor: grab;
+}
+
+.image-lightbox__viewport:active {
+  cursor: grabbing;
+}
+
+.image-lightbox__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .image-lightbox__frame {
@@ -12826,6 +12911,71 @@ a.nav-tip {
 .product-mode-banner--solve .product-mode-banner__label { color: #4edea3; }
 .product-mode-banner--practice .product-mode-banner__label { color: #dcb8ff; }
 .product-mode-banner--test .product-mode-banner__label { color: #ffc107; }
+
+.product-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.14rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.product-mode-chip__icon {
+  font-size: 0.82rem;
+  font-variation-settings: "FILL" 1;
+  flex-shrink: 0;
+}
+
+.product-mode-chip__label {
+  flex-shrink: 0;
+}
+
+.product-mode-chip__hint {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(226, 224, 252, 0.58);
+}
+
+.product-mode-chip--practice {
+  border-color: rgba(138, 43, 226, 0.35);
+  background: rgba(138, 43, 226, 0.1);
+  color: #e8d4ff;
+}
+
+.product-mode-chip--practice .product-mode-chip__icon {
+  color: #c9a0ff;
+}
+
+.product-mode-chip--test {
+  border-color: rgba(255, 193, 7, 0.35);
+  background: rgba(255, 193, 7, 0.08);
+  color: #ffe082;
+}
+
+.product-mode-chip--test .product-mode-chip__icon {
+  color: #ffc107;
+}
+
+.product-mode-chip--solve {
+  border-color: rgba(78, 222, 163, 0.3);
+  background: rgba(78, 222, 163, 0.08);
+  color: #bbf7d0;
+}
+
+.product-mode-chip--solve .product-mode-chip__icon {
+  color: #4edea3;
+}
 
 .product-mode-banner__helper {
   margin: 0;

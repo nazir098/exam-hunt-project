@@ -697,7 +697,6 @@ export default function PracticeQuestionPage() {
   if (pageLoading) {
     return (
       <main className={`practice-run-page practice-run-page--${routeMode}`}>
-        <ProductModeBanner mode={routeMode} compact />
         <header className="practice-run-header">
           <div className="practice-run-header__sticky sticky-below-header">
             <div className="practice-run-header__top">
@@ -705,6 +704,7 @@ export default function PracticeQuestionPage() {
                 <span className="material-symbols-outlined">arrow_back</span>
                 {backLabel}
               </Link>
+              <ProductModeBanner mode={routeMode} inline />
             </div>
           </div>
         </header>
@@ -743,7 +743,6 @@ export default function PracticeQuestionPage() {
   if (!q) {
     return (
       <main className={`practice-run-page practice-run-page--${routeMode}`}>
-        <ProductModeBanner mode={routeMode} compact />
         <header className="practice-run-header">
           <div className="practice-run-header__sticky sticky-below-header">
             <div className="practice-run-header__top">
@@ -751,6 +750,7 @@ export default function PracticeQuestionPage() {
                 <span className="material-symbols-outlined">arrow_back</span>
                 {backLabel}
               </Link>
+              <ProductModeBanner mode={routeMode} inline />
             </div>
           </div>
         </header>
@@ -1107,10 +1107,11 @@ export default function PracticeQuestionPage() {
             <button
               type="button"
               className="practice-run-result__action practice-run-result__action--primary"
-              onClick={() => setShowSolution(true)}
+              onClick={() => setShowSolution((open) => !open)}
+              aria-pressed={showSolution}
             >
               <span className="material-symbols-outlined">menu_book</span>
-              View Solution
+              {showSolution ? "Hide Solution" : "View Solution"}
             </button>
           )}
         </div>
@@ -1129,10 +1130,9 @@ export default function PracticeQuestionPage() {
         </div>
         {imgUrl ? (
           <div className="practice-run-question__media solve-page__solution-media">
-            <img
+            <ZoomableImage
               src={imageSrc(imgUrl)}
               alt={`Solution for question ${q.questionNo}`}
-              draggable={false}
             />
           </div>
         ) : q.solutionDiagramSvg?.trim() ? (
@@ -1321,11 +1321,11 @@ export default function PracticeQuestionPage() {
         {routeMode === "practice" && (practiceRevealed || (!result && !variantChecked)) && (
           <QuestionSecondaryActions
             questionId={questionId}
-            hasSolution={hasSolution && distinctSolution}
-            solutionAllowed={practiceRevealed || variantChecked}
+            hasSolution={!practiceRevealed && hasSolution && distinctSolution}
+            solutionAllowed={variantChecked && !practiceRevealed}
             solutionOpen={showSolution}
             onToggleSolution={
-              practiceRevealed || variantChecked
+              variantChecked && !practiceRevealed
                 ? () => setShowSolution((v) => !v)
                 : undefined
             }
@@ -1347,8 +1347,8 @@ export default function PracticeQuestionPage() {
           </p>
         )}
 
-        {practiceRevealed && renderPracticeSolutionPanel()}
         {practiceRevealed && practiceAnswerReview && renderPracticeInlineFeedback(practiceAnswerReview)}
+        {practiceRevealed && renderPracticeSolutionPanel()}
 
         {renderSessionFooterNav("solve-page__footer-nav--desktop")}
         <p className="practice-run-keyboard-hint muted hidden lg:block">
@@ -1366,7 +1366,6 @@ export default function PracticeQuestionPage() {
 
   return (
     <main className={`practice-run-page practice-run-page--${routeMode}`}>
-      <ProductModeBanner mode={routeMode} compact />
       <header className="practice-run-header">
         <div className="practice-run-header__sticky sticky-below-header">
           <div className="practice-run-header__top">
@@ -1374,6 +1373,7 @@ export default function PracticeQuestionPage() {
               <span className="material-symbols-outlined">arrow_back</span>
               {backLabel}
             </Link>
+            <ProductModeBanner mode={routeMode} inline />
             {routeMode === "test" && session.status === "active" && (
               <button type="button" className="practice-run-submit-test" disabled={busy} onClick={submitTestEarly}>
                 Submit test

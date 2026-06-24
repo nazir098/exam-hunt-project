@@ -51,11 +51,14 @@ export default function PracticeBankStartBanner({
           <span className="practice-bank-start-banner__title">questions selected</span>
           <span className="practice-bank-start-banner__meta">{meta}</span>
         </span>
-        <span className="practice-bank-start-banner__edit">
-          <span className="material-symbols-outlined" aria-hidden>
+        <span className="practice-bank-start-banner__edit" title="Change filters, topics, and question count">
+          <span
+            className="material-symbols-outlined practice-bank-start-banner__edit-icon"
+            aria-hidden
+          >
             tune
           </span>
-          <span className="practice-bank-start-banner__edit-label">Change</span>
+          <span className="practice-bank-start-banner__edit-label">Filters</span>
           {filterCount > 0 && (
             <span className="practice-bank-start-banner__filter-badge">{filterCount}</span>
           )}

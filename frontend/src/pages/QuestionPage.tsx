@@ -511,10 +511,9 @@ export default function QuestionPage() {
               </div>
               {q.solutionImageUrl?.trim() ? (
                 <div className="practice-run-question__media solve-page__solution-media">
-                  <img
+                  <ZoomableImage
                     src={imageSrc(q.solutionImageUrl, questionId)}
                     alt={`Solution for question ${q.questionNo}`}
-                    draggable={false}
                   />
                 </div>
               ) : q.solutionDiagramSvg?.trim() ? (
