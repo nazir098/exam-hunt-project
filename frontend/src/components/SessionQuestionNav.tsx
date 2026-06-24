@@ -115,6 +115,8 @@ type Props = {
   examMode?: boolean;
   /** Result page copy: "Reviewed X of Y Questions". */
   resultOverview?: boolean;
+  /** Practice run: hide Session Q / Paper Q summary (tiles only). */
+  hideHeadMeta?: boolean;
 };
 
 export default function SessionQuestionNav({
@@ -126,6 +128,7 @@ export default function SessionQuestionNav({
   visitedIds = [],
   examMode = false,
   resultOverview = false,
+  hideHeadMeta = false,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -186,22 +189,27 @@ export default function SessionQuestionNav({
         "session-qnav",
         expanded ? "session-qnav--expanded" : "session-qnav--preview",
         canExpand ? "session-qnav--expandable" : "",
+        hideHeadMeta ? "session-qnav--compact-head" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       aria-label="Question navigation"
     >
       <div className="session-qnav__head">
-        <span className="session-qnav__head-label">
-          {resultOverview ? "Question review" : "Questions"}
-        </span>
-        <span className="session-qnav__head-meta">
-          {resultOverview
-            ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
-            : activePaper
-              ? `Session Q${activeNumber} · ${activePaper} · ${answeredCount}/${tiles.length}`
-              : `Session Q${activeNumber} · ${answeredCount}/${tiles.length}`}
-        </span>
+        {!hideHeadMeta && (
+          <span className="session-qnav__head-label">
+            {resultOverview ? "Question review" : "Questions"}
+          </span>
+        )}
+        {!hideHeadMeta && (
+          <span className="session-qnav__head-meta">
+            {resultOverview
+              ? `Reviewed ${answeredCount} of ${tiles.length} Questions`
+              : activePaper
+                ? `Session Q${activeNumber} · ${activePaper} · ${answeredCount}/${tiles.length}`
+                : `Session Q${activeNumber} · ${answeredCount}/${tiles.length}`}
+          </span>
+        )}
         {canExpand && (
           <button
             type="button"

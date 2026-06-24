@@ -234,6 +234,10 @@ export default function PracticeQuestionPage() {
     );
   }, [questionId]);
 
+  useEffect(() => {
+    setFeedbackOpen(false);
+  }, [questionId]);
+
   const resultPath = useCallback(
     (sid: string) => (routeMode === "test" ? `/test/result/${sid}` : `/practice/result/${sid}`),
     [routeMode]
@@ -666,12 +670,14 @@ export default function PracticeQuestionPage() {
     return (
       <main className={`practice-run-page practice-run-page--${routeMode}`}>
         <ProductModeBanner mode={routeMode} compact />
-        <header className="practice-run-header sticky-below-header">
-          <div className="practice-run-header__top">
-            <Link to={backTo} className="practice-run-header__back">
-              <span className="material-symbols-outlined">arrow_back</span>
-              {backLabel}
-            </Link>
+        <header className="practice-run-header">
+          <div className="practice-run-header__sticky sticky-below-header">
+            <div className="practice-run-header__top">
+              <Link to={backTo} className="practice-run-header__back">
+                <span className="material-symbols-outlined">arrow_back</span>
+                {backLabel}
+              </Link>
+            </div>
           </div>
         </header>
         <div className="practice-run-layout">
@@ -710,12 +716,14 @@ export default function PracticeQuestionPage() {
     return (
       <main className={`practice-run-page practice-run-page--${routeMode}`}>
         <ProductModeBanner mode={routeMode} compact />
-        <header className="practice-run-header sticky-below-header">
-          <div className="practice-run-header__top">
-            <Link to={backTo} className="practice-run-header__back">
-              <span className="material-symbols-outlined">arrow_back</span>
-              {backLabel}
-            </Link>
+        <header className="practice-run-header">
+          <div className="practice-run-header__sticky sticky-below-header">
+            <div className="practice-run-header__top">
+              <Link to={backTo} className="practice-run-header__back">
+                <span className="material-symbols-outlined">arrow_back</span>
+                {backLabel}
+              </Link>
+            </div>
           </div>
         </header>
         <div className="practice-run-layout">
@@ -737,8 +745,6 @@ export default function PracticeQuestionPage() {
 
   const diff = difficultyLabel(q.difficulty);
   const answered = session.correctCount + session.wrongCount;
-  const currentQ = answered + (result ? 0 : 1);
-  const progressPct = Math.round((answered / session.questionCount) * 100);
   const sessionAnchorId = sessionAnchorQuestionId(q, questionId);
   const variantPreview = isAiVariantPreview(q, questionId);
   const variantChecked = !!variantCheck;
@@ -888,23 +894,27 @@ export default function PracticeQuestionPage() {
         : null;
     return (
       <section key={questionId} className="practice-run-question glass-card">
-        <div className="practice-run-question__head">
-          <div className="practice-run-question__titles">
-            <p className="practice-run-question__eyebrow">
-              Session Q{sessionNo} of {session.questionCount}
-              {session.filterSubject ? ` · ${session.filterSubject}` : ""}
-            </p>
-            <h1 className="practice-run-question__title">
-              {questionHeadingTitle(
-                q.exam,
-                q.questionNo,
-                q.topic || q.chapter,
-                isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
-              )}
-            </h1>
+        {(routeMode !== "practice" || includeMarkReview) && (
+          <div className="practice-run-question__head">
+            {routeMode !== "practice" && (
+              <div className="practice-run-question__titles">
+                <p className="practice-run-question__eyebrow">
+                  Session Q{sessionNo} of {session.questionCount}
+                  {session.filterSubject ? ` · ${session.filterSubject}` : ""}
+                </p>
+                <h1 className="practice-run-question__title">
+                  {questionHeadingTitle(
+                    q.exam,
+                    q.questionNo,
+                    q.topic || q.chapter,
+                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+                  )}
+                </h1>
+              </div>
+            )}
+            {includeMarkReview && renderTestMarkReview()}
           </div>
-          {includeMarkReview && renderTestMarkReview()}
-        </div>
+        )}
         {routeMode === "practice" && (
           <QuestionVariantSwitcher
             questionId={questionId}
@@ -1150,6 +1160,39 @@ export default function PracticeQuestionPage() {
     );
   }
 
+  function renderSessionFooterNav(extraClass = "") {
+    return (
+      <footer
+        className={`solve-page__footer-nav practice-run-footer-nav${extraClass ? ` ${extraClass}` : ""}`}
+        aria-label="Question navigation"
+      >
+        <button
+          type="button"
+          className="practice-run-nav-btn solve-page__nav-btn"
+          disabled={!prevId || busy}
+          onClick={goPrev}
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+          <span className="solve-page__nav-label">Prev</span>
+        </button>
+        <span className="solve-page__nav-pos">
+          {session
+            ? `${activeTile?.number ?? session.currentIndex + 1} / ${session.questionCount}`
+            : ""}
+        </span>
+        <button
+          type="button"
+          className="practice-run-nav-btn solve-page__nav-btn"
+          disabled={!canGoNext || busy}
+          onClick={handleNextQuestion}
+        >
+          <span className="solve-page__nav-label">Next</span>
+          <span className="material-symbols-outlined">arrow_forward</span>
+        </button>
+      </footer>
+    );
+  }
+
   function renderQuestionNavRow() {
     const submitLabel = variantPreview
       ? busy
@@ -1215,123 +1258,102 @@ export default function PracticeQuestionPage() {
           </>
         )}
 
-        <div className="practice-run-actions practice-run-actions--pair solve-page__footer-nav practice-run-footer-nav">
-          <button
-            type="button"
-            className="practice-run-nav-btn"
-            disabled={!prevId || busy}
-            onClick={goPrev}
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-            Previous
-          </button>
-          <span className="text-caption text-outline practice-run-footer-nav__pos">
-            {session
-              ? `${activeTile?.number ?? session.currentIndex + 1} / ${session.questionCount}`
-              : ""}
-          </span>
-          <button
-            type="button"
-            className="practice-run-nav-btn"
-            disabled={!canGoNext || busy}
-            onClick={handleNextQuestion}
-          >
-            Next
-            <span className="material-symbols-outlined">arrow_forward</span>
-          </button>
-        </div>
-        <p className="practice-run-keyboard-hint muted">Use ← → arrow keys to move between questions</p>
+        {renderSessionFooterNav("solve-page__footer-nav--desktop")}
+        <p className="practice-run-keyboard-hint muted hidden lg:block">
+          Use ← → arrow keys to move between questions
+        </p>
       </>
     );
   }
 
+  const showSessionFooter =
+    !questionPending && !result && !testAnswerSaved && !tileLocked && !!session;
+
   return (
     <main className={`practice-run-page practice-run-page--${routeMode}`}>
       <ProductModeBanner mode={routeMode} compact />
-      <header className="practice-run-header sticky-below-header">
-        <div className="practice-run-header__top">
-          <Link to={backTo} className="practice-run-header__back">
-            <span className="material-symbols-outlined">arrow_back</span>
-            {backLabel}
-          </Link>
-          {routeMode === "test" && session.status === "active" && (
-            <button type="button" className="practice-run-submit-test" disabled={busy} onClick={submitTestEarly}>
-              Submit test
-            </button>
+      <header className="practice-run-header">
+        <div className="practice-run-header__sticky sticky-below-header">
+          <div className="practice-run-header__top">
+            <Link to={backTo} className="practice-run-header__back">
+              <span className="material-symbols-outlined">arrow_back</span>
+              {backLabel}
+            </Link>
+            {routeMode === "test" && session.status === "active" && (
+              <button type="button" className="practice-run-submit-test" disabled={busy} onClick={submitTestEarly}>
+                Submit test
+              </button>
+            )}
+          </div>
+          {isTestActive ? (
+            <div className="practice-run-header__score-row practice-run-header__score-row--test">
+              <div className="practice-run-header__progress-meta practice-run-header__progress-meta--test">
+                <span>Answered: {answered}</span>
+                <span>Remaining: {Math.max(0, remaining)}</span>
+              </div>
+              <SessionTimer
+                activeSeconds={session.activeSeconds ?? 0}
+                engagedSince={session.engagedSince}
+                label="Time"
+                compact
+              />
+            </div>
+          ) : (
+            <div className="practice-run-header__dashboard">
+              <div className="practice-run-header__dashboard-main">
+                <div className="practice-run-header__score-block">
+                  <span className="practice-run-header__score-label">
+                    <span className="material-symbols-outlined" aria-hidden>
+                      trophy
+                    </span>
+                    Score
+                  </span>
+                  <strong className="practice-run-header__score-value">
+                    {scoreMarks}/{scoreMax}
+                  </strong>
+                </div>
+
+                <div
+                  className="practice-run-header__status-icons"
+                  aria-label={`${session.correctCount} correct, ${session.wrongCount} wrong, ${session.skipCount ?? 0} skipped`}
+                >
+                  <div className="practice-run-header__status-item practice-run-header__status-item--ok">
+                    <span className="practice-run-header__status-icon" aria-hidden>
+                      <span className="material-symbols-outlined">check</span>
+                    </span>
+                    <span className="practice-run-header__status-count">{session.correctCount}</span>
+                  </div>
+                  <div className="practice-run-header__status-item practice-run-header__status-item--bad">
+                    <span className="practice-run-header__status-icon" aria-hidden>
+                      <span className="material-symbols-outlined">close</span>
+                    </span>
+                    <span className="practice-run-header__status-count">{session.wrongCount}</span>
+                  </div>
+                  <div className="practice-run-header__status-item practice-run-header__status-item--skip">
+                    <span className="practice-run-header__status-icon" aria-hidden>
+                      <span className="material-symbols-outlined">skip_next</span>
+                    </span>
+                    <span className="practice-run-header__status-count">{session.skipCount ?? 0}</span>
+                  </div>
+                </div>
+
+                {session.status === "active" && (
+                  <SessionTimer
+                    activeSeconds={session.activeSeconds ?? 0}
+                    engagedSince={session.engagedSince}
+                    label="Time"
+                    compact
+                  />
+                )}
+              </div>
+
+              <div className="practice-run-header__dashboard-footer">
+                <span>Answered: {answered}</span>
+                <span>Remaining: {Math.max(0, remaining)}</span>
+              </div>
+            </div>
           )}
         </div>
-        {isTestActive ? (
-          <div className="practice-run-header__score-row practice-run-header__score-row--test">
-            <div className="practice-run-header__progress-meta practice-run-header__progress-meta--test">
-              <span>Answered: {answered}</span>
-              <span>Remaining: {Math.max(0, remaining)}</span>
-            </div>
-            <SessionTimer
-              activeSeconds={session.activeSeconds ?? 0}
-              engagedSince={session.engagedSince}
-              label="Time"
-              compact
-            />
-          </div>
-        ) : (
-          <>
-            <div className="practice-run-header__score-row">
-              <div className="practice-run-header__score-block">
-                <span className="practice-run-header__score-label">Score</span>
-                <strong className="practice-run-header__score-value">
-                  {scoreMarks}/{scoreMax}
-                </strong>
-              </div>
-              {session.status === "active" && (
-                <SessionTimer
-                  activeSeconds={session.activeSeconds ?? 0}
-                  engagedSince={session.engagedSince}
-                  label="Time"
-                  compact
-                />
-              )}
-            </div>
-            <div
-              className="practice-run-header__stats"
-              aria-label={`Score ${scoreMarks} of ${scoreMax}, ${answered} answered, ${remaining} remaining`}
-            >
-              <span className="practice-run-header-chip practice-run-header-chip--ok">
-                <span className="material-symbols-outlined" aria-hidden>
-                  check
-                </span>
-                {session.correctCount}
-              </span>
-              <span className="practice-run-header-chip practice-run-header-chip--bad">
-                <span className="material-symbols-outlined" aria-hidden>
-                  close
-                </span>
-                {session.wrongCount}
-              </span>
-              <span className="practice-run-header-chip practice-run-header-chip--skip">
-                <span className="material-symbols-outlined" aria-hidden>
-                  skip_next
-                </span>
-                {session.skipCount ?? 0}
-              </span>
-              <span className="practice-run-header-chip practice-run-header-chip--q">
-                Session {currentQ}/{session.questionCount}
-              </span>
-            </div>
-            <div className="practice-run-header__progress-meta">
-              <span>Answered: {answered}</span>
-              <span>Remaining: {Math.max(0, remaining)}</span>
-            </div>
-            <div
-              className="practice-run-progress"
-              role="progressbar"
-              aria-valuenow={progressPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div className="practice-run-progress__fill" style={{ width: `${progressPct}%` }} />
-            </div>
-          </>
-        )}
         {session.questionTiles && session.questionTiles.length > 0 && (
           <SessionQuestionNav
             tiles={session.questionTiles}
@@ -1341,6 +1363,7 @@ export default function PracticeQuestionPage() {
             markedIds={session.markedForReviewIds}
             visitedIds={visitedIds}
             examMode={isTestActive}
+            hideHeadMeta={routeMode === "practice"}
           />
         )}
       </header>
@@ -1414,18 +1437,6 @@ export default function PracticeQuestionPage() {
               {error && !questionPending && <p className="practice-run-error">{error}</p>}
 
               {!questionPending && renderQuestionNavRow()}
-              {!questionPending && routeMode === "practice" && !result && !variantChecked && (
-                <div id="question-report">
-                  <QuestionFeedbackPanel
-                    questionId={questionId}
-                    context="practice"
-                    compact
-                    expanded={feedbackOpen}
-                    onExpandedChange={setFeedbackOpen}
-                    className="solve-page__feedback"
-                  />
-                </div>
-              )}
               {!questionPending && renderVariantPracticeResult()}
             </>
           )}
@@ -1455,6 +1466,17 @@ export default function PracticeQuestionPage() {
         <aside
           className={`practice-run-aside hidden lg:block${showAssistantPanel ? "" : " practice-run-aside--hidden"}`}
         >
+          {routeMode === "practice" && feedbackOpen && (
+            <QuestionFeedbackPanel
+              questionId={questionId}
+              context="practice"
+              compact
+              hideToggle
+              expanded={feedbackOpen}
+              onExpandedChange={setFeedbackOpen}
+              className="solve-page__feedback"
+            />
+          )}
           {isTestActive ? (
             <TestRunSidebar assistant={assistantProps} />
           ) : (
@@ -1463,16 +1485,38 @@ export default function PracticeQuestionPage() {
         </aside>
       </div>
 
-      {showAssistantPanel && !isTestActive && (
-        <div className="practice-run-ai-inline lg:hidden">
-          <PracticeStudyAssistant {...assistantProps} layout="inline" />
+      {routeMode === "practice" && !isTestActive && (
+        <div className="solve-page__mobile-rail lg:hidden">
+          {feedbackOpen && (
+            <div id="question-report">
+              <QuestionFeedbackPanel
+                questionId={questionId}
+                context="practice"
+                compact
+                hideToggle
+                expanded={feedbackOpen}
+                onExpandedChange={setFeedbackOpen}
+                className="solve-page__feedback"
+              />
+            </div>
+          )}
+          {showAssistantPanel && (
+            <div className="practice-run-ai-inline">
+              <PracticeStudyAssistant {...assistantProps} layout="inline" />
+            </div>
+          )}
         </div>
       )}
+
       {isTestActive && (
-        <div className="practice-run-ai-inline lg:hidden">
-          <TestRunSidebar assistant={assistantProps} />
+        <div className="solve-page__mobile-rail lg:hidden">
+          <div className="practice-run-ai-inline">
+            <TestRunSidebar assistant={assistantProps} />
+          </div>
         </div>
       )}
+
+      {showSessionFooter && renderSessionFooterNav("solve-page__footer-nav--fixed")}
     </main>
   );
 }

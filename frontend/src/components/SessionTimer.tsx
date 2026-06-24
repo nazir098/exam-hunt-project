@@ -7,14 +7,20 @@ type Props = {
   compact?: boolean;
 };
 
-function formatElapsed(totalSeconds: number): string {
+function formatElapsed(totalSeconds: number): { text: string; hasHours: boolean } {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
   if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return {
+      text: `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+      hasHours: true,
+    };
   }
-  return `${m}:${String(s).padStart(2, "0")}`;
+  return {
+    text: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+    hasHours: false,
+  };
 }
 
 export default function SessionTimer({ activeSeconds, engagedSince, label = "Time", compact }: Props) {
@@ -39,10 +45,14 @@ export default function SessionTimer({ activeSeconds, engagedSince, label = "Tim
     return () => window.clearInterval(id);
   }, [activeSeconds, engagedSince]);
 
+  const { text, hasHours } = formatElapsed(elapsed);
+
   return (
     <span className={`session-timer${compact ? " session-timer--compact" : ""}`} aria-live="polite">
       <span className="session-timer__label">{label}</span>
-      <strong>{formatElapsed(elapsed)}</strong>
+      <strong className={`session-timer__value${hasHours ? " session-timer__value--hours" : ""}`}>
+        {text}
+      </strong>
     </span>
   );
 }

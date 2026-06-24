@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchQuestionFamily, type QuestionFamily, type QuestionVariantRef } from "../api";
+import { isAiVariantQuestionId } from "../utils/questionFamily";
 import { formatVariantTypeLabel } from "../utils/variantLabels";
 
 function dedupeVariants(variants: QuestionVariantRef[]): QuestionVariantRef[] {
@@ -77,36 +78,33 @@ export default function QuestionVariantSwitcher({
     [family]
   );
 
-  const activeVariantNo = useMemo(() => {
-    if (!family) return 0;
-    return (
-      family.variants.find((v) => v.questionId === family.activeQuestionId)?.variantNo ?? 0
-    );
-  }, [family]);
-
-  const activeParent = family?.activeQuestionId === family?.pyq.questionId;
-
   const activeVariant = useMemo(
-    () => variants.find((v) => v.variantNo === activeVariantNo) ?? null,
-    [variants, activeVariantNo]
+    () => variants.find((v) => v.questionId === questionId) ?? null,
+    [variants, questionId]
   );
+
+  const activeParent = useMemo(() => {
+    if (!family || activeVariant) return false;
+    return questionId === family.pyq.questionId;
+  }, [family, activeVariant, questionId]);
 
   const activeLabel = useMemo(() => {
     if (!family) return "AI variations";
-    if (activeParent) return "Original PYQ";
     if (activeVariant) {
       return formatVariantTypeLabel(activeVariant.variantType, activeVariant.variantNo);
     }
+    if (activeParent) return "Original PYQ";
+    if (isAiVariantQuestionId(questionId)) return "AI variation";
     return "AI variation";
-  }, [family, activeParent, activeVariant]);
+  }, [family, activeParent, activeVariant, questionId]);
 
   const selectVariant = useCallback(
     (targetId: string) => {
-      if (targetId === family?.activeQuestionId) return;
+      if (targetId === questionId) return;
       setOpen(false);
       onSelect(targetId);
     },
-    [family?.activeQuestionId, onSelect]
+    [questionId, onSelect]
   );
 
   if (!family || variants.length === 0) return null;
@@ -147,10 +145,7 @@ export default function QuestionVariantSwitcher({
             </button>
           </li>
           {variants.map((v) => {
-            const active =
-              activeVariantNo > 0
-                ? v.variantNo === activeVariantNo
-                : family.activeQuestionId === v.questionId;
+            const active = v.questionId === questionId;
             const label = formatVariantTypeLabel(v.variantType, v.variantNo);
             return (
               <li key={v.questionId} role="option" aria-selected={active}>
