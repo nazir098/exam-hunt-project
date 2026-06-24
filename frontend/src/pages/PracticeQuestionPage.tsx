@@ -17,6 +17,7 @@ import {
   type VariantCheckResult,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import AiMarkdown from "../components/AiMarkdown";
 import AppLoader from "../components/AppLoader";
 import PageLoadShell from "../components/PageLoadShell";
 import PracticeStudyAssistant, { explainFeatureForResult } from "../components/PracticeStudyAssistant";
@@ -35,6 +36,7 @@ import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName, questionHeadingTitle } from "../utils/labels";
 import { formatVariantTypeLabel } from "../utils/variantLabels";
 import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { hasDistinctSolution } from "../utils/questionSolution";
 
 const OPTIONS = [
   { value: "1", label: "1" },
@@ -80,6 +82,23 @@ function variantMcqProps(q: PracticeQuestion) {
 function optionLabel(value: string) {
   return `Option ${value}`;
 }
+
+function formatAnswerValue(
+  value: string | undefined | null,
+  q: PracticeQuestion
+) {
+  if (!value) return "—";
+  if (isImageQuestion(q)) return value;
+  return optionLabel(value);
+}
+
+type PracticeAnswerReview = {
+  correct: boolean;
+  correctAnswer: string;
+  selectedAnswer: string;
+  hasSolution: boolean;
+  solutionImageUrl: string;
+};
 
 function sessionAnchorQuestionId(
   question: Pick<PracticeQuestion, "questionId" | "parentQuestionId" | "sourceType"> | null,
@@ -380,8 +399,17 @@ export default function PracticeQuestionPage() {
       const loaded = questionCacheRef.current.get(qid);
       const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
       prefetchNextQuestion(s.questionTiles, anchorId);
+      const tile = s.questionTiles?.find((t) => t.questionId === anchorId);
+      if (
+        routeMode === "practice" &&
+        tile &&
+        (tile.status === "correct" || tile.status === "wrong") &&
+        tile.selectedAnswer
+      ) {
+        setSelected(tile.selectedAnswer);
+      }
     },
-    [sessionId, navigate, sessionPath, loadQuestionById, prefetchNextQuestion]
+    [sessionId, navigate, sessionPath, loadQuestionById, prefetchNextQuestion, routeMode]
   );
 
   useEffect(() => {
@@ -758,15 +786,35 @@ export default function PracticeQuestionPage() {
     session.status === "active" &&
     variantPreview;
   const activeTile = session.questionTiles?.find((t) => t.questionId === sessionAnchorId);
+  const practiceAnswerReview: PracticeAnswerReview | null =
+    routeMode === "practice" && result
+      ? {
+          correct: result.correct,
+          correctAnswer: result.correctAnswer,
+          selectedAnswer: selected,
+          hasSolution: result.hasSolution,
+          solutionImageUrl: result.solutionImageUrl,
+        }
+      : routeMode === "practice" &&
+          activeTile &&
+          (activeTile.status === "correct" || activeTile.status === "wrong")
+        ? {
+            correct: activeTile.status === "correct",
+            correctAnswer: activeTile.correctAnswer ?? "",
+            selectedAnswer: activeTile.selectedAnswer ?? selected,
+            hasSolution: q.hasSolution,
+            solutionImageUrl: activeTile.solutionImageUrl ?? "",
+          }
+        : null;
+  const practiceRevealed = !!practiceAnswerReview;
   const isTestActive = routeMode === "test" && session.status === "active";
   const isAnsweredTile =
     activeTile?.status === "correct" || activeTile?.status === "wrong" || activeTile?.status === "skipped";
   const tileLocked =
     routeMode === "practice" &&
-    !result &&
+    !practiceRevealed &&
     session.status === "active" &&
-    activeTile &&
-    isAnsweredTile;
+    activeTile?.status === "skipped";
   const testAnswerSaved = isTestActive && !result && !!activeTile && isAnsweredTile;
   const remaining =
     session.questionCount - answered - (session.skipCount ?? 0);
@@ -775,26 +823,33 @@ export default function PracticeQuestionPage() {
   const canGoNext =
     !!nextId || (isSessionCurrentQuestion && session.status === "active" && !result);
   const showPracticeAssistant =
-    routeMode === "practice" && (!!result || !!tileLocked || variantChecked);
+    routeMode === "practice" && (practiceRevealed || variantChecked);
   const showAssistantPanel = routeMode === "practice" || isTestActive;
-  const feedbackCorrect = result ? result.correct : activeTile?.status === "correct";
-  const feedbackWrong = result ? !result.correct : activeTile?.status === "wrong";
+  const feedbackCorrect = practiceAnswerReview
+    ? practiceAnswerReview.correct
+    : activeTile?.status === "correct";
+  const feedbackWrong = practiceAnswerReview
+    ? !practiceAnswerReview.correct
+    : activeTile?.status === "wrong";
   const scoreMarks = result?.sessionTotalMarks ?? session.totalMarks;
   const scoreMax = result?.sessionMaxMarks ?? session.maxMarks;
   const showFormula = q.formulaRelevant;
   const hasSolution = variantChecked
     ? variantCheck?.hasSolution ?? q.hasSolution
-    : result?.hasSolution ?? q.hasSolution;
+    : practiceAnswerReview?.hasSolution ?? q.hasSolution;
   const solutionUrl = variantChecked
     ? variantCheck?.solutionImageUrl
-    : result?.solutionImageUrl;
+    : practiceAnswerReview?.solutionImageUrl || result?.solutionImageUrl;
+  const distinctSolution = q
+    ? hasDistinctSolution(q) || Boolean(solutionUrl?.trim())
+    : false;
 
   const assistantProps = {
     questionId,
     selectedAnswer: selected,
     submitted:
       routeMode === "practice" &&
-      (!!result || feedbackCorrect || feedbackWrong || variantChecked),
+      (practiceRevealed || variantChecked),
     correct: routeMode === "practice"
       ? variantChecked
         ? variantCheck?.correct ?? null
@@ -882,6 +937,10 @@ export default function PracticeQuestionPage() {
     const sessionNo = activeTile?.number ?? session.currentIndex + 1;
     const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
     const variantAnswer = variantCheck?.correctAnswer ?? "";
+    const answerRevealed = practiceRevealed || (variantPreview && variantChecked);
+    const revealedAnswer =
+      practiceAnswerReview?.correctAnswer ??
+      (variantPreview && variantChecked ? variantAnswer : "");
     const goVariant = (qid: string) => {
       if (qid === questionId) return;
       if (isSamePaperQuestion(qid, q)) setContentLoading(true);
@@ -953,14 +1012,11 @@ export default function PracticeQuestionPage() {
               options={q.options ?? []}
               selected={selected}
               onSelect={setSelected}
-              disabled={busy || !!result || (variantPreview && variantChecked)}
-              correctAnswer={variantPreview && variantChecked ? variantAnswer : ""}
-              showCorrect={variantPreview && variantChecked && Boolean(variantAnswer)}
+              disabled={busy || answerRevealed}
+              correctAnswer={revealedAnswer}
+              showCorrect={answerRevealed && Boolean(revealedAnswer)}
               showWrong={
-                variantPreview &&
-                variantChecked &&
-                !!selected &&
-                selected !== variantAnswer
+                answerRevealed && !!selected && !!revealedAnswer && selected !== revealedAnswer
               }
               {...variantMcqProps(q)}
             />
@@ -1010,52 +1066,89 @@ export default function PracticeQuestionPage() {
     );
   }
 
-  function renderPracticeResult(res: SubmitResult) {
+  function renderPracticeInlineFeedback(review: PracticeAnswerReview) {
+    if (!q) return null;
+    const yours = formatAnswerValue(review.selectedAnswer, q);
+    const correct = formatAnswerValue(review.correctAnswer, q);
     return (
       <section
-        className={`practice-run-result practice-run-result--compact glass-card is-revealed${
-          res.correct ? " practice-run-result--correct" : " practice-run-result--wrong"
+        className={`practice-run-result practice-run-result--compact practice-run-result--inline glass-card is-revealed${
+          review.correct ? " practice-run-result--correct" : " practice-run-result--wrong"
         }`}
+        aria-live="polite"
       >
-        <div className="practice-run-result__banner practice-run-result__banner--compact">
-          <span
-            className="material-symbols-outlined practice-run-result__icon"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            {res.correct ? "check_circle" : "cancel"}
+        <div className="practice-run-result__banner practice-run-result__banner--compact practice-run-result__banner--inline">
+          <span className="practice-run-result__icon-wrap" aria-hidden>
+            <span
+              className="material-symbols-outlined practice-run-result__icon"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              {review.correct ? "check_circle" : "cancel"}
+            </span>
           </span>
-          <div>
+          <div className="practice-run-result__content">
             <h2 className="practice-run-result__title">
-              {res.correct ? "Correct" : "Incorrect"}
+              {review.correct ? "Correct!" : "Incorrect"}
             </h2>
-            {!res.correct && (
-              <p className="practice-run-result__answer-line">
-                Correct Answer: {optionLabel(res.correctAnswer)}
-              </p>
-            )}
-            <p className="practice-run-result__delta">{res.correct ? "+4 Marks" : "−1 Mark"}</p>
-            <p className="practice-run-result__score-line">
-              Current Score: {scoreMarks}/{scoreMax}
+            <p className="practice-run-result__delta">{review.correct ? "+4 Marks" : "−1 Mark"}</p>
+            <p className="practice-run-result__answer-line practice-run-result__answer-line--compare">
+              <span>
+                Your answer: <strong>{yours}</strong>
+              </span>
+              <span className="practice-run-result__answer-line-sep" aria-hidden>
+                |
+              </span>
+              <span>
+                Correct answer: <strong>{correct}</strong>
+              </span>
             </p>
           </div>
+          {hasSolution && (
+            <button
+              type="button"
+              className="practice-run-result__action practice-run-result__action--primary"
+              onClick={() => setShowSolution(true)}
+            >
+              <span className="material-symbols-outlined">menu_book</span>
+              View Solution
+            </button>
+          )}
         </div>
+      </section>
+    );
+  }
 
-        {hasSolution && solutionUrl && (
-          <div className="practice-run-solution practice-run-solution--compact">
-            <div className={`practice-run-solution__panel${showSolution ? " is-open" : ""}`}>
-              <img src={imageSrc(solutionUrl)} alt="Solution" draggable={false} />
-            </div>
+  function renderPracticeSolutionPanel() {
+    if (!q || !showSolution || !hasSolution) return null;
+    const imgUrl = solutionUrl?.trim();
+    return (
+      <section className="solve-page__solution glass-card" aria-label="Official solution">
+        <div className="solve-page__solution-head">
+          <span className="material-symbols-outlined">menu_book</span>
+          <h2 className="solve-page__solution-title">Official solution</h2>
+        </div>
+        {imgUrl ? (
+          <div className="practice-run-question__media solve-page__solution-media">
+            <img
+              src={imageSrc(imgUrl)}
+              alt={`Solution for question ${q.questionNo}`}
+              draggable={false}
+            />
           </div>
+        ) : q.solutionDiagramSvg?.trim() ? (
+          <div className="solve-page__solution-text text-mcq-paper">
+            <div
+              className="variant-diagram__svg"
+              dangerouslySetInnerHTML={{ __html: q.solutionDiagramSvg }}
+            />
+          </div>
+        ) : q.solutionTextPreview?.trim() ? (
+          <div className="solve-page__solution-text text-mcq-paper">
+            <AiMarkdown text={q.solutionTextPreview} className="ai-markdown--paper" />
+          </div>
+        ) : (
+          <p className="muted">Solution is marked available but not loaded — try re-syncing the pack.</p>
         )}
-
-        {renderPracticeAnswerActions(res.correct)}
-
-        <QuestionFeedbackPanel
-          questionId={questionId}
-          context="practice"
-          compact
-          className="glass-card"
-        />
       </section>
     );
   }
@@ -1076,51 +1169,23 @@ export default function PracticeQuestionPage() {
     }
   }
 
-  function renderPracticeLockedReview() {
+  function renderPracticeSkippedReview() {
     return (
-      <section
-        className={`practice-run-result practice-run-result--compact glass-card practice-run-result--locked is-revealed${
-          feedbackCorrect ? " practice-run-result--correct" : " practice-run-result--wrong"
-        }`}
-      >
+      <section className="practice-run-result practice-run-result--compact glass-card practice-run-result--locked is-revealed">
         <div className="practice-run-result__banner practice-run-result__banner--compact">
           <span
             className="material-symbols-outlined practice-run-result__icon"
             style={{ fontVariationSettings: "'FILL' 1" }}
           >
-            {feedbackCorrect ? "check_circle" : activeTile?.status === "skipped" ? "skip_next" : "cancel"}
+            skip_next
           </span>
           <div>
-            <h2 className="practice-run-result__title">
-              {feedbackCorrect ? "Correct" : activeTile?.status === "skipped" ? "Skipped" : "Incorrect"}
-            </h2>
-            {feedbackCorrect && (
-              <>
-                <p className="practice-run-result__delta">+4 Marks</p>
-                <p className="practice-run-result__score-line">
-                  Current Score: {scoreMarks}/{scoreMax}
-                </p>
-              </>
-            )}
-            {feedbackWrong && (
-              <>
-                <p className="practice-run-result__answer-line muted">
-                  You already answered this question. Use Explain or Study Mode to review.
-                </p>
-                <p className="practice-run-result__delta">−1 Mark</p>
-                <p className="practice-run-result__score-line">
-                  Current Score: {scoreMarks}/{scoreMax}
-                </p>
-              </>
-            )}
-            {activeTile?.status === "skipped" && (
-              <p className="practice-run-result__score-line">
-                Current Score: {scoreMarks}/{scoreMax}
-              </p>
-            )}
+            <h2 className="practice-run-result__title">Skipped</h2>
+            <p className="practice-run-result__score-line">
+              Current Score: {scoreMarks}/{scoreMax}
+            </p>
           </div>
         </div>
-        {(feedbackCorrect || feedbackWrong) && renderPracticeAnswerActions(!!feedbackCorrect)}
       </section>
     );
   }
@@ -1208,14 +1273,29 @@ export default function PracticeQuestionPage() {
 
     return (
       <>
-        {variantPreview && !variantChecked && (
+        {variantPreview && !variantChecked && !practiceRevealed && (
           <p className="practice-run-variant-preview-hint muted">
             Practice this AI variation with <strong>Check answer</strong>. Switch to{" "}
             <strong>Original</strong> when you&apos;re ready to submit for session marks.
           </p>
         )}
         <div className="solve-page__actions practice-run-submit-row">
-          {variantPreview ? (
+          {practiceRevealed && practiceAnswerReview ? (
+            <button
+              type="button"
+              className={`practice-submit-btn solve-page__check-btn${
+                practiceAnswerReview.correct
+                  ? " practice-run-result--correct"
+                  : " practice-run-result--wrong"
+              }`}
+              disabled
+            >
+              <span className="material-symbols-outlined">
+                {practiceAnswerReview.correct ? "check_circle" : "cancel"}
+              </span>
+              {practiceAnswerReview.correct ? "Correct" : "Incorrect"}
+            </button>
+          ) : variantPreview ? (
             <button
               type="button"
               className="practice-submit-btn solve-page__check-btn practice-run-submit--variant"
@@ -1238,25 +1318,37 @@ export default function PracticeQuestionPage() {
           )}
         </div>
 
-        {routeMode === "practice" && !result && !variantChecked && (
-          <>
-            <QuestionSecondaryActions
-              questionId={questionId}
-              onReport={() => {
-                setFeedbackOpen(true);
-                requestAnimationFrame(() => {
-                  document.getElementById("question-report")?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
+        {routeMode === "practice" && (practiceRevealed || (!result && !variantChecked)) && (
+          <QuestionSecondaryActions
+            questionId={questionId}
+            hasSolution={hasSolution && distinctSolution}
+            solutionAllowed={practiceRevealed || variantChecked}
+            solutionOpen={showSolution}
+            onToggleSolution={
+              practiceRevealed || variantChecked
+                ? () => setShowSolution((v) => !v)
+                : undefined
+            }
+            onReport={() => {
+              setFeedbackOpen(true);
+              requestAnimationFrame(() => {
+                document.getElementById("question-report")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
                 });
-              }}
-            />
-            <p className="solve-page__submit-hint muted">
-              Answer will be revealed after you submit.
-            </p>
-          </>
+              });
+            }}
+          />
         )}
+
+        {!practiceRevealed && !variantChecked && routeMode === "practice" && !result && (
+          <p className="solve-page__submit-hint muted">
+            Answer will be revealed after you submit.
+          </p>
+        )}
+
+        {practiceRevealed && renderPracticeSolutionPanel()}
+        {practiceRevealed && practiceAnswerReview && renderPracticeInlineFeedback(practiceAnswerReview)}
 
         {renderSessionFooterNav("solve-page__footer-nav--desktop")}
         <p className="practice-run-keyboard-hint muted hidden lg:block">
@@ -1267,7 +1359,10 @@ export default function PracticeQuestionPage() {
   }
 
   const showSessionFooter =
-    !questionPending && !result && !testAnswerSaved && !tileLocked && !!session;
+    !questionPending &&
+    !testAnswerSaved &&
+    !!session &&
+    (routeMode === "practice" || (!result && !tileLocked));
 
   return (
     <main className={`practice-run-page practice-run-page--${routeMode}`}>
@@ -1353,19 +1448,19 @@ export default function PracticeQuestionPage() {
               </div>
             </div>
           )}
+          {session.questionTiles && session.questionTiles.length > 0 && (
+            <SessionQuestionNav
+              tiles={session.questionTiles}
+              activeQuestionId={sessionAnchorId}
+              onSelect={goToTile}
+              showMarked={routeMode === "test"}
+              markedIds={session.markedForReviewIds}
+              visitedIds={visitedIds}
+              examMode={isTestActive}
+              hideHeadMeta={routeMode === "practice"}
+            />
+          )}
         </div>
-        {session.questionTiles && session.questionTiles.length > 0 && (
-          <SessionQuestionNav
-            tiles={session.questionTiles}
-            activeQuestionId={sessionAnchorId}
-            onSelect={goToTile}
-            showMarked={routeMode === "test"}
-            markedIds={session.markedForReviewIds}
-            visitedIds={visitedIds}
-            examMode={isTestActive}
-            hideHeadMeta={routeMode === "practice"}
-          />
-        )}
       </header>
 
       <div className={`practice-run-layout${showPracticeAssistant ? " practice-run-layout--result" : ""}`}>
@@ -1387,9 +1482,7 @@ export default function PracticeQuestionPage() {
             </div>
           )}
 
-          {result ? (
-            renderPracticeResult(result)
-          ) : testAnswerSaved ? (
+          {testAnswerSaved ? (
             <>
               {renderQuestionBlock(true)}
               {renderTestRevisitNav()}
@@ -1397,7 +1490,8 @@ export default function PracticeQuestionPage() {
           ) : tileLocked ? (
             <>
               {renderQuestionBlock(false)}
-              {renderPracticeLockedReview()}
+              {renderPracticeSkippedReview()}
+              {!questionPending && renderSessionFooterNav("solve-page__footer-nav--desktop")}
             </>
           ) : (
             <>
@@ -1408,17 +1502,23 @@ export default function PracticeQuestionPage() {
                   <p className="practice-run-options__label">Select one option</p>
                   <div className="practice-run-options__list">
                     {OPTIONS.map((opt) => {
-                      const active = selected === opt.value;
+                      const active =
+                        selected === opt.value ||
+                        practiceAnswerReview?.selectedAnswer === opt.value;
                       const variantAnswer = variantCheck?.correctAnswer ?? "";
-                      const isOptCorrect =
-                        variantPreview && variantChecked && variantAnswer === opt.value;
+                      const answerRevealed =
+                        practiceRevealed || (variantPreview && variantChecked);
+                      const revealedAnswer =
+                        practiceAnswerReview?.correctAnswer ??
+                        (variantPreview && variantChecked ? variantAnswer : "");
+                      const isOptCorrect = answerRevealed && revealedAnswer === opt.value;
                       const isOptWrong =
-                        variantPreview && variantChecked && active && variantAnswer !== opt.value;
+                        answerRevealed && active && revealedAnswer !== opt.value;
                       return (
                         <button
                           key={opt.value}
                           type="button"
-                          disabled={busy || (variantPreview && variantChecked)}
+                          disabled={busy || answerRevealed}
                           onClick={() => setSelected(opt.value)}
                           className={`practice-run-option${active ? " is-selected" : ""}${
                             isOptCorrect ? " is-correct" : ""

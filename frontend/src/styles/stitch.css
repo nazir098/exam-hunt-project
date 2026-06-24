@@ -18,6 +18,7 @@
 .stitch-shell--no-mobile-chrome {
   --app-bottom-h: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   --mobile-tab-bar-h: 0px;
+  --solve-qnav-h: calc(3.65rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 1024px) {

@@ -196,11 +196,9 @@ export default function SessionQuestionNav({
       aria-label="Question navigation"
     >
       <div className="session-qnav__head">
-        {!hideHeadMeta && (
-          <span className="session-qnav__head-label">
-            {resultOverview ? "Question review" : "Questions"}
-          </span>
-        )}
+        <span className="session-qnav__head-label">
+          {resultOverview ? "Question review" : "Questions"}
+        </span>
         {!hideHeadMeta && (
           <span className="session-qnav__head-meta">
             {resultOverview

@@ -1252,7 +1252,21 @@ public class PracticeService {
                 int paperNo = q != null ? q.getQuestionNo() : 0;
                 int variantNo = q != null ? q.getVariantNo() : 0;
                 String sourceType = q != null && q.getSourceType() != null ? q.getSourceType() : "pyq";
-                tiles.add(new SessionQuestionTile(i + 1, qid, status, paperNo, variantNo, sourceType));
+                String selectedAnswer = null;
+                String correctAnswer = null;
+                String solutionImageUrl = null;
+                if (att != null) {
+                    selectedAnswer = att.getSelectedAnswer();
+                    if (q != null) {
+                        correctAnswer = validation.normalize(q.getAnswer());
+                        if (q.isHasSolution()) {
+                            solutionImageUrl = q.getSolutionImageUrl();
+                        }
+                    }
+                }
+                tiles.add(new SessionQuestionTile(
+                        i + 1, qid, status, paperNo, variantNo, sourceType,
+                        selectedAnswer, correctAnswer, solutionImageUrl));
             }
         }
         return new SessionView(
@@ -1300,7 +1314,10 @@ public class PracticeService {
             String status,
             int questionNo,
             int variantNo,
-            String sourceType) {}
+            String sourceType,
+            String selectedAnswer,
+            String correctAnswer,
+            String solutionImageUrl) {}
 
     public record WrongAttemptView(
             String attemptId,

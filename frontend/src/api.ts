@@ -121,6 +121,10 @@ export type SessionQuestionTile = {
   questionNo?: number;
   variantNo?: number;
   sourceType?: string;
+  /** Set when status is correct or wrong (persisted across refresh). */
+  selectedAnswer?: string;
+  correctAnswer?: string;
+  solutionImageUrl?: string;
 };
 
 export type QuestionVariantRef = {
