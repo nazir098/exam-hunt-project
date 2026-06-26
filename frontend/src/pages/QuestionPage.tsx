@@ -16,7 +16,7 @@ import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
 import { familyParentId, isAiVariantQuestionId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
-import { formatVariantTypeLabel } from "../utils/variantLabels";
+import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 
 const OPTIONS = [
   { label: "1", value: "1" },
@@ -43,6 +43,14 @@ function usesTextVariantLayout(q: QuestionDetail) {
 
 function isImageQuestion(q: QuestionDetail) {
   return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
+}
+
+/** PYQ hybrid: show composite crop as diagram only when the question has a figure. */
+function hybridDiagramUrl(q: QuestionDetail) {
+  if (!q.questionImageUrl?.trim()) return "";
+  if (q.sourceType === "ai_variant") return imageSrc(q.questionImageUrl, q.questionId);
+  if (!q.hasDiagram) return "";
+  return imageSrc(q.questionImageUrl, q.questionId);
 }
 
 function optionLabel(value: string) {
@@ -380,12 +388,12 @@ export default function QuestionPage() {
   }
 
   const diff = difficultyLabel(q.difficulty);
-  const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
+  const isVariant = isAiVariantQuestion(q) || variantLoader?.mode === "ai";
   const imageMode = isImageQuestion(q);
 
   return (
-    <main className="solve-page lg:pt-4">
-      <ProductModeBanner mode="solve" compact />
+    <main className={`solve-page lg:pt-4${isVariant ? " solve-page--variant" : ""}`}>
+      <ProductModeBanner mode="solve" compact split={isVariant} />
 
       <div className="solve-page__meta">
         <Link to={backHref()} className="practice-run-header__back solve-page__back">
@@ -407,11 +415,15 @@ export default function QuestionPage() {
             </>
           )}
         </div>
-        <div className="solve-page__meta-chips">
-          <span className="practice-run-chip practice-run-chip--meta">
+        <div className={`solve-page__meta-chips${isVariant ? " solve-page__meta-chips--variant" : ""}`}>
+          <span className="practice-run-chip practice-run-chip--meta practice-run-chip--exam">
             {examDisplayName(q.exam, q.year)} {q.year}
           </span>
-          <span className="practice-run-chip practice-run-chip--meta">{diff}</span>
+          <span
+            className={`practice-run-chip practice-run-chip--meta practice-run-chip--diff practice-run-chip--diff-${diff.toLowerCase()}`}
+          >
+            {diff}
+          </span>
           <span className="practice-run-chip practice-run-chip--meta practice-run-chip--muted">
             {marksLabel(q.difficulty, q.questionNo)}
           </span>
@@ -420,7 +432,11 @@ export default function QuestionPage() {
 
       <div className="practice-run-layout">
         <div className="practice-run-main">
-          <section key={questionId} className="practice-run-question glass-card">
+          <section
+            key={questionId}
+            className={`practice-run-question glass-card${isVariant ? " practice-run-question--variant" : ""}`}
+          >
+            {!isVariant && (
             <div className="practice-run-question__head">
               <div className="practice-run-question__titles">
                 <h1 className="practice-run-question__title">
@@ -430,11 +446,12 @@ export default function QuestionPage() {
                         q.exam,
                         q.questionNo,
                         q.topic || q.chapter,
-                        isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+                        null
                       )}
                 </h1>
               </div>
             </div>
+            )}
 
             {!questionPending && (
               <QuestionVariantSwitcher
@@ -481,8 +498,12 @@ export default function QuestionPage() {
                   matchListA={q.matchListA}
                   matchListB={q.matchListB}
                   questionId={q.questionId}
-                  questionImageUrl={q.questionImageUrl}
+                  questionImageUrl={hybridDiagramUrl(q)}
                   questionDiagramSvg={q.questionDiagramSvg}
+                  variantTheme={isVariant}
+                  variantLabel={
+                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined
+                  }
                 />
               )}
             </div>
@@ -610,7 +631,12 @@ export default function QuestionPage() {
             </section>
           )}
 
-          <footer className="solve-page__footer-nav solve-page__footer-nav--desktop" aria-label="Question navigation">
+          <footer
+            className={`solve-page__footer-nav solve-page__footer-nav--desktop${
+              isVariant ? " solve-page__footer-nav--variant" : ""
+            }`}
+            aria-label="Question navigation"
+          >
             <button
               type="button"
               className="practice-run-nav-btn solve-page__nav-btn"
@@ -620,10 +646,16 @@ export default function QuestionPage() {
               <span className="material-symbols-outlined">arrow_back</span>
               <span className="solve-page__nav-label">Prev</span>
             </button>
-            <span className="solve-page__nav-pos">{navPositionLabel}</span>
+            <span
+              className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}
+            >
+              {navPositionLabel}
+            </span>
             <button
               type="button"
-              className="practice-run-nav-btn solve-page__nav-btn"
+              className={`practice-run-nav-btn solve-page__nav-btn${
+                isVariant ? " solve-page__nav-btn--next" : ""
+              }`}
               disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
               onClick={() => void goToSibling("next")}
             >
@@ -672,7 +704,12 @@ export default function QuestionPage() {
         )}
       </div>
 
-      <footer className="solve-page__footer-nav solve-page__footer-nav--fixed" aria-label="Question navigation">
+      <footer
+        className={`solve-page__footer-nav solve-page__footer-nav--fixed${
+          isVariant ? " solve-page__footer-nav--variant" : ""
+        }`}
+        aria-label="Question navigation"
+      >
         <button
           type="button"
           className="practice-run-nav-btn solve-page__nav-btn"
@@ -682,10 +719,14 @@ export default function QuestionPage() {
           <span className="material-symbols-outlined">arrow_back</span>
           <span className="solve-page__nav-label">Prev</span>
         </button>
-        <span className="solve-page__nav-pos">{navPositionLabel}</span>
+        <span className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}>
+          {navPositionLabel}
+        </span>
         <button
           type="button"
-          className="practice-run-nav-btn solve-page__nav-btn"
+          className={`practice-run-nav-btn solve-page__nav-btn${
+            isVariant ? " solve-page__nav-btn--next" : ""
+          }`}
           disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
           onClick={() => void goToSibling("next")}
         >

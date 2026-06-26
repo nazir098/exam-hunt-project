@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import AiMarkdown from "./AiMarkdown";
+import BookmarkButton from "./BookmarkButton";
 import VariantDiagram from "./VariantDiagram";
-import { needsQuestionPrefix, questionStemBody } from "../utils/variantLabels";
+import { formatVariantTypeLabel, needsQuestionPrefix, questionStemBody, resolveAssertionReasonOptions } from "../utils/variantLabels";
 import {
   listRomanLabel,
   resolveMatchingColumns,
@@ -34,6 +35,9 @@ type Props = {
   questionId?: string;
   questionImageUrl?: string;
   questionDiagramSvg?: string;
+  /** Dark EduMaster-style card for AI variations. */
+  variantTheme?: boolean;
+  variantLabel?: string;
 };
 
 const OPTION_LABELS = ["1", "2", "3", "4"];
@@ -115,8 +119,17 @@ export default function TextMcqQuestion({
   questionId = "",
   questionImageUrl = "",
   questionDiagramSvg = "",
+  variantTheme = false,
+  variantLabel,
 }: Props) {
-  const sorted = [...options].sort((a, b) => Number(a.id) - Number(b.id));
+  const sorted = useMemo(() => {
+    const base = [...options].sort((a, b) => Number(a.id) - Number(b.id));
+    const formatKey = resolveFormat(questionFormat, variantType, assertion, reason, statements, matchListA);
+    if (formatKey === "assertion_reason") {
+      return resolveAssertionReasonOptions(base);
+    }
+    return base;
+  }, [options, questionFormat, variantType, assertion, reason, statements, matchListA]);
   const format = useMemo(
     () => resolveFormat(questionFormat, variantType, assertion, reason, statements, matchListA),
     [questionFormat, variantType, assertion, reason, statements, matchListA]
@@ -163,22 +176,48 @@ export default function TextMcqQuestion({
     [variantType, questionFormat, format]
   );
   const questionBody = useMemo(() => questionStemBody(questionText), [questionText]);
+  const variantCard = variantTheme;
+  const markdownClass = variantCard ? "ai-markdown--variant" : "ai-markdown--paper";
+  const displayVariantLabel = variantLabel ?? formatVariantTypeLabel(variantType);
+  const effectiveLayout = variantCard ? "stacked" : optionsLayout;
+  const effectivePillGrid = variantCard ? false : usePillGrid;
 
   return (
-    <div className={`text-mcq-paper text-mcq-paper--responsive${className ? ` ${className}` : ""}`}>
+    <div
+      className={`text-mcq-paper text-mcq-paper--responsive${
+        variantCard ? " text-mcq-paper--variant" : ""
+      }${className ? ` ${className}` : ""}`}
+    >
+      {variantCard && (
+        <header className="variant-question-card__head">
+          <div className="variant-question-card__head-left">
+            <span className="material-symbols-outlined variant-question-card__sparkle" aria-hidden>
+              auto_awesome
+            </span>
+            <span className="variant-question-card__type">{displayVariantLabel}</span>
+          </div>
+          {questionId ? (
+            <BookmarkButton
+              questionId={questionId}
+              variant="icon"
+              className="variant-question-card__bookmark"
+            />
+          ) : null}
+        </header>
+      )}
       <div className="text-mcq-paper__stem">
         {showAssertionReason ? (
           <div className="variant-stem variant-stem--assertion-reason">
             {assertion && (
               <section className="variant-stem__block">
                 <p className="variant-stem__label">Assertion (A)</p>
-                <AiMarkdown text={assertion} className="ai-markdown--paper" />
+                <AiMarkdown text={assertion} className={markdownClass} />
               </section>
             )}
             {reason && (
               <section className="variant-stem__block">
                 <p className="variant-stem__label">Reason (R)</p>
-                <AiMarkdown text={reason} className="ai-markdown--paper" />
+                <AiMarkdown text={reason} className={markdownClass} />
               </section>
             )}
           </div>
@@ -191,7 +230,7 @@ export default function TextMcqQuestion({
                   <span className="variant-stem__label">
                     {statementLabel(idx, sortedStatements.length)}.
                   </span>
-                  <AiMarkdown text={stmt.text} className="ai-markdown--paper" />
+                  <AiMarkdown text={stmt.text} className={markdownClass} />
                 </li>
               ))}
             </ol>
@@ -200,7 +239,7 @@ export default function TextMcqQuestion({
           <div className="variant-stem variant-stem--matching">
             {matching.intro && (
               <p className="variant-stem__intro">
-                <AiMarkdown text={matching.intro} className="ai-markdown--paper" />
+                <AiMarkdown text={matching.intro} className={markdownClass} />
               </p>
             )}
             <div className="variant-matching-grid">
@@ -210,7 +249,7 @@ export default function TextMcqQuestion({
                   {matching.listA.map((item) => (
                     <li key={item.id} className="variant-matching-col__item">
                       <span className="variant-matching-col__label">{item.id}.</span>
-                      <AiMarkdown text={item.text} className="ai-markdown--paper" />
+                      <AiMarkdown text={item.text} className={markdownClass} />
                     </li>
                   ))}
                 </ol>
@@ -224,7 +263,7 @@ export default function TextMcqQuestion({
                         <span className="variant-matching-col__label">
                           ({listRomanLabel(idx)}).
                         </span>
-                        <AiMarkdown text={item.text} className="ai-markdown--paper" />
+                        <AiMarkdown text={item.text} className={markdownClass} />
                       </li>
                     ))}
                   </ol>
@@ -236,11 +275,11 @@ export default function TextMcqQuestion({
           <div className="variant-stem variant-stem--plain-question">
             <span className="variant-stem__q-marker">Q.</span>
             <div className="variant-stem__question-body">
-              <AiMarkdown text={questionBody} className="ai-markdown--paper" />
+              <AiMarkdown text={questionBody} className={markdownClass} />
             </div>
           </div>
         ) : (
-          <AiMarkdown text={questionText} className="ai-markdown--paper" />
+          <AiMarkdown text={questionText} className={markdownClass} />
         )}
       </div>
 
@@ -253,7 +292,7 @@ export default function TextMcqQuestion({
 
       {sorted.length > 0 ? (
         <ol
-          className={`text-mcq-paper__options text-mcq-paper__options--${optionsLayout}`}
+          className={`text-mcq-paper__options text-mcq-paper__options--${effectiveLayout}`}
           aria-label="Answer options"
         >
           {sorted.map((opt, idx) => {
@@ -263,28 +302,38 @@ export default function TextMcqQuestion({
             const isWrong = showWrong && active && correctAnswer !== opt.id;
             const interactive = !!onSelect && !disabled;
             const formula =
-              (usePillGrid && allShortMath) ||
-              (!usePillGrid &&
-                (optionsLayout === "horizontal" || optionsLayout === "paired") &&
+              (effectivePillGrid && allShortMath) ||
+              (!effectivePillGrid &&
+                (effectiveLayout === "horizontal" || effectiveLayout === "paired") &&
                 optionHasMath(opt.text));
-            const pill = usePillGrid;
+            const pill = effectivePillGrid;
             return (
               <li key={opt.id} className="text-mcq-paper__option-item">
                 <button
                   type="button"
                   className={`text-mcq-paper__option${pill ? " text-mcq-paper__option--pill" : ""}${
                     formula ? " text-mcq-paper__option--formula" : ""
-                  }${optionsLayout === "stacked" ? " text-mcq-paper__option--stacked" : ""}${
-                    active ? " is-selected" : ""
-                  }${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
+                  }${effectiveLayout === "stacked" ? " text-mcq-paper__option--stacked" : ""}${
+                    variantCard ? " text-mcq-paper__option--variant-card" : ""
+                  }${active ? " is-selected" : ""}${isCorrect ? " is-correct" : ""}${
+                    isWrong ? " is-wrong" : ""
+                  }`}
                   disabled={!interactive}
                   aria-pressed={active}
                   onClick={() => onSelect?.(opt.id)}
                 >
                   <span className="text-mcq-paper__option-badge">{label}</span>
                   <span className="text-mcq-paper__option-text">
-                    <AiMarkdown text={opt.text} className="ai-markdown--paper" />
+                    <AiMarkdown text={opt.text} className={markdownClass} />
                   </span>
+                  {variantCard && isCorrect && (
+                    <span
+                      className="text-mcq-paper__option-check material-symbols-outlined"
+                      aria-hidden
+                    >
+                      check_circle
+                    </span>
+                  )}
                 </button>
               </li>
             );

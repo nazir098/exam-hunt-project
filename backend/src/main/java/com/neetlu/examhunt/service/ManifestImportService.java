@@ -777,7 +777,11 @@ public class ManifestImportService {
             solutionText = buildSolutionTextPreview(q);
         }
         doc.setHasSolution(hasSolutionFlag || !solutionUrl.isBlank() || !solutionText.isBlank());
-        doc.setQuestionTextPreview(text(q, "question_text_preview"));
+        String preview = text(q, "question_text_preview");
+        if (preview.isBlank()) {
+            preview = text(q, "question_text");
+        }
+        doc.setQuestionTextPreview(sanitize(preview));
         doc.setSolutionTextPreview(solutionText);
         doc.setHints(readHintsList(q.path("hints")));
         doc.setOptions(readMcqOptions(q.path("options")));
@@ -787,6 +791,7 @@ public class ManifestImportService {
         doc.setPracticePattern(text(q, "practice_pattern"));
         doc.setSourceType("pyq");
         doc.setVariantNo(0);
+        applyVariantFormatFields(doc, q, sourceFolder);
         return doc;
     }
 

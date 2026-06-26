@@ -5,6 +5,8 @@ type Props = {
   compact?: boolean;
   /** Slim pill for sticky headers — minimal vertical space. */
   inline?: boolean;
+  /** Study mode: twin green pills (Study mode + No rank pressure). */
+  split?: boolean;
 };
 
 const INLINE_ICONS: Record<ProductMode, string> = {
@@ -25,8 +27,27 @@ const INLINE_HINTS: Record<ProductMode, string> = {
   test: "exam simulation",
 };
 
-export default function ProductModeBanner({ mode, compact, inline }: Props) {
+export default function ProductModeBanner({ mode, compact, inline, split }: Props) {
   const meta = MODES[mode];
+
+  if (split && mode === "solve") {
+    return (
+      <div className="product-mode-banner-twin" role="group" aria-label="Study mode">
+        <span className="product-mode-badge product-mode-badge--study">
+          <span className="material-symbols-outlined" aria-hidden>
+            menu_book
+          </span>
+          Study mode
+        </span>
+        <span className="product-mode-badge product-mode-badge--calm">
+          <span className="material-symbols-outlined" aria-hidden>
+            shield
+          </span>
+          No rank pressure
+        </span>
+      </div>
+    );
+  }
 
   if (inline) {
     return (

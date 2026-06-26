@@ -6316,6 +6316,12 @@ a.nav-tip {
   overflow: hidden;
 }
 
+.practice-run-question--variant .practice-run-question__media--variant-generating,
+.practice-run-question--variant .practice-run-question__media--variant-loading {
+  background: rgba(10, 10, 20, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 .variant-plain-loader {
   flex: 1;
   display: flex;
@@ -6324,6 +6330,11 @@ a.nav-tip {
   min-height: 14rem;
   border-radius: 0.85rem;
   background: #fafafa;
+}
+
+.practice-run-question--variant .variant-plain-loader {
+  background: rgba(12, 12, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Gemini-style LLM fetch skeleton while a variation loads */
@@ -6338,6 +6349,59 @@ a.nav-tip {
   background-size: 200% 200%;
   animation: variant-llm-bg-breathe 2.4s ease-in-out infinite;
   overflow: hidden;
+}
+
+.practice-run-question--variant .variant-llm-loader {
+  background: linear-gradient(145deg, rgba(18, 18, 32, 0.95) 0%, rgba(24, 22, 40, 0.92) 48%, rgba(18, 18, 32, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.practice-run-page .practice-run-question__media--variant-generating,
+.practice-run-page .practice-run-question__media--variant-loading,
+.solve-page .practice-run-question__media--variant-generating,
+.solve-page .practice-run-question__media--variant-loading {
+  background: rgba(10, 10, 20, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.practice-run-page .variant-llm-loader,
+.solve-page .variant-llm-loader {
+  background: linear-gradient(145deg, rgba(18, 18, 32, 0.95) 0%, rgba(24, 22, 40, 0.92) 48%, rgba(18, 18, 32, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.practice-run-page .variant-plain-loader,
+.solve-page .variant-plain-loader {
+  background: rgba(12, 12, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.practice-run-page .variant-llm-loader__status,
+.solve-page .variant-llm-loader__status {
+  background: linear-gradient(90deg, #7c7a9a 0%, #e9d5ff 35%, #c4b5fd 70%, #e9d5ff 100%);
+  background-size: 220% auto;
+}
+
+.practice-run-page .variant-llm-loader__shimmer,
+.solve-page .variant-llm-loader__shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.12) 45%,
+    rgba(124, 58, 237, 0.2) 55%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+}
+
+.practice-run-page .variant-llm-loader__chip,
+.solve-page .variant-llm-loader__chip {
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.1) 40%,
+    rgba(124, 58, 237, 0.16) 52%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
 }
 
 .variant-llm-loader__glow {
@@ -6518,6 +6582,180 @@ a.nav-tip {
   max-width: 42rem;
   margin-inline: auto;
   box-sizing: border-box;
+}
+
+/* AI variation — dark EduMaster-style question card */
+.text-mcq-paper--variant {
+  background: rgba(22, 22, 38, 0.92);
+  color: #f0eeff;
+  border-radius: 1rem;
+  padding: 1rem 1rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  max-width: 100%;
+}
+
+.variant-question-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.variant-question-card__head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.variant-question-card__sparkle {
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  color: #c4b5fd;
+}
+
+.variant-question-card__type {
+  font-family: Sora, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #dcb8ff;
+  letter-spacing: 0.01em;
+}
+
+.variant-question-card__bookmark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: #9a98b8;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.variant-question-card__bookmark:hover {
+  color: #e2e0fc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.text-mcq-paper--variant .text-mcq-paper__stem {
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.62;
+  color: #f3f1ff;
+  margin-bottom: 1rem;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
+.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p {
+  color: #f3f1ff;
+}
+
+.text-mcq-paper--variant .variant-stem__q-marker {
+  color: #e9d5ff;
+  background: rgba(124, 58, 237, 0.22);
+  border-color: rgba(196, 181, 253, 0.35);
+}
+
+.text-mcq-paper--variant .variant-stem__question-body .ai-markdown,
+.text-mcq-paper--variant .variant-stem__question-body .ai-markdown p {
+  color: #f3f1ff;
+}
+
+.text-mcq-paper--variant .variant-stem__block {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.text-mcq-paper--variant .variant-stem__label {
+  color: #9a98b8;
+}
+
+.text-mcq-paper--variant .variant-stem__statement-list .variant-stem__label {
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.text-mcq-paper--variant .variant-stem__intro.muted {
+  color: #9a98b8;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__options--stacked {
+  gap: 0.55rem;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card {
+  align-items: center;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 22, 0.65);
+  color: #f0eeff;
+  gap: 0.7rem;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card:hover:not(:disabled) {
+  border-color: rgba(196, 181, 253, 0.35);
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-badge {
+  width: 1.85rem;
+  height: 1.85rem;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: #d4d2f0;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected {
+  border-color: rgba(124, 58, 237, 0.55);
+  background: rgba(124, 58, 237, 0.12);
+  box-shadow: none;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected .text-mcq-paper__option-badge {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-correct {
+  border-color: rgba(78, 222, 163, 0.65);
+  background: rgba(78, 222, 163, 0.08);
+  box-shadow: 0 0 0 1px rgba(78, 222, 163, 0.15);
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-correct .text-mcq-paper__option-badge {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-wrong {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-wrong .text-mcq-paper__option-badge {
+  background: #dc2626;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text {
+  color: #f0eeff;
+  font-weight: 500;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option-check {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 1.35rem;
+  color: #4edea3;
+  font-variation-settings: "FILL" 1;
 }
 
 .text-mcq-paper__stem {
@@ -7128,6 +7366,52 @@ a.nav-tip {
   font-size: 0.9rem;
 }
 
+/* Dark-surface markdown — AI variant cards on practice */
+.ai-markdown--variant {
+  font-size: 0.94rem;
+  line-height: 1.58;
+  color: #f0eeff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.ai-markdown--variant,
+.ai-markdown--variant p,
+.ai-markdown--variant li,
+.ai-markdown--variant span,
+.ai-markdown--variant strong {
+  color: #f0eeff !important;
+}
+
+.ai-markdown--variant strong {
+  font-weight: 700;
+}
+
+.ai-markdown--variant h3 {
+  color: #e9d5ff !important;
+  font-weight: 700;
+}
+
+.ai-markdown--variant .katex,
+.ai-markdown--variant .katex * {
+  color: #f0eeff !important;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown p,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown li,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown span,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown strong,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown .katex,
+.text-mcq-paper--variant .text-mcq-paper__option-text .ai-markdown .katex * {
+  color: #f0eeff !important;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__empty-options {
+  color: #9a98b8;
+}
+
 .text-mcq-paper__empty-options {
   margin: 0.75rem 0 0;
   font-size: 0.82rem;
@@ -7182,6 +7466,16 @@ a.nav-tip {
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.06);
   box-sizing: border-box;
+}
+
+.practice-run-question--variant .practice-run-question__media {
+  background: rgba(10, 10, 20, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  padding: 0.35rem;
+}
+
+.practice-run-question--variant .practice-run-question__media .text-mcq-paper--variant {
+  box-shadow: none;
 }
 
 .practice-run-question__media .text-mcq-paper {
@@ -8638,6 +8932,26 @@ a.nav-tip {
   opacity: 0.75;
 }
 
+.study-assistant__tab.is-unavailable {
+  opacity: 0.72;
+}
+
+.study-assistant__tab.is-unavailable:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.study-assistant__unavailable-banner {
+  margin: 0 0.75rem 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 193, 7, 0.22);
+  background: rgba(255, 193, 7, 0.08);
+  color: rgba(255, 236, 179, 0.92);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .study-assistant__panel {
   max-height: 0;
   opacity: 0;
@@ -8856,6 +9170,12 @@ html.fonts-loading .material-symbols-outlined::after {
 
 .practice-run-question-skeleton {
   min-height: 14rem;
+  background: rgba(12, 12, 24, 0.45);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.practice-run-page--practice .content-loader-panel.practice-run-question-skeleton {
+  background: rgba(12, 12, 24, 0.45);
 }
 
 .bank-search-results-hint {
@@ -12900,6 +13220,87 @@ html.fonts-loading .material-symbols-outlined::after {
 }
 
 /* ── Product modes (Solve / Practice / Test) ── */
+
+.product-mode-banner-twin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.product-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.product-mode-badge .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+.product-mode-badge--study {
+  color: #4edea3;
+  border: 1px solid rgba(78, 222, 163, 0.45);
+  background: rgba(78, 222, 163, 0.08);
+}
+
+.product-mode-badge--calm {
+  color: #4edea3;
+  border: 1px solid rgba(78, 222, 163, 0.35);
+  background: rgba(78, 222, 163, 0.05);
+}
+
+.solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--exam {
+  color: #c4b5fd;
+}
+
+.solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--diff-easy {
+  color: #4edea3;
+}
+
+.solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--diff-medium {
+  color: #fbbf24;
+}
+
+.solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--diff-hard {
+  color: #fb923c;
+}
+
+.solve-page__footer-nav--variant .solve-page__nav-pos--disc {
+  min-width: 2.35rem;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #e2e0fc;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.solve-page__footer-nav--variant .solve-page__nav-btn--next {
+  border-color: rgba(168, 85, 247, 0.55);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.55), rgba(168, 85, 247, 0.38));
+  color: #f3e8ff;
+}
+
+.solve-page__footer-nav--variant .solve-page__nav-btn--next:hover:not(:disabled) {
+  border-color: rgba(196, 181, 253, 0.75);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.68), rgba(168, 85, 247, 0.48));
+}
 
 .product-mode-banner {
   display: flex;

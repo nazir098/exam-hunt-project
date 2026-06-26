@@ -148,6 +148,10 @@ export default function PracticeStudyAssistant({
   const { settings, loading: settingsLoading } = usePlatformSettings();
   const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
 
+  const unavailableMessage = !settings.aiLlmConfigured
+    ? "AI hints need the LLM service (OPENAI_API_KEY + FreeLLMAPI). Official solutions still work below."
+    : "AI hints are turned off in platform settings. Official solutions still work below.";
+
   const tabs = useMemo(
     () => buildTabs(formulaRelevant, submitted, correct),
     [formulaRelevant, submitted, correct]
@@ -224,6 +228,11 @@ export default function PracticeStudyAssistant({
       setActiveTab(feature);
       setCollapsed(false);
       setPanelOpen(true);
+      if (!available) {
+        setError(unavailableMessage);
+        setStreamComplete(true);
+        return;
+      }
       if (feature !== "hint") {
         setHintStep(1);
         setSolutionRevealed(false);
@@ -260,7 +269,7 @@ export default function PracticeStudyAssistant({
         setBusy(null);
       }
     },
-    [user, results, statusOk, checkStatus, questionId, submitted, selectedAnswer]
+    [user, results, statusOk, checkStatus, questionId, submitted, selectedAnswer, available, unavailableMessage]
   );
 
   const revealNextHint = useCallback(() => {
@@ -341,22 +350,24 @@ export default function PracticeStudyAssistant({
 
   const renderTab = (tab: TabDef) => {
     const isActive = activeTab === tab.id && panelOpen;
-    const isLoading = busy === tab.id;
+    const isLoading = available && busy === tab.id;
     return (
       <button
         key={`${tab.id}-${tab.short}-${tab.tier}`}
         type="button"
         role="tab"
         aria-selected={isActive}
+        aria-disabled={!available}
         className={[
           "study-assistant__tab",
           tab.tier === "primary" ? "study-assistant__tab--primary" : "study-assistant__tab--secondary",
           isActive ? "is-active" : "",
           isLoading ? "is-loading" : "",
+          !available ? "is-unavailable" : "",
         ]
           .filter(Boolean)
           .join(" ")}
-        onClick={() => runTab(tab.id)}
+        onClick={() => void runTab(tab.id)}
       >
         <span className="material-symbols-outlined">{tab.icon}</span>
         <span>{tab.short}</span>
@@ -450,55 +461,6 @@ export default function PracticeStudyAssistant({
     );
   }
 
-  if (!available) {
-    return (
-      <aside className={`study-assistant study-assistant--off study-assistant--${layout}`}>
-        <div className="study-assistant__head">
-          <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
-          <h3 className="study-assistant__title">AI Study Assistant</h3>
-        </div>
-        {hasSolution ? (
-          <div className="study-assistant__content study-assistant__content--solution-only">
-            {canRevealOfficialSolution && !solutionRevealed ? (
-              <button
-                type="button"
-                className="study-assistant__show-solution"
-                disabled={solutionBusy}
-                onClick={() => void revealFullSolution()}
-              >
-                <span className="material-symbols-outlined">menu_book</span>
-                {solutionBusy ? "Loading solution…" : "Show official solution"}
-              </button>
-            ) : !canRevealOfficialSolution ? (
-              <p className="study-assistant__off-text study-assistant__off-text--muted">
-                Official solution unlocks after you check or submit your answer.
-              </p>
-            ) : null}
-            {canRevealOfficialSolution ? renderOfficialSolution(true) : null}
-            <p className="study-assistant__off-text study-assistant__off-text--muted">
-              {!settings.aiLlmConfigured
-                ? "AI hints need FreeLLMAPI — official paper solutions still work."
-                : "AI hints are off in settings — official paper solutions still work."}
-            </p>
-          </div>
-        ) : (
-          <p className="study-assistant__off-text">
-            {!settings.aiLlmConfigured ? (
-              <>
-                Set a FreeLLMAPI <strong>client</strong> key as <code>OPENAI_API_KEY</code> on the exam-hunt
-                backend and point <code>OPENAI_BASE_URL</code> at your router (e.g.{" "}
-                <code>https://freellmapi-t1pm.onrender.com/v1</code>), then restart the API. Provider keys
-                (Groq, Cerebras, etc.) belong on the FreeLLMAPI service only.
-              </>
-            ) : (
-              <>AI practice is turned off in platform settings.</>
-            )}
-          </p>
-        )}
-      </aside>
-    );
-  }
-
   if (!user) {
     return (
       <aside className={`study-assistant study-assistant--${layout}`}>
@@ -573,11 +535,14 @@ export default function PracticeStudyAssistant({
       </button>
 
       <div className="study-assistant__collapsible">
+      {!available && (
+        <p className="study-assistant__unavailable-banner">{unavailableMessage}</p>
+      )}
       <div className="study-assistant__tabs" role="tablist" aria-label="AI study tools">
         <div className="study-assistant__tabs-row study-assistant__tabs-row--uniform">
           {tabs.map((tab) => renderTab({ ...tab, tier: "primary" }))}
         </div>
-        {directSolutionReveal && canRevealOfficialSolution && hasSolution && !solutionRevealed && (
+        {canRevealOfficialSolution && hasSolution && !solutionRevealed && (
           <button
             type="button"
             className="study-assistant__show-solution study-assistant__show-solution--toolbar"
@@ -590,7 +555,7 @@ export default function PracticeStudyAssistant({
         )}
       </div>
 
-      {directSolutionReveal && canRevealOfficialSolution && solutionRevealed && (solutionText || solutionImageUrl) && (
+      {canRevealOfficialSolution && solutionRevealed && (solutionText || solutionImageUrl) && (
         <div className="study-assistant__solution-standalone">{renderOfficialSolution(true)}</div>
       )}
 

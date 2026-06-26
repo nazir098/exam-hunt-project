@@ -16,6 +16,7 @@ import TextMcqQuestion from "../components/TextMcqQuestion";
 import ZoomableImage from "../components/ZoomableImage";
 import { practiceReviewRoute, sessionResultRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
+import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 
 function imageSrc(url: string, questionId?: string) {
   if (!url) return "";
@@ -42,6 +43,7 @@ function isImageQuestion(q: PracticeQuestion) {
 }
 
 function variantMcqProps(q: PracticeQuestion) {
+  const isVariant = isAiVariantQuestion(q);
   return {
     questionFormat: q.questionFormat,
     variantType: q.variantType,
@@ -53,6 +55,8 @@ function variantMcqProps(q: PracticeQuestion) {
     questionId: q.questionId,
     questionImageUrl: q.questionImageUrl,
     questionDiagramSvg: q.questionDiagramSvg,
+    variantTheme: isVariant,
+    variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
   };
 }
 

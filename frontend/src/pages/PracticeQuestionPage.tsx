@@ -34,7 +34,7 @@ import SessionTimer from "../components/SessionTimer";
 import { useSessionEngagement } from "../hooks/useSessionEngagement";
 import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName, questionHeadingTitle } from "../utils/labels";
-import { formatVariantTypeLabel } from "../utils/variantLabels";
+import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 import { hasDistinctSolution } from "../utils/questionSolution";
 
@@ -64,7 +64,15 @@ function isImageQuestion(q: PracticeQuestion) {
   return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
 }
 
+function hybridDiagramUrl(q: PracticeQuestion) {
+  if (!q.questionImageUrl?.trim()) return "";
+  if (q.sourceType === "ai_variant") return imageSrc(q.questionImageUrl);
+  if (!q.hasDiagram) return "";
+  return imageSrc(q.questionImageUrl);
+}
+
 function variantMcqProps(q: PracticeQuestion) {
+  const isVariant = isAiVariantQuestion(q);
   return {
     questionFormat: q.questionFormat,
     variantType: q.variantType,
@@ -74,8 +82,10 @@ function variantMcqProps(q: PracticeQuestion) {
     matchListA: q.matchListA,
     matchListB: q.matchListB,
     questionId: q.questionId,
-    questionImageUrl: q.questionImageUrl,
+    questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
+    variantTheme: isVariant,
+    variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
   };
 }
 
@@ -678,11 +688,19 @@ export default function PracticeQuestionPage() {
     return sessionAnchorQuestionId(question, routeId) === routeId;
   }
 
-  const questionPending = contentLoading || !questionMatchesRoute(q, questionId);
+  const samePaperSwitchPending =
+    Boolean(q) && isSamePaperQuestion(questionId, q) && (contentLoading || q!.questionId !== questionId);
+
+  const questionShellPending =
+    !q ||
+    (!samePaperSwitchPending && (contentLoading || !questionMatchesRoute(q, questionId)));
+
+  const questionContentReady =
+    Boolean(q) && q!.questionId === questionId && questionMatchesRoute(q, questionId);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (busy || pageLoading || questionPending) return;
+      if (busy || pageLoading || !questionContentReady) return;
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
 
@@ -723,7 +741,7 @@ export default function PracticeQuestionPage() {
     sessionPath,
     routeMode,
     result,
-    questionPending,
+    questionContentReady,
   ]);
 
   const isMarked =
@@ -883,7 +901,8 @@ export default function PracticeQuestionPage() {
     routeMode === "practice" && session.status === "active" && isLastQuestion;
   const showPracticeAssistant =
     routeMode === "practice" && (practiceRevealed || variantChecked);
-  const showAssistantPanel = (routeMode === "practice" || isTestActive) && !questionPending;
+  const showAssistantPanel =
+    (routeMode === "practice" || isTestActive) && questionContentReady;
   const feedbackCorrect = practiceAnswerReview
     ? practiceAnswerReview.correct
     : activeTile?.status === "correct";
@@ -1012,24 +1031,26 @@ export default function PracticeQuestionPage() {
   function renderQuestionBlock(includeMarkReview = false) {
     if (!q || !session) return null;
     const sessionNo = activeTile?.number ?? session.currentIndex + 1;
-    const isVariant = q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
+    const goVariant = (qid: string) => {
+      if (qid === questionId) return;
+      if (isSamePaperQuestion(qid, q)) setContentLoading(true);
+      navigate(sessionPath(sessionId, qid));
+    };
+    const switchLoader = samePaperSwitchPending
+      ? variantSwitchLoaderForTarget(questionId, family)
+      : null;
+    const mediaLoading = Boolean(switchLoader);
+    const isVariant = isAiVariantQuestion(q) || switchLoader?.mode === "ai";
     const variantAnswer = variantCheck?.correctAnswer ?? "";
     const answerRevealed = practiceRevealed || (variantPreview && variantChecked);
     const revealedAnswer =
       practiceAnswerReview?.correctAnswer ??
       (variantPreview && variantChecked ? variantAnswer : "");
-    const goVariant = (qid: string) => {
-      if (qid === questionId) return;
-      if (isSamePaperQuestion(qid, q)) setContentLoading(true);
-      void loadQuestionById(qid, { prefetch: true });
-      navigate(sessionPath(sessionId, qid));
-    };
-    const pendingVariantSwitch =
-      questionPending && isSamePaperQuestion(questionId, q)
-        ? variantSwitchLoaderForTarget(questionId, family)
-        : null;
     return (
-      <section key={questionId} className="practice-run-question glass-card">
+      <section
+        key={questionId}
+        className={`practice-run-question glass-card${isVariant ? " practice-run-question--variant" : ""}`}
+      >
         {(routeMode !== "practice" || includeMarkReview) && (
           <div className="practice-run-question__head">
             {routeMode !== "practice" && (
@@ -1060,16 +1081,16 @@ export default function PracticeQuestionPage() {
         )}
         <div
           className={`practice-run-question__media${
-            questionPending
-              ? pendingVariantSwitch?.mode === "ai"
+            mediaLoading
+              ? switchLoader?.mode === "ai"
                 ? " practice-run-question__media--variant-generating"
                 : " practice-run-question__media--variant-loading"
               : ""
           }`}
         >
-          {questionPending ? (
-            pendingVariantSwitch?.mode === "ai" ? (
-              <VariantSwitchLoader mode={pendingVariantSwitch.mode} label={pendingVariantSwitch.label} />
+          {mediaLoading ? (
+            switchLoader?.mode === "ai" ? (
+              <VariantSwitchLoader mode={switchLoader.mode} label={switchLoader.label} />
             ) : (
               <AppLoader
                 variant="compact"
@@ -1436,7 +1457,7 @@ export default function PracticeQuestionPage() {
   }
 
   const showSessionFooter =
-    !questionPending &&
+    questionContentReady &&
     !testAnswerSaved &&
     !!session &&
     (routeMode === "practice" || (!result && !tileLocked));
@@ -1553,7 +1574,7 @@ export default function PracticeQuestionPage() {
 
       <div className={`practice-run-layout${showPracticeAssistant ? " practice-run-layout--result" : ""}`}>
         <div className="practice-run-main practice-run-main--busy-host">
-          {routeMode !== "test" && !questionPending && (
+          {routeMode !== "test" && questionContentReady && (
             <div className="practice-run-meta">
               <span className="practice-run-chip">{examDisplayName(q.exam, q.year)} {q.year}</span>
               <span className="practice-run-chip practice-run-chip--paper">
@@ -1571,7 +1592,7 @@ export default function PracticeQuestionPage() {
           )}
 
           {testAnswerSaved ? (
-            questionPending ? (
+            questionShellPending ? (
               renderQuestionLoadingShell()
             ) : (
               <>
@@ -1580,7 +1601,7 @@ export default function PracticeQuestionPage() {
               </>
             )
           ) : tileLocked ? (
-            questionPending ? (
+            questionShellPending ? (
               renderQuestionLoadingShell()
             ) : (
               <>
@@ -1589,13 +1610,13 @@ export default function PracticeQuestionPage() {
                 {renderSessionFooterNav("solve-page__footer-nav--desktop")}
               </>
             )
-          ) : questionPending ? (
+          ) : questionShellPending && !samePaperSwitchPending ? (
             renderQuestionLoadingShell()
           ) : (
             <>
               {renderQuestionBlock(isTestActive)}
 
-              {isImageQuestion(q) && (
+              {questionContentReady && isImageQuestion(q) && (
                 <section className="practice-run-options" aria-label="Answer options">
                   <p className="practice-run-options__label">Select one option</p>
                   <div className="practice-run-options__list">
@@ -1634,8 +1655,8 @@ export default function PracticeQuestionPage() {
 
               {error && <p className="practice-run-error">{error}</p>}
 
-              {renderQuestionNavRow()}
-              {renderVariantPracticeResult()}
+              {questionContentReady && renderQuestionNavRow()}
+              {questionContentReady && renderVariantPracticeResult()}
             </>
           )}
 

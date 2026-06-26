@@ -8,6 +8,13 @@ const VARIANT_TYPE_LABELS: Record<string, string> = {
   mcq: "MCQ variation",
 };
 
+export function isAiVariantQuestion(q: {
+  sourceType?: string | null;
+  variantNo?: number | null;
+}): boolean {
+  return q.sourceType === "ai_variant" && (q.variantNo ?? 0) > 0;
+}
+
 export function formatVariantTypeLabel(variantType?: string | null, variantNo?: number): string {
   const raw = (variantType ?? "").trim().toLowerCase().replace(/\s+/g, "_");
   if (raw && VARIANT_TYPE_LABELS[raw]) {
@@ -17,6 +24,35 @@ export function formatVariantTypeLabel(variantType?: string | null, variantNo?: 
     return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
   return variantNo ? `Variation ${variantNo}` : "AI variation";
+}
+
+/** Standard NEET assertion–reason answer choices when option text is missing from sync. */
+export const ASSERTION_REASON_STANDARD_OPTIONS: { id: string; text: string }[] = [
+  {
+    id: "1",
+    text: "Both Assertion (A) and Reason (R) are true and Reason (R) is the correct explanation of Assertion (A).",
+  },
+  {
+    id: "2",
+    text: "Both Assertion (A) and Reason (R) are true, but Reason (R) is **not** the correct explanation of Assertion (A).",
+  },
+  { id: "3", text: "Assertion (A) is true, but Reason (R) is false." },
+  { id: "4", text: "Assertion (A) is false, but Reason (R) is true." },
+];
+
+export function resolveAssertionReasonOptions(
+  options: { id: string; text: string }[]
+): { id: string; text: string }[] {
+  const std = ASSERTION_REASON_STANDARD_OPTIONS;
+  if (!options.length) return std;
+  const merged = options.map((opt, idx) => {
+    const text = opt.text?.trim();
+    if (text) return opt;
+    const fallback = std.find((s) => s.id === opt.id) ?? std[idx];
+    return fallback ? { ...opt, text: fallback.text } : opt;
+  });
+  if (merged.every((o) => !o.text?.trim())) return std;
+  return merged;
 }
 
 export type VariantSwitchMode = "ai" | "normal";

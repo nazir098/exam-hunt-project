@@ -1,6 +1,6 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { PackSummary, PracticeSessionView, ProgressSummary } from "../api";
-import { STITCH_ANALYTICS_HERO } from "../design/stitchAssets";
 import {
   resumePrimaryLabel,
   sessionAnsweredCount,
@@ -9,6 +9,7 @@ import {
   sessionProgressPercent,
   sessionResumeUrl,
 } from "../utils/practiceHub";
+import { pickDashboardHeroImageForVisit } from "../utils/dashboardHeroImage";
 import { primaryWeakChapter, weakChapterPracticeUrl } from "../utils/weakChapters";
 
 type Props = {
@@ -28,6 +29,7 @@ export default function DashboardResumeHero({ name, topTier, session, packs, pro
   const focusLine = session ? sessionFocusLine(session) : null;
   const progressPct = session ? sessionProgressPercent(session) : 0;
   const questionNo = session ? session.currentIndex + 1 : 0;
+  const heroImage = useMemo(() => pickDashboardHeroImageForVisit(name), [name]);
 
   return (
     <section className="dashboard-hero glass-card">
@@ -159,7 +161,12 @@ export default function DashboardResumeHero({ name, topTier, session, packs, pro
 
       <div className="dashboard-hero__visual dashboard-hero__visual--hero-resume">
         <div className="dashboard-hero__image-wrap">
-          <img alt="" className="dashboard-hero__image" src={STITCH_ANALYTICS_HERO} />
+          <img
+            alt=""
+            className="dashboard-hero__image"
+            src={heroImage.src}
+            key={heroImage.src}
+          />
           <div className="dashboard-hero__image-fade" aria-hidden />
         </div>
       </div>
