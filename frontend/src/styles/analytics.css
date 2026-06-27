@@ -5488,6 +5488,62 @@ a.nav-tip {
   padding: 0 1rem 2rem;
 }
 
+.practice-run-page--session-ended .practice-run-header,
+.practice-run-page--session-ended .practice-run-layout,
+.practice-run-page--session-ended .solve-page__mobile-rail {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.45;
+}
+
+.session-expired-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(6, 8, 18, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.session-expired-dialog__panel {
+  width: min(22rem, 100%);
+  padding: 1.5rem 1.35rem 1.35rem;
+  text-align: center;
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.session-expired-dialog__icon {
+  display: block;
+  margin: 0 auto 0.65rem;
+  font-size: 2rem;
+  color: #fbbf24;
+}
+
+.session-expired-dialog__title {
+  margin: 0 0 0.55rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.session-expired-dialog__message {
+  margin: 0 0 1.15rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.session-expired-dialog__cta {
+  width: 100%;
+  justify-content: center;
+}
+
 @media (max-width: 1023px) {
   .practice-run-page--practice {
     padding-bottom: calc(var(--mobile-tab-bar-h) + var(--solve-qnav-h) + 0.35rem);
@@ -5603,6 +5659,18 @@ a.nav-tip {
     padding: 0.65rem 0.75rem 0.75rem;
     margin-bottom: 0.5rem;
     border-radius: 0.85rem;
+  }
+
+  .practice-run-page--practice .practice-run-question--variant {
+    padding: 0.55rem 0.55rem 0.65rem;
+  }
+
+  .practice-run-page--practice .practice-run-question--variant .practice-run-question__media {
+    padding: 0.15rem 0;
+  }
+
+  .practice-run-page--practice .text-mcq-paper--variant {
+    padding: 0.75rem 0.8rem 0.85rem;
   }
 
   .practice-run-page--practice .question-variant-switcher {
@@ -6593,6 +6661,72 @@ a.nav-tip {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   max-width: 100%;
+  container-type: normal;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__stem,
+.text-mcq-paper--variant .variant-stem {
+  width: 100%;
+  max-width: 100%;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__stem {
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.62;
+  color: #f3f1ff;
+  margin-bottom: 1rem;
+}
+
+.text-mcq-paper--variant .variant-stem__question-body .ai-markdown {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.text-mcq-paper--variant .variant-stem__question-body .ai-markdown p {
+  width: 100%;
+  max-width: 100%;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
+.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p,
+.text-mcq-paper--variant .variant-stem__block .ai-markdown,
+.text-mcq-paper--variant .variant-stem__block .ai-markdown p,
+.text-mcq-paper--variant .variant-stem__intro .ai-markdown,
+.text-mcq-paper--variant .variant-stem__intro .ai-markdown p,
+.text-mcq-paper--variant .variant-matching-col__item .ai-markdown,
+.text-mcq-paper--variant .variant-matching-col__item .ai-markdown p {
+  color: #f3f1ff;
+  text-align: justify;
+  text-justify: inter-word;
+  text-align-last: left;
+  hyphens: auto;
+}
+
+@media (min-width: 1024px) {
+  .text-mcq-paper--variant .text-mcq-paper__stem {
+    font-size: 1.12rem;
+    line-height: 1.68;
+  }
+
+  .text-mcq-paper--variant .ai-markdown--variant,
+  .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
+  .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p {
+    font-size: 1.06rem;
+    line-height: 1.68;
+  }
+
+  .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text,
+  .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown,
+  .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown p {
+    font-size: 1.04rem;
+    line-height: 1.62;
+  }
 }
 
 .variant-question-card__head {
@@ -6643,19 +6777,6 @@ a.nav-tip {
 .variant-question-card__bookmark:hover {
   color: #e2e0fc;
   background: rgba(255, 255, 255, 0.06);
-}
-
-.text-mcq-paper--variant .text-mcq-paper__stem {
-  font-size: 0.98rem;
-  font-weight: 500;
-  line-height: 1.62;
-  color: #f3f1ff;
-  margin-bottom: 1rem;
-}
-
-.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
-.text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p {
-  color: #f3f1ff;
 }
 
 .text-mcq-paper--variant .variant-stem__q-marker {
@@ -7369,7 +7490,7 @@ a.nav-tip {
 /* Dark-surface markdown — AI variant cards on practice */
 .ai-markdown--variant {
   font-size: 0.94rem;
-  line-height: 1.58;
+  line-height: 1.62;
   color: #f0eeff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -8098,6 +8219,26 @@ a.nav-tip {
   justify-content: space-between;
   gap: 0.55rem;
   margin-top: 1rem;
+}
+
+.solve-page__nav-hint {
+  margin: 0.35rem 0 0;
+  padding: 0 0.15rem;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+@media (max-width: 1023px) {
+  .solve-page__nav-hint {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--mobile-tab-bar-h, 4.25rem) + var(--solve-qnav-h, 3.65rem) - 0.15rem);
+    z-index: 44;
+    margin: 0;
+    padding: 0 1rem;
+    pointer-events: none;
+  }
 }
 
 .solve-page__footer-nav--desktop {

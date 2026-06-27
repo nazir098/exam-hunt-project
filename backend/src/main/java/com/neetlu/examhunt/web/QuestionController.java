@@ -10,6 +10,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -87,7 +89,15 @@ public class QuestionController {
         Question q = questionRepository.findByQuestionId(questionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
         q = manifestImportService.enrichVariantFromDisk(q);
-        return QuestionDetail.from(q);
+        return QuestionDetail.from(q, includeSensitiveFields());
+    }
+
+    private static boolean includeSensitiveFields() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null
+                && auth.isAuthenticated()
+                && auth.getPrincipal() instanceof String userId
+                && !userId.isBlank();
     }
 
     /** Original PYQ plus up to five QC-accepted AI variants for the same paper question. */
@@ -232,13 +242,18 @@ public class QuestionController {
             String solutionDiagramSvg
     ) {
         static QuestionDetail from(Question q) {
+            return from(q, true);
+        }
+
+        static QuestionDetail from(Question q, boolean includeSensitive) {
+            boolean hasSolution = hasRenderableSolution(q);
             return new QuestionDetail(
                     q.getQuestionId(),
                     q.getPackId(),
                     q.getQuestionNo(),
                     q.getExam(),
                     q.getYear(),
-                    q.getAnswer(),
+                    includeSensitive ? nullToEmpty(q.getAnswer()) : "",
                     q.getSubject(),
                     q.getChapter(),
                     q.getTopic(),
@@ -248,12 +263,12 @@ public class QuestionController {
                     q.isHasDiagram(),
                     q.isHasEquation(),
                     FormulaEligibility.questionNeedsFormula(q),
-                    hasRenderableSolution(q),
+                    hasSolution,
                     q.isAnswerOnly(),
                     q.getQuestionImageUrl(),
-                    hasRenderableSolution(q) ? nullToEmpty(q.getSolutionImageUrl()) : "",
+                    includeSensitive && hasSolution ? nullToEmpty(q.getSolutionImageUrl()) : "",
                     q.getQuestionTextPreview(),
-                    q.getSolutionTextPreview(),
+                    includeSensitive && hasSolution ? nullToEmpty(q.getSolutionTextPreview()) : "",
                     mapOptions(q),
                     q.getSourceType() != null ? q.getSourceType() : "pyq",
                     q.getParentQuestionId(),
@@ -266,9 +281,14 @@ public class QuestionController {
                     QuestionVariantMapper.mapMatchListA(q),
                     QuestionVariantMapper.mapMatchListB(q),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
-                    QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg())
-            );
+                    includeSensitive
+                            ? QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg())
+                            : "");
         }
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private static boolean hasRenderableSolution(Question q) {
@@ -284,9 +304,5 @@ public class QuestionController {
         }
         String text = nullToEmpty(q.getSolutionTextPreview());
         return !text.isBlank();
-    }
-
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value;
     }
 }

@@ -770,12 +770,8 @@ public class PracticeService {
             return session;
         }
         Instant now = Instant.now();
-        boolean wasEngaged = session.getEngagedSince() != null;
         SessionTiming.ExpiryReason reason = SessionTiming.expiryReason(session, now);
         if (reason == null) {
-            if (wasEngaged) {
-                return sessions.save(session);
-            }
             return session;
         }
         return completeExpiredSession(session, session.getUserId(), now);

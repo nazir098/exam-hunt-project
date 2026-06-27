@@ -28,9 +28,11 @@ At GoDaddy:
 | Type | Name | Value |
 |------|------|-------|
 | CNAME | `www` | `exam-hunt-project.pages.dev` |
-| A | `api` | EC2 public IPv4 |
+| A | `api` | EC2 public IPv4 — **Proxied (orange cloud)** in Cloudflare |
 
 Root `techmuzzle.in` is forwarded to `https://www.techmuzzle.in`.
+
+**API protection:** Proxy `api` through Cloudflare and configure WAF + rate limits — see **[cloudflare-waf.md](./cloudflare-waf.md)**.
 
 ## AWS Security Group
 
@@ -61,8 +63,9 @@ Required backend env values:
 SERVER_PORT=8081
 MONGODB_URI=<atlas-uri>
 JWT_SECRET=<long-random-secret>
-ADMIN_EMAIL=hussaininazir1@gmail.com
-ADMIN_PASSWORD=<admin-password>
+REQUIRE_SECURE_SECRETS=true
+ADMIN_EMAIL=<admin-email>
+ADMIN_PASSWORD=<admin-password-first-bootstrap-only>
 OPENAI_BASE_URL=https://freellmapi-t1pm.onrender.com/v1
 OPENAI_API_KEY=<freellmapi-client-key>
 OPENAI_CHAT_MODEL=auto
@@ -312,6 +315,19 @@ curl -i 'https://api.techmuzzle.in/api/exams' | grep -iE 'cache-control|etag|cf-
 ```
 
 Second request should show `cf-cache-status: HIT` when Cloudflare caching is active.
+
+## Cloudflare WAF & rate limits
+
+Full runbook: **[cloudflare-waf.md](./cloudflare-waf.md)**
+
+Quick checklist:
+
+1. **DNS:** `api` A record → **Proxied** (orange cloud)
+2. **SSL:** Full (strict)
+3. **Bot Fight Mode:** On
+4. **Rate limits:** login (10/min), questions GET (60/min), practice-ai (20/min)
+5. **Nginx on EC2:** allow only Cloudflare IPs — `deploy/ec2/nginx-exam-hunt-api.conf.example`
+6. **Verify:** `curl -sI https://api.techmuzzle.in/actuator/health | grep cf-ray`
 
 Purge edge cache after a major import (optional):
 

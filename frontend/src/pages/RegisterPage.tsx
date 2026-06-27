@@ -1,11 +1,13 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
+import { useAuthRedirect } from "../auth/useAuthRedirect";
+import AuthGoogleSection from "../components/AuthGoogleSection";
 
 export default function RegisterPage() {
-  const { register } = useAuth();
-  const navigate = useNavigate();
+  const { register, loginWithGoogle } = useAuth();
+  const redirectAfterAuth = useAuthRedirect();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -15,14 +17,27 @@ export default function RegisterPage() {
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     try {
-      await register(
+      const profile = await register(
         fd.get("email") as string,
         fd.get("password") as string,
         (fd.get("displayName") as string) || undefined
       );
-      navigate("/practice");
+      redirectAfterAuth(profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onGoogleCredential(credential: string) {
+    setError("");
+    setBusy(true);
+    try {
+      const profile = await loginWithGoogle(credential);
+      redirectAfterAuth(profile);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {
       setBusy(false);
     }
@@ -38,6 +53,13 @@ export default function RegisterPage() {
         <p className="auth-card__desc">
           Free account — save adaptive practice progress, NEET marks, and leaderboard rank.
         </p>
+
+        <AuthGoogleSection
+          label="signup"
+          disabled={busy}
+          onCredential={(credential) => void onGoogleCredential(credential)}
+          onError={setError}
+        />
 
         <form onSubmit={onSubmit} className="auth-form">
           <label className="auth-field">
@@ -67,10 +89,10 @@ export default function RegisterPage() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               className="auth-field__input"
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
             />
           </label>
           {error && <p className="auth-error">{error}</p>}

@@ -9,6 +9,8 @@ import java.util.Optional;
 
 public interface UserAccountRepository extends MongoRepository<UserAccount, String> {
     Optional<UserAccount> findByEmailIgnoreCase(String email);
+
+    Optional<UserAccount> findByGoogleSub(String googleSub);
     boolean existsByEmailIgnoreCase(String email);
     List<UserAccount> findByEmailStartingWithIgnoreCase(String prefix);
 

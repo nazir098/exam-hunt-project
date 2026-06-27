@@ -20,6 +20,16 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @GetMapping("/google/status")
+    public AuthService.GoogleAuthStatus googleStatus() {
+        return authService.googleAuthStatus();
+    }
+
+    @PostMapping("/google")
+    public AuthService.AuthResult google(@RequestBody GoogleLoginRequest body) {
+        return authService.loginWithGoogle(body.credential());
+    }
+
     @PostMapping("/register")
     public AuthService.AuthResult register(@RequestBody RegisterRequest body) {
         return authService.register(body.email(), body.password(), body.displayName());
@@ -34,6 +44,8 @@ public class AuthController {
     public AuthService.UserProfile me(@AuthenticationPrincipal String userId) {
         return authService.profileFor(authService.requireUser(userId));
     }
+
+    public record GoogleLoginRequest(@NotBlank String credential) {}
 
     public record RegisterRequest(
             @NotBlank @Email String email,

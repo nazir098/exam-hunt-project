@@ -765,7 +765,14 @@ public class ManifestImportService {
         doc.setHasDiagram(q.path("has_diagram").asBoolean(false));
         doc.setHasEquation(q.path("has_equation").asBoolean(false));
         doc.setAnswerOnly(q.path("answer_only").asBoolean(false));
-        doc.setQuestionImageUrl(rewriteAssetUrl(text(q, "question_image_url"), sourceFolder));
+        String renderMode = text(q, "render_mode");
+        String diagramUrl = text(q, "question_diagram_url");
+        String compositeUrl = text(q, "question_image_url");
+        if ("hybrid".equalsIgnoreCase(renderMode) && !diagramUrl.isBlank()) {
+            doc.setQuestionImageUrl(rewriteAssetUrl(diagramUrl, sourceFolder));
+        } else {
+            doc.setQuestionImageUrl(rewriteAssetUrl(compositeUrl, sourceFolder));
+        }
         String solutionUrl = text(q, "solution_image_url");
         if (solutionUrl.isBlank()) {
             solutionUrl = text(q, "solution_image");

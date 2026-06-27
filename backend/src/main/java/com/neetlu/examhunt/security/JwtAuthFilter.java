@@ -1,6 +1,9 @@
 package com.neetlu.examhunt.security;
 
+import com.neetlu.examhunt.model.UserAccount;
 import com.neetlu.examhunt.model.UserRole;
+import com.neetlu.examhunt.repository.UserAccountRepository;
+import com.neetlu.examhunt.security.AdminAuthorization;
 import com.neetlu.examhunt.service.JwtService;
 import io.jsonwebtoken.JwtException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -18,13 +21,20 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
+import java.util.Optional;
+
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserAccountRepository users;
+    private final AdminAuthorization adminAuthorization;
 
-    public JwtAuthFilter(JwtService jwtService) {
+    public JwtAuthFilter(
+            JwtService jwtService, UserAccountRepository users, AdminAuthorization adminAuthorization) {
         this.jwtService = jwtService;
+        this.users = users;
+        this.adminAuthorization = adminAuthorization;
     }
 
     @Override
@@ -32,6 +42,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.equals("/api/auth/register")
                 || path.equals("/api/auth/login")
+                || path.equals("/api/auth/google")
                 || request.getMethod().equalsIgnoreCase("OPTIONS");
     }
 
@@ -44,7 +55,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 String userId = jwtService.userIdFromToken(token);
-                UserRole role = jwtService.roleFromToken(token);
+                Optional<UserAccount> account = users.findById(userId);
+                if (account.isEmpty()) {
+                    SecurityContextHolder.clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
+                UserRole role = adminAuthorization.roleFor(account.get());
                 var authority = new SimpleGrantedAuthority("ROLE_" + role.name());
                 var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

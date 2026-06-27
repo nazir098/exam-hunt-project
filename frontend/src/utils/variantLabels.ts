@@ -89,3 +89,12 @@ export function questionStemBody(text: string): string {
   const withoutPrefix = trimmed.replace(/^q[.:]\s*/i, "").trim();
   return withoutPrefix || trimmed;
 }
+
+/** Ensure variant stem copy begins with a capital letter (plain text or after leading punctuation). */
+export function capitalizeStemStart(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.replace(/^([^\p{L}]*)(\p{L})/u, (_, prefix: string, letter: string) => {
+    return prefix + letter.toUpperCase();
+  });
+}

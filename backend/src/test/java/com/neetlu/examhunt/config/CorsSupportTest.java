@@ -24,7 +24,9 @@ class CorsSupportTest {
                 "freellmapi-test",
                 "https://freellmapi-t1pm.onrender.com/v1",
                 "auto",
-                true);
+                true,
+                false,
+                "");
         CorsConfiguration config = new CorsConfiguration();
 
         CorsSupport.apply(config, props);
@@ -55,7 +57,9 @@ class CorsSupportTest {
                 "",
                 "http://localhost:3001/v1",
                 "auto",
-                true);
+                true,
+                false,
+                "");
         CorsConfiguration config = new CorsConfiguration();
 
         CorsSupport.apply(config, props);

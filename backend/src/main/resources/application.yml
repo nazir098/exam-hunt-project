@@ -15,7 +15,7 @@ app:
   public-files-base-url: ${PUBLIC_FILES_BASE_URL:${R2_PUBLIC_BASE_URL:}}
   import-pack-folders: ${IMPORT_PACK_FOLDERS:}
   admin-import-key: ${ADMIN_IMPORT_KEY:}
-  admin-email: ${ADMIN_EMAIL:hussaininazir1@gmail.com}
+  admin-email: ${ADMIN_EMAIL:}
   admin-bootstrap-password: ${ADMIN_PASSWORD:}
   jwt-secret: ${JWT_SECRET:exam-hunt-dev-jwt-secret-change-in-prod-32b}
   jwt-expiration-hours: ${JWT_EXPIRATION_HOURS:168}
@@ -24,6 +24,8 @@ app:
   llm-base-url: ${OPENAI_BASE_URL:http://localhost:3001/v1}
   llm-model: ${OPENAI_CHAT_MODEL:auto}
   ai-practice-enabled: ${AI_PRACTICE_ENABLED:true}
+  google-auth-enabled: ${GOOGLE_AUTH_ENABLED:false}
+  google-client-id: ${GOOGLE_CLIENT_ID:}
   public-api-cache:
     max-age-seconds: ${PUBLIC_API_CACHE_MAX_AGE:60}
     s-max-age-seconds: ${PUBLIC_API_CACHE_S_MAX_AGE:300}

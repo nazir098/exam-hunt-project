@@ -27,9 +27,18 @@ final class CorsSupport {
                 .filter(s -> !s.isEmpty())
                 .forEach(origins::add);
         origins.forEach(config::addAllowedOrigin);
-        DEV_ORIGIN_PATTERNS.forEach(config::addAllowedOriginPattern);
+        boolean productionOrigins =
+                origins.stream().anyMatch(origin -> origin.startsWith("https://"));
+        if (!productionOrigins) {
+            DEV_ORIGIN_PATTERNS.forEach(config::addAllowedOriginPattern);
+        }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Admin-Key",
+                "X-Requested-With"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
     }

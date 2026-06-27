@@ -48,9 +48,15 @@ public class AdminAccountBootstrap {
 
         String normalized = AdminAuthorization.normalizeEmail(email);
         UserAccount admin = users.findByEmailIgnoreCase(normalized).orElseGet(UserAccount::new);
+        boolean isNew = admin.getId() == null;
+        boolean localDev = DeploymentMode.isLocalDevelopment(appProperties);
         admin.setEmail(normalized);
         admin.setRole(UserRole.ADMIN);
-        admin.setPasswordHash(passwordEncoder.encode(password));
+        if (isNew || localDev) {
+            admin.setPasswordHash(passwordEncoder.encode(password));
+        } else {
+            log.info("Admin account exists — keeping password unchanged (production mode)");
+        }
         if (admin.getDisplayName() == null || admin.getDisplayName().isBlank()) {
             admin.setDisplayName("Admin");
         }

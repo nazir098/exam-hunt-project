@@ -1,13 +1,14 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
+import { useAuthRedirect } from "../auth/useAuthRedirect";
 import { sessionIdleMinutes } from "../auth/session";
+import AuthGoogleSection from "../components/AuthGoogleSection";
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { login, loginWithGoogle } = useAuth();
+  const redirectAfterAuth = useAuthRedirect();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -18,16 +19,22 @@ export default function LoginPage() {
     const fd = new FormData(e.currentTarget);
     try {
       const profile = await login(fd.get("email") as string, fd.get("password") as string);
-      const next = searchParams.get("next");
-      if (next) {
-        navigate(next);
-      } else if (profile.admin) {
-        navigate("/admin");
-      } else {
-        navigate("/practice");
-      }
+      redirectAfterAuth(profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onGoogleCredential(credential: string) {
+    setError("");
+    setBusy(true);
+    try {
+      const profile = await loginWithGoogle(credential);
+      redirectAfterAuth(profile);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {
       setBusy(false);
     }
@@ -44,6 +51,12 @@ export default function LoginPage() {
           Track marks, progress, and ratings. You stay signed in until you log out or{" "}
           {sessionIdleMinutes()} minutes of inactivity.
         </p>
+
+        <AuthGoogleSection
+          disabled={busy}
+          onCredential={(credential) => void onGoogleCredential(credential)}
+          onError={setError}
+        />
 
         <form onSubmit={onSubmit} className="auth-form">
           <label className="auth-field">
@@ -63,7 +76,7 @@ export default function LoginPage() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="current-password"
               className="auth-field__input"
               placeholder="••••••••"

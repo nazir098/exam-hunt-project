@@ -2,6 +2,7 @@ package com.neetlu.examhunt.config;
 
 import com.neetlu.examhunt.security.AdminKeyAuthFilter;
 import com.neetlu.examhunt.security.JwtAuthFilter;
+import com.neetlu.examhunt.security.RateLimitFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,7 +41,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(
-            HttpSecurity http, AdminKeyAuthFilter adminKeyAuthFilter, JwtAuthFilter jwtAuthFilter)
+            HttpSecurity http,
+            RateLimitFilter rateLimitFilter,
+            AdminKeyAuthFilter adminKeyAuthFilter,
+            JwtAuthFilter jwtAuthFilter)
             throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
@@ -50,24 +54,33 @@ public class SecurityConfig {
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/google").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/google/status").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exams", "/api/exams/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/packs", "/api/packs/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/questions/*/feedback").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/questions/*/feedback").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/questions", "/api/questions/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/*/family").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/questions").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/leaderboard", "/api/leaderboard/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/settings/**", "/api/practice-ai/status")
+                        .requestMatchers(HttpMethod.GET, "/api/settings/public", "/api/practice-ai/status")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/seo/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/analytics/events").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                         "/api/auth/me",
                                         "/api/practice/**",
                                         "/api/practice-ai/**",
-                                        "/api/bookmarks/**")
+                                        "/api/bookmarks/**",
+                                        "/api/revision/**",
+                                        "/api/ai-tutor/**")
                         .authenticated()
-                        .anyRequest().permitAll())
+                        .anyRequest().denyAll())
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(adminKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

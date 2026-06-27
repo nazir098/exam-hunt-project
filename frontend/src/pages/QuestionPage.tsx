@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { fetchQuestion, fetchQuestionFamily, fetchQuestions, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
@@ -15,7 +16,13 @@ import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
-import { familyParentId, isAiVariantQuestionId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import {
+  beginVariantSwitch,
+  clearVariantSwitchGate,
+  resolveContentLoadingEnd,
+  type VariantSwitchGate,
+} from "../utils/variantSwitchTiming";
 import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 
 const OPTIONS = [
@@ -69,6 +76,7 @@ function seoExcerpt(text?: string | null) {
 export default function QuestionPage() {
   const { questionId = "" } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [q, setQ] = useState<QuestionDetail | null>(null);
   const [siblings, setSiblings] = useState<QuestionPublic[] | null>(null);
@@ -83,6 +91,8 @@ export default function QuestionPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
+  const questionCacheRef = useRef(new Map<string, QuestionDetail>());
+  const variantSwitchGateRef = useRef<VariantSwitchGate | null>(null);
   const returnQs = searchParams.toString();
   const familyParent = familyParentId(questionId, q?.parentQuestionId);
 
@@ -95,28 +105,42 @@ export default function QuestionPage() {
     if (!questionId) return;
 
     const samePaper = isSamePaperQuestion(questionId, q);
+    const cached = questionCacheRef.current.get(questionId);
+    const cacheStale =
+      cached?.sourceType === "ai_variant" &&
+      (!cached.options?.length || !cached.questionFormat);
+    if (samePaper && cached && !cacheStale) {
+      setQ(cached);
+      resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
+      return;
+    }
     if (!samePaper) {
       setQ(null);
       setContentLoading(false);
-    } else {
+    } else if (variantSwitchGateRef.current?.targetId !== questionId) {
       setContentLoading(true);
     }
 
     let cancelled = false;
     fetchQuestion(questionId)
       .then((data) => {
+        questionCacheRef.current.set(questionId, data);
         if (!cancelled) setQ(data);
       })
       .catch((e) => {
         if (!cancelled) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setContentLoading(false);
+        if (!cancelled) {
+          resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [questionId]);
+  }, [questionId, user?.id]);
+
+  useEffect(() => () => clearVariantSwitchGate(variantSwitchGateRef), []);
 
   useEffect(() => {
     if (!questionId) {
@@ -135,6 +159,22 @@ export default function QuestionPage() {
       cancelled = true;
     };
   }, [familyParent]);
+
+  useEffect(() => {
+    if (!family) return;
+    const ids = [
+      family.pyq.questionId,
+      ...family.variants.map((v) => v.questionId),
+    ];
+    for (const id of ids) {
+      const cached = questionCacheRef.current.get(id);
+      const cacheStale =
+        cached?.sourceType === "ai_variant" &&
+        (!cached.options?.length || !cached.questionFormat);
+      if (cached && !cacheStale) continue;
+      void fetchQuestion(id).then((data) => questionCacheRef.current.set(id, data));
+    }
+  }, [family]);
 
   useEffect(() => {
     if (!checked) setSolutionOpen(false);
@@ -229,10 +269,12 @@ export default function QuestionPage() {
 
   const goToQuestion = useCallback(
     (id: string) => {
-      if (id !== questionId && isSamePaperQuestion(id, q)) {
-        setContentLoading(true);
+      if (id === questionId) return;
+      if (isSamePaperQuestion(id, q)) {
+        beginVariantSwitch(variantSwitchGateRef, id, setContentLoading);
       }
       navigate(`/solve/${id}?${new URLSearchParams(searchParams).toString()}`);
+      void fetchQuestion(id).then((data) => questionCacheRef.current.set(id, data));
     },
     [navigate, searchParams, questionId, q]
   );
@@ -241,7 +283,8 @@ export default function QuestionPage() {
     if (!siblings) {
       return { idx: -1, prev: null, next: null, total: 0, loaded: false };
     }
-    const idx = siblings.findIndex((p) => p.questionId === questionId);
+    const anchorId = familyParentId(questionId, q?.parentQuestionId);
+    const idx = siblings.findIndex((p) => p.questionId === anchorId);
     return {
       idx,
       prev: idx > 0 ? siblings[idx - 1] : null,
@@ -249,27 +292,32 @@ export default function QuestionPage() {
       total: siblings.length,
       loaded: true,
     };
-  }, [siblings, questionId]);
+  }, [siblings, questionId, q?.parentQuestionId]);
 
   if (nav.loaded && nav.total > 0) {
     lastNavTotalRef.current = nav.total;
   }
 
-  const pyqSiblingNav = !isAiVariantQuestionId(questionId) && !q?.parentQuestionId;
+  const bankSiblingNav = Boolean(q?.packId);
 
   const navPositionLabel = useMemo(() => {
-    if (!pyqSiblingNav || !q) return String(q?.questionNo ?? "");
-    const current = nav.loaded && nav.idx >= 0 ? nav.idx + 1 : q.questionNo;
+    if (!bankSiblingNav || !q) return String(q?.questionNo ?? "");
+    const anchorId = familyParentId(questionId, q.parentQuestionId);
+    const idx =
+      nav.loaded && nav.idx >= 0
+        ? nav.idx + 1
+        : siblings?.findIndex((p) => p.questionId === anchorId) ?? -1;
+    const current = idx >= 0 ? idx + 1 : q.questionNo;
     const total = nav.loaded ? nav.total : lastNavTotalRef.current;
     if (total > 0) return `${current} / ${total}`;
     return `${current} / …`;
-  }, [pyqSiblingNav, nav, q]);
+  }, [bankSiblingNav, nav, q, questionId, siblings]);
 
   const goToSibling = useCallback(
     async (direction: "prev" | "next") => {
-      if (isAiVariantQuestionId(questionId) || q?.parentQuestionId) return;
       const list = await loadSiblings();
-      const idx = list.findIndex((p) => p.questionId === questionId);
+      const anchorId = familyParentId(questionId, q?.parentQuestionId);
+      const idx = list.findIndex((p) => p.questionId === anchorId);
       if (idx < 0) return;
       const target = direction === "prev" ? list[idx - 1] : list[idx + 1];
       if (target) goToQuestion(target.questionId);
@@ -288,9 +336,8 @@ export default function QuestionPage() {
 
   useEffect(() => {
     if (!q?.packId) return;
-    if (isAiVariantQuestionId(questionId) || q.parentQuestionId) return;
     void loadSiblings();
-  }, [q?.packId, questionId, q?.parentQuestionId, loadSiblings]);
+  }, [q?.packId, returnQs, loadSiblings]);
 
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
@@ -325,6 +372,48 @@ export default function QuestionPage() {
   }, [contentLoading, questionId, family]);
 
   const questionPending = Boolean(q && contentLoading && q.questionId !== questionId);
+
+  const showLastInSetHint = bankSiblingNav && nav.loaded && !nav.next && nav.idx >= 0;
+
+  function renderFooterNav(extraClass: string) {
+    return (
+      <>
+        {showLastInSetHint && (
+          <p className="solve-page__nav-hint muted">Last question in this set.</p>
+        )}
+        <footer
+          className={`solve-page__footer-nav ${extraClass}${
+            isVariant ? " solve-page__footer-nav--variant" : ""
+          }`}
+          aria-label="Question navigation"
+        >
+          <button
+            type="button"
+            className="practice-run-nav-btn solve-page__nav-btn"
+            disabled={!bankSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
+            onClick={() => void goToSibling("prev")}
+          >
+            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="solve-page__nav-label">Prev</span>
+          </button>
+          <span className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}>
+            {navPositionLabel}
+          </span>
+          <button
+            type="button"
+            className={`practice-run-nav-btn solve-page__nav-btn${
+              isVariant ? " solve-page__nav-btn--next" : ""
+            }`}
+            disabled={!bankSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
+            onClick={() => void goToSibling("next")}
+          >
+            <span className="solve-page__nav-label">Next</span>
+            <span className="material-symbols-outlined">arrow_forward</span>
+          </button>
+        </footer>
+      </>
+    );
+  }
 
   function renderImageOptions() {
     return (
@@ -631,38 +720,7 @@ export default function QuestionPage() {
             </section>
           )}
 
-          <footer
-            className={`solve-page__footer-nav solve-page__footer-nav--desktop${
-              isVariant ? " solve-page__footer-nav--variant" : ""
-            }`}
-            aria-label="Question navigation"
-          >
-            <button
-              type="button"
-              className="practice-run-nav-btn solve-page__nav-btn"
-              disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
-              onClick={() => void goToSibling("prev")}
-            >
-              <span className="material-symbols-outlined">arrow_back</span>
-              <span className="solve-page__nav-label">Prev</span>
-            </button>
-            <span
-              className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}
-            >
-              {navPositionLabel}
-            </span>
-            <button
-              type="button"
-              className={`practice-run-nav-btn solve-page__nav-btn${
-                isVariant ? " solve-page__nav-btn--next" : ""
-              }`}
-              disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
-              onClick={() => void goToSibling("next")}
-            >
-              <span className="solve-page__nav-label">Next</span>
-              <span className="material-symbols-outlined">arrow_forward</span>
-            </button>
-          </footer>
+          {renderFooterNav("solve-page__footer-nav--desktop")}
           </>
           )}
         </div>
@@ -704,36 +762,7 @@ export default function QuestionPage() {
         )}
       </div>
 
-      <footer
-        className={`solve-page__footer-nav solve-page__footer-nav--fixed${
-          isVariant ? " solve-page__footer-nav--variant" : ""
-        }`}
-        aria-label="Question navigation"
-      >
-        <button
-          type="button"
-          className="practice-run-nav-btn solve-page__nav-btn"
-          disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
-          onClick={() => void goToSibling("prev")}
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-          <span className="solve-page__nav-label">Prev</span>
-        </button>
-        <span className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}>
-          {navPositionLabel}
-        </span>
-        <button
-          type="button"
-          className={`practice-run-nav-btn solve-page__nav-btn${
-            isVariant ? " solve-page__nav-btn--next" : ""
-          }`}
-          disabled={!pyqSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
-          onClick={() => void goToSibling("next")}
-        >
-          <span className="solve-page__nav-label">Next</span>
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </button>
-      </footer>
+      {renderFooterNav("solve-page__footer-nav--fixed")}
     </main>
   );
 }

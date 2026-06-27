@@ -19,5 +19,7 @@ public record AppProperties(
         String llmApiKey,
         String llmBaseUrl,
         String llmModel,
-        boolean aiPracticeEnabled
+        boolean aiPracticeEnabled,
+        boolean googleAuthEnabled,
+        String googleClientId
 ) {}

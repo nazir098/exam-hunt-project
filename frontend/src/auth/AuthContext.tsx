@@ -12,6 +12,7 @@ import {
   fetchMe,
   fetchProgress,
   login as apiLogin,
+  loginWithGoogle as apiLoginWithGoogle,
   register as apiRegister,
   type ProgressSummary,
   type UserProfile,
@@ -25,7 +26,8 @@ type AuthContextValue = {
   progress: ProgressSummary | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<UserProfile>;
-  register: (email: string, password: string, displayName?: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<UserProfile>;
+  register: (email: string, password: string, displayName?: string) => Promise<UserProfile>;
   logout: () => void;
   refresh: () => Promise<void>;
   refreshProgress: () => Promise<void>;
@@ -143,6 +145,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProgress]
   );
 
+  const loginWithGoogle = useCallback(
+    async (credential: string) => {
+      const res = await apiLoginWithGoogle(credential);
+      setToken(res.token);
+      setUser(res.user);
+      setAnalyticsUser(res.user.id);
+      touchSessionActivity();
+      trackEvent("login", { method: "google" });
+      await refreshProgress();
+      return res.user;
+    },
+    [refreshProgress]
+  );
+
   const register = useCallback(
     async (email: string, password: string, displayName?: string) => {
       const res = await apiRegister(email, password, displayName);
@@ -152,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       touchSessionActivity();
       trackEvent("sign_up");
       await refreshProgress();
+      return res.user;
     },
     [refreshProgress]
   );
@@ -162,13 +179,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       progress,
       loading,
       login,
+      loginWithGoogle,
       register,
       logout,
       refresh,
       refreshProgress,
       touchActivity,
     }),
-    [user, progress, loading, login, register, logout, refresh, refreshProgress, touchActivity]
+    [user, progress, loading, login, loginWithGoogle, register, logout, refresh, refreshProgress, touchActivity]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

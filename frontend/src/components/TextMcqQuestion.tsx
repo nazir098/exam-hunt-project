@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import AiMarkdown from "./AiMarkdown";
 import BookmarkButton from "./BookmarkButton";
 import VariantDiagram from "./VariantDiagram";
-import { formatVariantTypeLabel, needsQuestionPrefix, questionStemBody, resolveAssertionReasonOptions } from "../utils/variantLabels";
+import { formatVariantTypeLabel, needsQuestionPrefix, questionStemBody, capitalizeStemStart, resolveAssertionReasonOptions } from "../utils/variantLabels";
 import {
   listRomanLabel,
   resolveMatchingColumns,
@@ -177,6 +177,10 @@ export default function TextMcqQuestion({
   );
   const questionBody = useMemo(() => questionStemBody(questionText), [questionText]);
   const variantCard = variantTheme;
+  const stemText = useCallback(
+    (text: string) => (variantCard ? capitalizeStemStart(text) : text),
+    [variantCard]
+  );
   const markdownClass = variantCard ? "ai-markdown--variant" : "ai-markdown--paper";
   const displayVariantLabel = variantLabel ?? formatVariantTypeLabel(variantType);
   const effectiveLayout = variantCard ? "stacked" : optionsLayout;
@@ -211,13 +215,13 @@ export default function TextMcqQuestion({
             {assertion && (
               <section className="variant-stem__block">
                 <p className="variant-stem__label">Assertion (A)</p>
-                <AiMarkdown text={assertion} className={markdownClass} />
+                <AiMarkdown text={stemText(assertion)} className={markdownClass} />
               </section>
             )}
             {reason && (
               <section className="variant-stem__block">
                 <p className="variant-stem__label">Reason (R)</p>
-                <AiMarkdown text={reason} className={markdownClass} />
+                <AiMarkdown text={stemText(reason)} className={markdownClass} />
               </section>
             )}
           </div>
@@ -230,7 +234,7 @@ export default function TextMcqQuestion({
                   <span className="variant-stem__label">
                     {statementLabel(idx, sortedStatements.length)}.
                   </span>
-                  <AiMarkdown text={stmt.text} className={markdownClass} />
+                  <AiMarkdown text={stemText(stmt.text)} className={markdownClass} />
                 </li>
               ))}
             </ol>
@@ -239,7 +243,7 @@ export default function TextMcqQuestion({
           <div className="variant-stem variant-stem--matching">
             {matching.intro && (
               <p className="variant-stem__intro">
-                <AiMarkdown text={matching.intro} className={markdownClass} />
+                <AiMarkdown text={stemText(matching.intro)} className={markdownClass} />
               </p>
             )}
             <div className="variant-matching-grid">
@@ -249,7 +253,7 @@ export default function TextMcqQuestion({
                   {matching.listA.map((item) => (
                     <li key={item.id} className="variant-matching-col__item">
                       <span className="variant-matching-col__label">{item.id}.</span>
-                      <AiMarkdown text={item.text} className={markdownClass} />
+                      <AiMarkdown text={stemText(item.text)} className={markdownClass} />
                     </li>
                   ))}
                 </ol>
@@ -263,7 +267,7 @@ export default function TextMcqQuestion({
                         <span className="variant-matching-col__label">
                           ({listRomanLabel(idx)}).
                         </span>
-                        <AiMarkdown text={item.text} className={markdownClass} />
+                        <AiMarkdown text={stemText(item.text)} className={markdownClass} />
                       </li>
                     ))}
                   </ol>
@@ -272,14 +276,18 @@ export default function TextMcqQuestion({
             </div>
           </div>
         ) : showQuestionMarker ? (
-          <div className="variant-stem variant-stem--plain-question">
-            <span className="variant-stem__q-marker">Q.</span>
-            <div className="variant-stem__question-body">
-              <AiMarkdown text={questionBody} className={markdownClass} />
+          variantCard ? (
+            <AiMarkdown text={stemText(questionBody)} className={markdownClass} />
+          ) : (
+            <div className="variant-stem variant-stem--plain-question">
+              <span className="variant-stem__q-marker">Q.</span>
+              <div className="variant-stem__question-body">
+                <AiMarkdown text={questionBody} className={markdownClass} />
+              </div>
             </div>
-          </div>
+          )
         ) : (
-          <AiMarkdown text={questionText} className={markdownClass} />
+          <AiMarkdown text={stemText(questionText)} className={markdownClass} />
         )}
       </div>
 

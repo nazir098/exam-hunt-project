@@ -113,6 +113,11 @@ export type AuthResult = {
   user: UserProfile;
 };
 
+export type GoogleAuthStatus = {
+  enabled: boolean;
+  clientId: string;
+};
+
 export type SessionQuestionTile = {
   number: number;
   questionId: string;
@@ -490,17 +495,18 @@ async function getJson<T>(path: string): Promise<T> {
 const shortLivedGetCache = new Map<string, { at: number; promise: Promise<unknown> }>();
 const GET_CACHE_MS = 8_000;
 
-function getJsonCached<T>(path: string): Promise<T> {
+function getJsonCached<T>(path: string, cacheKey?: string): Promise<T> {
   const now = Date.now();
-  const hit = shortLivedGetCache.get(path);
+  const key = cacheKey ?? path;
+  const hit = shortLivedGetCache.get(key);
   if (hit && now - hit.at < GET_CACHE_MS) {
     return hit.promise as Promise<T>;
   }
   const promise = request<T>(path).catch((err) => {
-    shortLivedGetCache.delete(path);
+    shortLivedGetCache.delete(key);
     throw err;
   });
-  shortLivedGetCache.set(path, { at: now, promise });
+  shortLivedGetCache.set(key, { at: now, promise });
   return promise;
 }
 
@@ -542,7 +548,9 @@ export function fetchQuestions(
 }
 
 export function fetchQuestion(questionId: string) {
-  return getJsonCached<QuestionDetail>(`/api/questions/${encodeURIComponent(questionId)}`);
+  const path = `/api/questions/${encodeURIComponent(questionId)}`;
+  const cacheKey = `${path}:${getToken() ? "auth" : "anon"}`;
+  return getJsonCached<QuestionDetail>(path, cacheKey);
 }
 
 export function fetchQuestionFamily(questionId: string): Promise<QuestionFamily> {
@@ -572,6 +580,17 @@ export function login(email: string, password: string) {
   return request<AuthResult>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export function fetchGoogleAuthStatus() {
+  return getJson<GoogleAuthStatus>("/api/auth/google/status");
+}
+
+export function loginWithGoogle(credential: string) {
+  return request<AuthResult>("/api/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
   });
 }
 

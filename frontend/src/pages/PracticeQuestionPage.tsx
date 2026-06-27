@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   checkVariantPracticeAnswer,
+  engagePracticeSession,
   fetchPracticeQuestion,
   fetchPracticeSession,
   fetchQuestionFamily,
@@ -28,6 +29,7 @@ import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import ZoomableImage from "../components/ZoomableImage";
+import SessionExpiredDialog from "../components/SessionExpiredDialog";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestRunSidebar from "../components/TestRunSidebar";
 import SessionTimer from "../components/SessionTimer";
@@ -36,6 +38,12 @@ import { sessionRoute, type ProductMode } from "../navigation/modes";
 import { difficultyLabel, examDisplayName, questionHeadingTitle } from "../utils/labels";
 import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import {
+  beginVariantSwitch,
+  clearVariantSwitchGate,
+  resolveContentLoadingEnd,
+  type VariantSwitchGate,
+} from "../utils/variantSwitchTiming";
 import { hasDistinctSolution } from "../utils/questionSolution";
 
 const OPTIONS = [
@@ -248,6 +256,7 @@ export default function PracticeQuestionPage() {
   const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
   const questionCacheRef = useRef(new Map<string, PracticeQuestion>());
+  const variantSwitchGateRef = useRef<VariantSwitchGate | null>(null);
   const qRef = useRef<PracticeQuestion | null>(null);
   const loadedSessionIdRef = useRef<string | null>(null);
   const sessionRef = useRef<PracticeSessionView | null>(null);
@@ -286,6 +295,8 @@ export default function PracticeQuestionPage() {
   useEffect(() => {
     setFeedbackOpen(false);
   }, [questionId]);
+
+  useEffect(() => () => clearVariantSwitchGate(variantSwitchGateRef), []);
 
   useEffect(() => {
     setResult(null);
@@ -333,13 +344,15 @@ export default function PracticeQuestionPage() {
         setShowSolution(false);
         setResult(null);
         setVariantCheck(null);
-        setContentLoading(false);
         setQ(cached);
+        if (!opts?.prefetch) resolveContentLoadingEnd(variantSwitchGateRef, qid, setContentLoading);
         return cached;
       }
 
       if (!opts?.prefetch) {
-        setContentLoading(true);
+        if (variantSwitchGateRef.current?.targetId !== qid) {
+          setContentLoading(true);
+        }
         setSelected("");
         setShowSolution(false);
         setResult(null);
@@ -357,7 +370,7 @@ export default function PracticeQuestionPage() {
         }
         return question;
       } finally {
-        if (!opts?.prefetch) setContentLoading(false);
+        if (!opts?.prefetch) resolveContentLoadingEnd(variantSwitchGateRef, qid, setContentLoading);
       }
     },
     []
@@ -370,6 +383,17 @@ export default function PracticeQuestionPage() {
     },
     [loadQuestionById]
   );
+
+  useEffect(() => {
+    if (!family) return;
+    const ids = [
+      family.pyq.questionId,
+      ...family.variants.map((v) => v.questionId),
+    ];
+    for (const id of ids) {
+      void loadQuestionById(id, { prefetch: true });
+    }
+  }, [family, loadQuestionById]);
 
   const loadSession = useCallback(async () => {
     setError("");
@@ -401,9 +425,16 @@ export default function PracticeQuestionPage() {
   const applyQuestion = useCallback(
     async (s: PracticeSessionView, qid: string) => {
       let sessionSnapshot = s;
-      if (routeMode === "practice") {
+      const samePaperVariantSwitch =
+        routeMode === "practice" &&
+        qRef.current != null &&
+        isSamePaperQuestion(qid, qRef.current);
+      if (routeMode === "practice" && !samePaperVariantSwitch) {
         try {
           sessionSnapshot = await fetchPracticeSession(sessionId);
+          if (sessionSnapshot.status === "active" && !sessionSnapshot.engagedSince) {
+            sessionSnapshot = await engagePracticeSession(sessionId);
+          }
           setSession(sessionSnapshot);
         } catch {
           /* keep local snapshot */
@@ -671,6 +702,7 @@ export default function PracticeQuestionPage() {
   }
 
   function goToTile(qid: string) {
+    if (session?.status === "completed") return;
     if (qid === sessionAnchorQuestionId(q, questionId)) return;
     navigate(sessionPath(sessionId, qid));
   }
@@ -700,7 +732,7 @@ export default function PracticeQuestionPage() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (busy || pageLoading || !questionContentReady) return;
+      if (busy || pageLoading || !questionContentReady || session?.status === "completed") return;
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
 
@@ -807,9 +839,14 @@ export default function PracticeQuestionPage() {
     );
   }
 
+  const sessionEnded = session.status === "completed";
+  const pageClassName = `practice-run-page practice-run-page--${routeMode}${
+    sessionEnded ? " practice-run-page--session-ended" : ""
+  }`;
+
   if (!q) {
     return (
-      <main className={`practice-run-page practice-run-page--${routeMode}`}>
+      <main className={pageClassName}>
         <header className="practice-run-header">
           <div className="practice-run-header__sticky sticky-below-header">
             <div className="practice-run-header__top">
@@ -834,6 +871,7 @@ export default function PracticeQuestionPage() {
             </section>
           </div>
         </div>
+        {sessionEnded && <SessionExpiredDialog mode={routeMode} sessionId={sessionId} />}
       </main>
     );
   }
@@ -1032,9 +1070,13 @@ export default function PracticeQuestionPage() {
     if (!q || !session) return null;
     const sessionNo = activeTile?.number ?? session.currentIndex + 1;
     const goVariant = (qid: string) => {
+      if (session.status === "completed") return;
       if (qid === questionId) return;
-      if (isSamePaperQuestion(qid, q)) setContentLoading(true);
+      if (isSamePaperQuestion(qid, q)) {
+        beginVariantSwitch(variantSwitchGateRef, qid, setContentLoading);
+      }
       navigate(sessionPath(sessionId, qid));
+      void loadQuestionById(qid, { prefetch: true });
     };
     const switchLoader = samePaperSwitchPending
       ? variantSwitchLoaderForTarget(questionId, family)
@@ -1110,7 +1152,7 @@ export default function PracticeQuestionPage() {
               options={q.options ?? []}
               selected={selected}
               onSelect={setSelected}
-              disabled={busy || answerRevealed}
+              disabled={sessionEnded || busy || answerRevealed}
               correctAnswer={revealedAnswer}
               showCorrect={answerRevealed && Boolean(revealedAnswer)}
               showWrong={
@@ -1463,7 +1505,7 @@ export default function PracticeQuestionPage() {
     (routeMode === "practice" || (!result && !tileLocked));
 
   return (
-    <main className={`practice-run-page practice-run-page--${routeMode}`}>
+    <main className={pageClassName}>
       <header className="practice-run-header">
         <div className="practice-run-header__sticky sticky-below-header">
           <div className="practice-run-header__top">
@@ -1637,7 +1679,7 @@ export default function PracticeQuestionPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          disabled={busy || answerRevealed}
+                          disabled={sessionEnded || busy || answerRevealed}
                           onClick={() => setSelected(opt.value)}
                           className={`practice-run-option${active ? " is-selected" : ""}${
                             isOptCorrect ? " is-correct" : ""
@@ -1736,6 +1778,7 @@ export default function PracticeQuestionPage() {
       )}
 
       {showSessionFooter && renderSessionFooterNav("solve-page__footer-nav--fixed")}
+      {sessionEnded && <SessionExpiredDialog mode={routeMode} sessionId={sessionId} />}
     </main>
   );
 }

@@ -43,18 +43,16 @@ final class SessionTiming {
         if (!"active".equals(session.getStatus())) {
             return null;
         }
-        if (session.getEngagedSince() != null) {
-            flushEngagement(session, now);
-        }
         if (session.getStartedAt() != null
                 && now.getEpochSecond() - session.getStartedAt().getEpochSecond() > MAX_AGE_SECONDS) {
             return ExpiryReason.MAX_AGE;
         }
-        if (session.getActiveSeconds() >= MAX_ACTIVE_SECONDS) {
+        if (currentActiveSeconds(session, now) >= MAX_ACTIVE_SECONDS) {
             return ExpiryReason.MAX_ACTIVE;
         }
         Instant lastAway = session.getLastDisengagedAt();
-        if (lastAway != null
+        if (session.getEngagedSince() == null
+                && lastAway != null
                 && now.getEpochSecond() - lastAway.getEpochSecond() > AWAY_IDLE_SECONDS) {
             return ExpiryReason.AWAY_IDLE;
         }
