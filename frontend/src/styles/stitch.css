@@ -1621,8 +1621,69 @@ html:not(.dark) .stitch-viewport {
   .auth-google {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
-    margin-bottom: 0.35rem;
+    gap: 1rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .auth-google__wrap--disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .auth-google__btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    padding: 0.78rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 18, 32, 0.92);
+    color: #ece9ff;
+    font-family: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.12s ease;
+  }
+
+  .auth-google__btn:hover:not(:disabled) {
+    border-color: rgba(220, 184, 255, 0.32);
+    background: rgba(32, 28, 52, 0.98);
+    box-shadow: 0 0 0 1px rgba(138, 43, 226, 0.12);
+  }
+
+  .auth-google__btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .auth-google__btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .auth-google__icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+  }
+
+  .auth-google__gsi-host {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .auth-google__divider {
@@ -1630,9 +1691,10 @@ html:not(.dark) .stitch-viewport {
     align-items: center;
     gap: 0.75rem;
     color: #6b7280;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
   }
 
   .auth-google__divider::before,
@@ -1640,18 +1702,18 @@ html:not(.dark) .stitch-viewport {
     content: "";
     flex: 1;
     height: 1px;
-    background: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.12) 20%,
+      rgba(255, 255, 255, 0.12) 80%,
+      transparent
+    );
   }
 
-  .auth-google__button {
-    display: flex;
-    justify-content: center;
+  .auth-google__wrap {
+    position: relative;
     width: 100%;
-  }
-
-  .auth-google__button--disabled {
-    opacity: 0.55;
-    pointer-events: none;
   }
 
   /* Mobile-only fixed bottom chrome */
