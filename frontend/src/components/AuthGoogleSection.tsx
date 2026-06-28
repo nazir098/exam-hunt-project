@@ -9,6 +9,13 @@ type Props = {
   onError: (message: string) => void;
 };
 
+type GoogleStatus = {
+  enabled: boolean;
+  clientId: string;
+};
+
+const ENV_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
+
 function GoogleGIcon() {
   return (
     <svg className="auth-google__icon" viewBox="0 0 24 24" aria-hidden>
@@ -82,31 +89,62 @@ function GoogleSignInControl({
   );
 }
 
+function resolveGoogleStatus(status: GoogleStatus | null): GoogleStatus | null {
+  const viteOff = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "false";
+  if (viteOff) return null;
+
+  const clientId = (status?.clientId || ENV_CLIENT_ID).trim();
+  if (!clientId) return null;
+
+  const enabled = status?.enabled ?? Boolean(ENV_CLIENT_ID);
+  if (!enabled) return null;
+
+  return { enabled: true, clientId };
+}
+
 export default function AuthGoogleSection(props: Props) {
-  const [status, setStatus] = useState<{ enabled: boolean; clientId: string } | null>(null);
+  const [status, setStatus] = useState<GoogleStatus | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     fetchGoogleAuthStatus()
       .then((data) => {
         if (!cancelled) setStatus(data);
       })
       .catch(() => {
-        if (!cancelled) setStatus({ enabled: false, clientId: "" });
+        if (!cancelled && ENV_CLIENT_ID) {
+          setStatus({ enabled: true, clientId: ENV_CLIENT_ID });
+        } else if (!cancelled) {
+          setStatus({ enabled: false, clientId: "" });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const viteOff = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "false";
-  if (viteOff || !status?.enabled || !status.clientId) {
+  const resolved = resolveGoogleStatus(status);
+
+  if (loading && !ENV_CLIENT_ID) {
+    return (
+      <div className="auth-google auth-google--loading" aria-hidden>
+        <div className="auth-google__btn auth-google__btn--placeholder" />
+      </div>
+    );
+  }
+
+  if (!resolved) {
     return null;
   }
 
   return (
     <div className="auth-google">
-      <GoogleOAuthProvider clientId={status.clientId}>
+      <GoogleOAuthProvider clientId={resolved.clientId}>
         <div className={props.disabled ? "auth-google__wrap auth-google__wrap--disabled" : "auth-google__wrap"}>
           <GoogleSignInControl {...props} />
         </div>

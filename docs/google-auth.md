@@ -18,9 +18,11 @@ Add to project root `.env`:
 ```env
 GOOGLE_AUTH_ENABLED=true
 GOOGLE_CLIENT_ID=123456789-xxxx.apps.googleusercontent.com
+# Optional: show the button even if /api/auth/google/status is slow or missing (Pages builds)
+VITE_GOOGLE_CLIENT_ID=123456789-xxxx.apps.googleusercontent.com
 ```
 
-Restart the backend. The login and register pages show **Continue with Google** when `/api/auth/google/status` returns `enabled: true`.
+Restart the backend (`scripts/dev-api.sh`). Restart Vite if you add `VITE_*` vars. The login and register pages show **Continue with Google** when `/api/auth/google/status` returns `enabled: true` (or when `VITE_GOOGLE_CLIENT_ID` is set).
 
 Optional frontend-only hide:
 
@@ -35,7 +37,13 @@ GOOGLE_AUTH_ENABLED=true
 GOOGLE_CLIENT_ID=<same-web-client-id>
 ```
 
-Redeploy/restart API. Redeploy Cloudflare Pages if you use `VITE_*` overrides.
+Redeploy/restart API (Watchtower + `docker compose up -d api`). Verify:
+
+```bash
+curl https://api.techmuzzle.in/api/auth/google/status
+```
+
+Redeploy Cloudflare Pages if you use `VITE_*` overrides.
 
 ## Behaviour
 

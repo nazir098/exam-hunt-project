@@ -74,7 +74,11 @@ PUBLIC_FILES_BASE_URL=https://pub-e97c6c0fb4ed4d289eea27512d33293d.r2.dev
 # IMPORT_PACK_FOLDERS=2016,2025
 CORS_ORIGINS=https://www.techmuzzle.in,https://exam-hunt-project.pages.dev,http://localhost:8080,http://localhost:5173
 LEADERBOARD_DEMO_SEED=false
+GOOGLE_AUTH_ENABLED=true
+GOOGLE_CLIENT_ID=<web-oauth-client-id.apps.googleusercontent.com>
 ```
+
+After changing env vars, restart the API container (`docker compose up -d api`). Watchtower pulls new images automatically, but **env changes require a manual restart**. See **[google-auth.md](./google-auth.md)** for OAuth console setup.
 
 Do **not** set `EXTRACTOR_ROOT` on EC2 unless you mount extractor output on the server. Production import reads manifests and metadata from R2 via `PUBLIC_FILES_BASE_URL`.
 
@@ -216,7 +220,15 @@ Production environment variable:
 VITE_API_BASE_URL=https://api.techmuzzle.in
 ```
 
+Optional (only if the API status endpoint is unavailable — sign-in still requires a backend with `/api/auth/google`):
+
+```text
+VITE_GOOGLE_CLIENT_ID=<same-web-oauth-client-id>
+```
+
 After changing env vars, redeploy the latest production deployment.
+
+**Google sign-in checklist:** `curl https://api.techmuzzle.in/api/auth/google/status` must return `{"enabled":true,"clientId":"..."}` — not `404`. If you see `404`, redeploy the backend image (GitHub Actions → *Publish backend image*) and restart EC2 `docker compose up -d api` with `GOOGLE_*` env vars set.
 
 ### Web & product analytics
 

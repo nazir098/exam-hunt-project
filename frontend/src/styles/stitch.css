@@ -1716,6 +1716,24 @@ html:not(.dark) .stitch-viewport {
     width: 100%;
   }
 
+  .auth-google__btn--placeholder {
+    min-height: 2.95rem;
+    border-color: rgba(255, 255, 255, 0.06);
+    background: rgba(18, 18, 32, 0.55);
+    animation: auth-google-pulse 1.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes auth-google-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+
   /* Mobile-only fixed bottom chrome */
   .mobile-bottom-nav {
     display: none;

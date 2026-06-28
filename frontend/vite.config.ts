@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  /** Load VITE_* from project root .env alongside frontend/.env */
+  envDir: "..",
   plugins: [react()],
   css: {
     postcss: "./postcss.config.js",
