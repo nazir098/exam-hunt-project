@@ -77,12 +77,60 @@ docker inspect exam-hunt-api --format '{{.Config.Image}} {{index .Config.Labels 
 Push backend changes to `main`. GitHub Actions publishes a new `latest` image.
 Watchtower checks every 5 minutes and restarts the `api` container when a new image exists.
 
-Manual update if needed:
+Manual update (recommended after Google auth or any urgent API change):
+
+```bash
+cd ~/exam-hunt
+chmod +x rollout-api.sh
+./rollout-api.sh
+```
+
+Or manually:
 
 ```bash
 docker compose pull api
 docker compose up -d api
+curl -s http://127.0.0.1:8081/actuator/info
+curl -s http://127.0.0.1:8081/api/auth/google/status
 ```
+
+### Google Sign-In not visible on production
+
+Symptoms: login page has no **Continue with Google**; public check returns `404`:
+
+```bash
+curl -s https://api.techmuzzle.in/api/auth/google/status
+```
+
+Fix on EC2:
+
+1. Add to `~/exam-hunt/.env`:
+
+```env
+GOOGLE_AUTH_ENABLED=true
+GOOGLE_CLIENT_ID=<your-web-client-id>.apps.googleusercontent.com
+```
+
+2. Pull and restart (Watchtower may be behind):
+
+```bash
+cd ~/exam-hunt && ./rollout-api.sh
+```
+
+3. Verify:
+
+```bash
+curl -s https://api.techmuzzle.in/api/auth/google/status
+# {"enabled":true,"clientId":"..."}
+```
+
+Compare running commit vs `main`:
+
+```bash
+curl -s https://api.techmuzzle.in/actuator/info
+```
+
+If `commit` is older than your latest `main` push, `docker compose pull api` did not run or GHCR login failed — re-run `docker login ghcr.io` and `./rollout-api.sh`.
 
 Check Watchtower:
 

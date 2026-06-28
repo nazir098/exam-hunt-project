@@ -14,8 +14,10 @@ public class AnalyticsEvent {
 
     @Id
     private String id;
+
     @Indexed
     private String name;
+    
     private String userId;
     @Indexed
     private String sessionId;
