@@ -1,5 +1,6 @@
 package com.neetlu.examhunt.web;
 
+import com.neetlu.examhunt.model.AssetPlacement;
 import com.neetlu.examhunt.model.McqOption;
 import com.neetlu.examhunt.model.Question;
 
@@ -64,5 +65,29 @@ final class QuestionVariantMapper {
 
     static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    static List<QuestionController.AssetPlacementView> mapAssetPlacements(Question q) {
+        if (q.getAssetPlacements() == null || q.getAssetPlacements().isEmpty()) {
+            return List.of();
+        }
+        return q.getAssetPlacements().stream().map(QuestionVariantMapper::toAssetView).toList();
+    }
+
+    static List<PracticeController.AssetPlacementView> mapAssetPlacementsForPractice(Question q) {
+        if (q.getAssetPlacements() == null || q.getAssetPlacements().isEmpty()) {
+            return List.of();
+        }
+        return q.getAssetPlacements().stream()
+                .map(
+                        p ->
+                                new PracticeController.AssetPlacementView(
+                                        p.getIndex(), p.getMarker(), p.getPath(), p.getUrl()))
+                .toList();
+    }
+
+    private static QuestionController.AssetPlacementView toAssetView(AssetPlacement p) {
+        return new QuestionController.AssetPlacementView(
+                p.getIndex(), p.getMarker(), p.getPath(), p.getUrl());
     }
 }

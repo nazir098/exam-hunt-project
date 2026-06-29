@@ -17,30 +17,11 @@ import ZoomableImage from "../components/ZoomableImage";
 import { practiceReviewRoute, sessionResultRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
 import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
-
-function imageSrc(url: string, questionId?: string) {
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
-  if (questionId) {
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}v=${encodeURIComponent(questionId)}`;
-  }
-  return url;
-}
-
-function usesTextVariantLayout(q: PracticeQuestion) {
-  if (q.options && q.options.length > 0) return true;
-  if (q.questionDiagramSvg?.trim()) return true;
-  if (q.assertion?.trim() || q.reason?.trim()) return true;
-  if (q.statements && q.statements.length > 0) return true;
-  if (q.matchListA && q.matchListA.length > 0) return true;
-  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
-  return false;
-}
-
-function isImageQuestion(q: PracticeQuestion) {
-  return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
-}
+import {
+  cacheBustImageUrl,
+  hybridDiagramUrl,
+  isImageQuestion,
+} from "../utils/questionRender";
 
 function variantMcqProps(q: PracticeQuestion) {
   const isVariant = isAiVariantQuestion(q);
@@ -53,8 +34,9 @@ function variantMcqProps(q: PracticeQuestion) {
     matchListA: q.matchListA,
     matchListB: q.matchListB,
     questionId: q.questionId,
-    questionImageUrl: q.questionImageUrl,
+    questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
+    assetPlacements: q.assetPlacements,
     variantTheme: isVariant,
     variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
   };
@@ -229,7 +211,7 @@ export default function PracticeReviewPage() {
               <div className="test-review-question__media">
                 {isImageQuestion(question) ? (
                   <ZoomableImage
-                    src={imageSrc(question.questionImageUrl, question.questionId)}
+                    src={cacheBustImageUrl(question.questionImageUrl, question.questionId)}
                     alt={`Question ${activeReview.questionNo}`}
                   />
                 ) : (
@@ -273,7 +255,7 @@ export default function PracticeReviewPage() {
                   </button>
                   {showSolution && (
                     <img
-                      src={imageSrc(activeReview.solutionImageUrl, activeReview.questionId)}
+                      src={cacheBustImageUrl(activeReview.solutionImageUrl, activeReview.questionId)}
                       alt="Solution"
                       draggable={false}
                     />

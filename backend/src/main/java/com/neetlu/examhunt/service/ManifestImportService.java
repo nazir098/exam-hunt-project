@@ -47,6 +47,7 @@ public class ManifestImportService {
     private final RestTemplate restTemplate;
     private final PackStatsService packStatsService;
     private final PublicCatalogCacheInvalidator catalogCacheInvalidator;
+    private final StructuredContentService structuredContentService;
     private final Object importMonitor = new Object();
 
     public ManifestImportService(
@@ -55,13 +56,15 @@ public class ManifestImportService {
             AppProperties appProperties,
             ObjectMapper objectMapper,
             PackStatsService packStatsService,
-            PublicCatalogCacheInvalidator catalogCacheInvalidator) {
+            PublicCatalogCacheInvalidator catalogCacheInvalidator,
+            StructuredContentService structuredContentService) {
         this.packRepository = packRepository;
         this.questionRepository = questionRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.packStatsService = packStatsService;
         this.catalogCacheInvalidator = catalogCacheInvalidator;
+        this.structuredContentService = structuredContentService;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(20));
         factory.setReadTimeout(Duration.ofSeconds(120));
@@ -765,14 +768,28 @@ public class ManifestImportService {
         doc.setHasDiagram(q.path("has_diagram").asBoolean(false));
         doc.setHasEquation(q.path("has_equation").asBoolean(false));
         doc.setAnswerOnly(q.path("answer_only").asBoolean(false));
-        String renderMode = text(q, "render_mode");
-        String diagramUrl = text(q, "question_diagram_url");
-        String compositeUrl = text(q, "question_image_url");
-        if ("hybrid".equalsIgnoreCase(renderMode) && !diagramUrl.isBlank()) {
-            doc.setQuestionImageUrl(rewriteAssetUrl(diagramUrl, sourceFolder));
-        } else {
-            doc.setQuestionImageUrl(rewriteAssetUrl(compositeUrl, sourceFolder));
+
+        boolean structured = structuredContentService.applyStructuredContent(doc, q, sourceFolder);
+        if (!structured) {
+            try {
+                structured =
+                        loadQuestionMetadataNode(doc.getQuestionId(), sourceFolder)
+                                .map(
+                                        meta ->
+                                                structuredContentService.applyStructuredContent(
+                                                        doc, meta, sourceFolder))
+                                .orElse(false);
+            } catch (IOException ignored) {
+                structured = false;
+            }
         }
+
+        if (!structured) {
+            String compositeUrl = text(q, "question_image_url");
+            doc.setQuestionImageUrl(rewriteAssetUrl(compositeUrl, sourceFolder));
+            doc.setRenderMode("image");
+        }
+
         String solutionUrl = text(q, "solution_image_url");
         if (solutionUrl.isBlank()) {
             solutionUrl = text(q, "solution_image");
@@ -784,14 +801,16 @@ public class ManifestImportService {
             solutionText = buildSolutionTextPreview(q);
         }
         doc.setHasSolution(hasSolutionFlag || !solutionUrl.isBlank() || !solutionText.isBlank());
-        String preview = text(q, "question_text_preview");
-        if (preview.isBlank()) {
-            preview = text(q, "question_text");
+        if (!structured) {
+            String preview = text(q, "question_text_preview");
+            if (preview.isBlank()) {
+                preview = text(q, "question_text");
+            }
+            doc.setQuestionTextPreview(sanitize(preview));
+            doc.setOptions(readMcqOptions(q.path("options")));
         }
-        doc.setQuestionTextPreview(sanitize(preview));
         doc.setSolutionTextPreview(solutionText);
         doc.setHints(readHintsList(q.path("hints")));
-        doc.setOptions(readMcqOptions(q.path("options")));
         doc.setFormulaCards(readFormulaCards(q.path("formula_cards")));
         doc.setConceptExplanation(sanitize(text(q, "concept_explanation")));
         doc.setCommonMistakes(readStringList(q.path("common_mistakes")));
@@ -1188,11 +1207,23 @@ public class ManifestImportService {
     }
 
     /**
-     * Backfill MCQ options, hints, and text solutions for AI variants already in MongoDB
-     * (e.g. imported before options support) by reading extractor metadata/AI_*.json.
+     * Backfill MCQ options, structured text, and diagrams from extractor metadata/{id}.json.
      */
+    public Question enrichFromDisk(Question doc) {
+        if (doc == null) {
+            return null;
+        }
+        if ("ai_variant".equalsIgnoreCase(doc.getSourceType())) {
+            return enrichVariantFromDisk(doc);
+        }
+        return enrichPyqFromDisk(doc);
+    }
+
     public Question enrichVariantFromDisk(Question doc) {
         if (doc == null || !"ai_variant".equalsIgnoreCase(doc.getSourceType())) {
+            return doc;
+        }
+        if (!structuredContentService.needsVariantDiskEnrichment(doc)) {
             return doc;
         }
         try {
@@ -1211,20 +1242,43 @@ public class ManifestImportService {
         }
     }
 
-    private java.util.Optional<JsonNode> loadVariantMetadataNode(Question doc) throws IOException {
-        String folder = resolveSourceFolder(doc.getPackId());
+    private Question enrichPyqFromDisk(Question doc) {
+        if (!structuredContentService.needsPyqDiskEnrichment(doc)) {
+            return doc;
+        }
+        try {
+            String folder = resolveSourceFolder(doc.getPackId());
+            java.util.Optional<JsonNode> metadata =
+                    loadQuestionMetadataNode(doc.getQuestionId(), folder);
+            if (metadata.isEmpty()) {
+                doc.setRenderMode("image");
+                return questionRepository.save(doc);
+            }
+            JsonNode meta = metadata.get();
+            boolean applied = structuredContentService.applyStructuredContent(doc, meta, folder);
+            if (!applied) {
+                doc.setRenderMode("image");
+            }
+            return questionRepository.save(doc);
+        } catch (Exception ex) {
+            return doc;
+        }
+    }
+
+    private java.util.Optional<JsonNode> loadQuestionMetadataNode(String questionId, String sourceFolder)
+            throws IOException {
         Optional<Path> outputRootOptional = resolveOutputRootOptional();
         if (outputRootOptional.isPresent()) {
             Path file =
-                    localYearPath(outputRootOptional.get(), folder)
+                    localYearPath(outputRootOptional.get(), sourceFolder)
                             .resolve("metadata")
-                            .resolve(doc.getQuestionId() + ".json");
+                            .resolve(questionId + ".json");
             if (Files.isRegularFile(file)) {
                 return java.util.Optional.of(objectMapper.readTree(file.toFile()));
             }
         }
-        String fileName = doc.getQuestionId() + ".json";
-        for (String url : remoteMetadataFileUrls(folder, null, fileName)) {
+        String fileName = questionId + ".json";
+        for (String url : remoteMetadataFileUrls(sourceFolder, null, fileName)) {
             try {
                 String body = restTemplate.getForObject(url, String.class);
                 if (body != null && !body.isBlank()) {
@@ -1235,6 +1289,10 @@ public class ManifestImportService {
             }
         }
         return java.util.Optional.empty();
+    }
+
+    private java.util.Optional<JsonNode> loadVariantMetadataNode(Question doc) throws IOException {
+        return loadQuestionMetadataNode(doc.getQuestionId(), resolveSourceFolder(doc.getPackId()));
     }
 
     private String resolveSourceFolder(String packId) {

@@ -47,7 +47,7 @@ public class AdminQuestionService {
 
     public AdminQuestionDetail get(String questionId) {
         Question q = require(questionId);
-        q = manifestImportService.enrichVariantFromDisk(q);
+        q = manifestImportService.enrichFromDisk(q);
         return AdminQuestionDetail.from(q);
     }
 
@@ -318,7 +318,11 @@ public class AdminQuestionService {
             String practicePattern,
             String revisionNotes,
             Map<String, String> whyWrongByAnswer,
-            Set<String> adminLockedFields) {
+            Set<String> adminLockedFields,
+            String renderMode,
+            List<AssetPlacementView> assetPlacements) {
+
+        public record AssetPlacementView(int index, String marker, String path, String url) {}
 
         static AdminQuestionDetail from(Question q) {
             return new AdminQuestionDetail(
@@ -361,7 +365,21 @@ public class AdminQuestionService {
                     nullToEmpty(q.getPracticePattern()),
                     nullToEmpty(q.getRevisionNotes()),
                     q.getWhyWrongByAnswer() != null ? Map.copyOf(q.getWhyWrongByAnswer()) : Map.of(),
-                    q.getAdminLockedFields() != null ? Set.copyOf(q.getAdminLockedFields()) : Set.of());
+                    q.getAdminLockedFields() != null ? Set.copyOf(q.getAdminLockedFields()) : Set.of(),
+                    nullToEmpty(q.getRenderMode()),
+                    mapAssetPlacements(q));
+        }
+
+        private static List<AssetPlacementView> mapAssetPlacements(Question q) {
+            if (q.getAssetPlacements() == null || q.getAssetPlacements().isEmpty()) {
+                return List.of();
+            }
+            return q.getAssetPlacements().stream()
+                    .map(
+                            p ->
+                                    new AssetPlacementView(
+                                            p.getIndex(), p.getMarker(), p.getPath(), p.getUrl()))
+                    .toList();
         }
 
         private static List<OptionView> mapOptions(Question q) {

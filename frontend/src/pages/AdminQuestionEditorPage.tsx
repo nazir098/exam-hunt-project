@@ -22,21 +22,9 @@ import AppLoader from "../components/AppLoader";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import { PRACTICE_AI_FEATURES } from "../utils/practiceAiFeatures";
+import { hybridDiagramUrl, isImageQuestion } from "../utils/questionRender";
 
 const OPTION_IDS = ["1", "2", "3", "4"];
-
-function usesTextVariantLayout(q: AdminQuestionDetail) {
-  if (q.options && q.options.length > 0) return true;
-  if (q.questionDiagramSvg?.trim()) return true;
-  if (q.assertion?.trim() || q.reason?.trim()) return true;
-  if (q.statements && q.statements.length > 0) return true;
-  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
-  return false;
-}
-
-function isImageQuestion(q: AdminQuestionDetail) {
-  return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
-}
 
 function emptyOptions(): McqOptionView[] {
   return OPTION_IDS.map((id) => ({ id, text: "" }));
@@ -471,8 +459,9 @@ export default function AdminQuestionEditorPage() {
                 matchListA={previewQ.matchListA}
                 matchListB={previewQ.matchListB}
                 questionId={previewQ.questionId}
-                questionImageUrl={previewQ.questionImageUrl}
+                questionImageUrl={hybridDiagramUrl(previewQ)}
                 questionDiagramSvg={previewQ.questionDiagramSvg}
+                assetPlacements={previewQ.assetPlacements}
                 correctAnswer={previewQ.answer}
                 showCorrect={showSolution}
               />

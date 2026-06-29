@@ -71,6 +71,10 @@ public class Question {
     /** Inline SVG from extractor diagrams/ (when no raster image). */
     private String questionDiagramSvg;
     private String solutionDiagramSvg;
+    /** structured | hybrid | image — from pdf-qa-extractor render_mode. */
+    private String renderMode;
+    /** Inline diagram placements for {{asset:N}} markers in structured stems. */
+    private List<AssetPlacement> assetPlacements;
     /** Field names admin edited — import/enrich/LLM must not overwrite these. */
     private Set<String> adminLockedFields;
 
@@ -400,6 +404,22 @@ public class Question {
 
     public void setSolutionDiagramSvg(String solutionDiagramSvg) {
         this.solutionDiagramSvg = solutionDiagramSvg;
+    }
+
+    public String getRenderMode() {
+        return renderMode;
+    }
+
+    public void setRenderMode(String renderMode) {
+        this.renderMode = renderMode;
+    }
+
+    public List<AssetPlacement> getAssetPlacements() {
+        return assetPlacements;
+    }
+
+    public void setAssetPlacements(List<AssetPlacement> assetPlacements) {
+        this.assetPlacements = assetPlacements;
     }
 
     public Set<String> getAdminLockedFields() {

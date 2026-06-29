@@ -24,6 +24,11 @@ import {
   type VariantSwitchGate,
 } from "../utils/variantSwitchTiming";
 import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
+import {
+  cacheBustImageUrl,
+  hybridDiagramUrl,
+  isImageQuestion,
+} from "../utils/questionRender";
 
 const OPTIONS = [
   { label: "1", value: "1" },
@@ -31,34 +36,6 @@ const OPTIONS = [
   { label: "3", value: "3" },
   { label: "4", value: "4" },
 ];
-
-function imageSrc(url: string, questionId: string) {
-  if (!url) return "";
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${encodeURIComponent(questionId)}`;
-}
-
-function usesTextVariantLayout(q: QuestionDetail) {
-  if (q.options && q.options.length > 0) return true;
-  if (q.questionDiagramSvg?.trim()) return true;
-  if (q.assertion?.trim() || q.reason?.trim()) return true;
-  if (q.statements && q.statements.length > 0) return true;
-  if (q.matchListA && q.matchListA.length > 0) return true;
-  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
-  return false;
-}
-
-function isImageQuestion(q: QuestionDetail) {
-  return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
-}
-
-/** PYQ hybrid: show composite crop as diagram only when the question has a figure. */
-function hybridDiagramUrl(q: QuestionDetail) {
-  if (!q.questionImageUrl?.trim()) return "";
-  if (q.sourceType === "ai_variant") return imageSrc(q.questionImageUrl, q.questionId);
-  if (!q.hasDiagram) return "";
-  return imageSrc(q.questionImageUrl, q.questionId);
-}
 
 function optionLabel(value: string) {
   return `Option ${value}`;
@@ -160,7 +137,7 @@ export default function QuestionPage() {
     };
   }, [familyParent]);
 
-  useEffect(() => {
+  const prefetchFamilyVariants = useCallback(() => {
     if (!family) return;
     const ids = [
       family.pyq.questionId,
@@ -547,6 +524,7 @@ export default function QuestionPage() {
                 questionId={questionId}
                 family={family}
                 onSelect={goToQuestion}
+                onPrefetchVariants={prefetchFamilyVariants}
               />
             )}
 
@@ -566,7 +544,7 @@ export default function QuestionPage() {
                 />
               ) : imageMode ? (
                 <ZoomableImage
-                  src={imageSrc(q.questionImageUrl, questionId)}
+                  src={cacheBustImageUrl(q.questionImageUrl, questionId)}
                   alt={`Question ${q.questionNo}`}
                 />
               ) : (
@@ -589,6 +567,7 @@ export default function QuestionPage() {
                   questionId={q.questionId}
                   questionImageUrl={hybridDiagramUrl(q)}
                   questionDiagramSvg={q.questionDiagramSvg}
+                  assetPlacements={q.assetPlacements}
                   variantTheme={isVariant}
                   variantLabel={
                     isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined
@@ -660,7 +639,7 @@ export default function QuestionPage() {
               {q.solutionImageUrl?.trim() ? (
                 <div className="practice-run-question__media solve-page__solution-media">
                   <ZoomableImage
-                    src={imageSrc(q.solutionImageUrl, questionId)}
+                    src={cacheBustImageUrl(q.solutionImageUrl, questionId)}
                     alt={`Solution for question ${q.questionNo}`}
                   />
                 </div>

@@ -28,6 +28,8 @@ type Props = {
   /** When provided, skips internal family fetch (parent loads once per PYQ). */
   family?: QuestionFamily | null;
   onSelect: (questionId: string) => void;
+  /** Warm variant question payloads when the user opens the menu (not on every page load). */
+  onPrefetchVariants?: () => void;
   className?: string;
 };
 
@@ -35,6 +37,7 @@ export default function QuestionVariantSwitcher({
   questionId,
   family: familyProp,
   onSelect,
+  onPrefetchVariants,
   className = "",
 }: Props) {
   const [familyLocal, setFamilyLocal] = useState<QuestionFamily | null>(null);
@@ -56,6 +59,11 @@ export default function QuestionVariantSwitcher({
       cancelled = true;
     };
   }, [questionId, familyProp]);
+
+  useEffect(() => {
+    if (!open || !onPrefetchVariants) return;
+    onPrefetchVariants();
+  }, [open, onPrefetchVariants]);
 
   useEffect(() => {
     if (!open) return;

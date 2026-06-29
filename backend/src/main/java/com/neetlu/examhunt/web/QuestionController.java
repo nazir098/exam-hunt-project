@@ -88,7 +88,7 @@ public class QuestionController {
     public QuestionDetail get(@PathVariable String questionId) {
         Question q = questionRepository.findByQuestionId(questionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
-        q = manifestImportService.enrichVariantFromDisk(q);
+        q = manifestImportService.enrichFromDisk(q);
         return QuestionDetail.from(q, includeSensitiveFields());
     }
 
@@ -180,6 +180,8 @@ public class QuestionController {
 
     public record McqOptionView(String id, String text) {}
 
+    public record AssetPlacementView(int index, String marker, String path, String url) {}
+
     private static java.util.List<McqOptionView> mapOptions(Question q) {
         if (q.getOptions() == null || q.getOptions().isEmpty()) {
             return java.util.List.of();
@@ -239,7 +241,9 @@ public class QuestionController {
             java.util.List<McqOptionView> matchListA,
             java.util.List<McqOptionView> matchListB,
             String questionDiagramSvg,
-            String solutionDiagramSvg
+            String solutionDiagramSvg,
+            String renderMode,
+            java.util.List<AssetPlacementView> assetPlacements
     ) {
         static QuestionDetail from(Question q) {
             return from(q, true);
@@ -283,7 +287,9 @@ public class QuestionController {
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
                     includeSensitive
                             ? QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg())
-                            : "");
+                            : "",
+                    QuestionVariantMapper.nullToEmpty(q.getRenderMode()),
+                    QuestionVariantMapper.mapAssetPlacements(q));
         }
     }
 

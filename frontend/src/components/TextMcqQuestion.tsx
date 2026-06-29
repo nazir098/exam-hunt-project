@@ -1,7 +1,9 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, type ReactNode } from "react";
 import AiMarkdown from "./AiMarkdown";
 import BookmarkButton from "./BookmarkButton";
 import VariantDiagram from "./VariantDiagram";
+import type { AssetPlacementView } from "../api";
+import { resolveAssetUrl, stemHasInlineAssets } from "../utils/questionRender";
 import { formatVariantTypeLabel, needsQuestionPrefix, questionStemBody, capitalizeStemStart, resolveAssertionReasonOptions } from "../utils/variantLabels";
 import {
   listRomanLabel,
@@ -35,6 +37,7 @@ type Props = {
   questionId?: string;
   questionImageUrl?: string;
   questionDiagramSvg?: string;
+  assetPlacements?: AssetPlacementView[];
   /** Dark EduMaster-style card for AI variations. */
   variantTheme?: boolean;
   variantLabel?: string;
@@ -99,6 +102,51 @@ function resolveOptionsLayout(format: string, options: McqOptionView[]): Options
   return "horizontal";
 }
 
+function renderStemWithInlineAssets(
+  text: string,
+  questionId: string,
+  placements: AssetPlacementView[] | undefined,
+  stemText: (value: string) => string,
+  markdownClass: string
+) {
+  const pattern = /\{\{asset:(\d+)\}\}/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(
+        <AiMarkdown
+          key={`stem-${lastIndex}`}
+          text={stemText(text.slice(lastIndex, match.index))}
+          className={markdownClass}
+        />
+      );
+    }
+    const assetIndex = Number(match[1]);
+    nodes.push(
+      <VariantDiagram
+        key={`asset-${match.index}`}
+        imageUrl={resolveAssetUrl(assetIndex, placements, questionId)}
+        svg=""
+        alt="Question figure"
+        className="text-mcq-paper__diagram text-mcq-paper__diagram--inline"
+      />
+    );
+    lastIndex = pattern.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(
+      <AiMarkdown
+        key={`stem-${lastIndex}`}
+        text={stemText(text.slice(lastIndex))}
+        className={markdownClass}
+      />
+    );
+  }
+  return nodes;
+}
+
 export default function TextMcqQuestion({
   questionText,
   options,
@@ -119,6 +167,7 @@ export default function TextMcqQuestion({
   questionId = "",
   questionImageUrl = "",
   questionDiagramSvg = "",
+  assetPlacements = [],
   variantTheme = false,
   variantLabel,
 }: Props) {
@@ -185,6 +234,18 @@ export default function TextMcqQuestion({
   const displayVariantLabel = variantLabel ?? formatVariantTypeLabel(variantType);
   const effectiveLayout = variantCard ? "stacked" : optionsLayout;
   const effectivePillGrid = variantCard ? false : usePillGrid;
+  const inlineStemAssets = stemHasInlineAssets(questionText);
+
+  const plainStemContent = useMemo(() => {
+    if (!inlineStemAssets) return null;
+    return renderStemWithInlineAssets(
+      questionText,
+      questionId,
+      assetPlacements,
+      stemText,
+      markdownClass
+    );
+  }, [inlineStemAssets, questionText, questionId, assetPlacements, stemText, markdownClass]);
 
   return (
     <div
@@ -277,26 +338,38 @@ export default function TextMcqQuestion({
           </div>
         ) : showQuestionMarker ? (
           variantCard ? (
-            <AiMarkdown text={stemText(questionBody)} className={markdownClass} />
+            inlineStemAssets ? (
+              <div className="variant-stem variant-stem--inline-assets">{plainStemContent}</div>
+            ) : (
+              <AiMarkdown text={stemText(questionBody)} className={markdownClass} />
+            )
           ) : (
             <div className="variant-stem variant-stem--plain-question">
               <span className="variant-stem__q-marker">Q.</span>
               <div className="variant-stem__question-body">
-                <AiMarkdown text={questionBody} className={markdownClass} />
+                {inlineStemAssets ? (
+                  plainStemContent
+                ) : (
+                  <AiMarkdown text={questionBody} className={markdownClass} />
+                )}
               </div>
             </div>
           )
+        ) : inlineStemAssets ? (
+          <div className="variant-stem variant-stem--inline-assets">{plainStemContent}</div>
         ) : (
           <AiMarkdown text={stemText(questionText)} className={markdownClass} />
         )}
       </div>
 
-      <VariantDiagram
-        imageUrl={questionImageUrl}
-        svg={questionDiagramSvg}
-        alt="Question diagram"
-        className="text-mcq-paper__diagram"
-      />
+      {!inlineStemAssets ? (
+        <VariantDiagram
+          imageUrl={questionImageUrl}
+          svg={questionDiagramSvg}
+          alt="Question diagram"
+          className="text-mcq-paper__diagram"
+        />
+      ) : null}
 
       {sorted.length > 0 ? (
         <ol

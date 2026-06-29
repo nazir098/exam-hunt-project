@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   checkVariantPracticeAnswer,
-  engagePracticeSession,
   fetchPracticeQuestion,
   fetchPracticeSession,
   fetchQuestionFamily,
@@ -45,6 +44,11 @@ import {
   type VariantSwitchGate,
 } from "../utils/variantSwitchTiming";
 import { hasDistinctSolution } from "../utils/questionSolution";
+import {
+  cacheBustImageUrl,
+  hybridDiagramUrl,
+  isImageQuestion,
+} from "../utils/questionRender";
 
 const OPTIONS = [
   { value: "1", label: "1" },
@@ -52,32 +56,6 @@ const OPTIONS = [
   { value: "3", label: "3" },
   { value: "4", label: "4" },
 ];
-
-function imageSrc(url: string) {
-  if (url.startsWith("http")) return url;
-  return url;
-}
-
-function usesTextVariantLayout(q: PracticeQuestion) {
-  if (q.options && q.options.length > 0) return true;
-  if (q.questionDiagramSvg?.trim()) return true;
-  if (q.assertion?.trim() || q.reason?.trim()) return true;
-  if (q.statements && q.statements.length > 0) return true;
-  if (q.matchListA && q.matchListA.length > 0) return true;
-  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
-  return false;
-}
-
-function isImageQuestion(q: PracticeQuestion) {
-  return Boolean(q.questionImageUrl?.trim()) && !usesTextVariantLayout(q);
-}
-
-function hybridDiagramUrl(q: PracticeQuestion) {
-  if (!q.questionImageUrl?.trim()) return "";
-  if (q.sourceType === "ai_variant") return imageSrc(q.questionImageUrl);
-  if (!q.hasDiagram) return "";
-  return imageSrc(q.questionImageUrl);
-}
 
 function variantMcqProps(q: PracticeQuestion) {
   const isVariant = isAiVariantQuestion(q);
@@ -92,6 +70,7 @@ function variantMcqProps(q: PracticeQuestion) {
     questionId: q.questionId,
     questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
+    assetPlacements: q.assetPlacements,
     variantTheme: isVariant,
     variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
   };
@@ -384,16 +363,17 @@ export default function PracticeQuestionPage() {
     [loadQuestionById]
   );
 
-  useEffect(() => {
+  const prefetchFamilyVariants = useCallback(() => {
     if (!family) return;
     const ids = [
       family.pyq.questionId,
       ...family.variants.map((v) => v.questionId),
     ];
     for (const id of ids) {
+      if (id === questionId || questionCacheRef.current.has(id)) continue;
       void loadQuestionById(id, { prefetch: true });
     }
-  }, [family, loadQuestionById]);
+  }, [family, loadQuestionById, questionId]);
 
   const loadSession = useCallback(async () => {
     setError("");
@@ -424,22 +404,7 @@ export default function PracticeQuestionPage() {
 
   const applyQuestion = useCallback(
     async (s: PracticeSessionView, qid: string) => {
-      let sessionSnapshot = s;
-      const samePaperVariantSwitch =
-        routeMode === "practice" &&
-        qRef.current != null &&
-        isSamePaperQuestion(qid, qRef.current);
-      if (routeMode === "practice" && !samePaperVariantSwitch) {
-        try {
-          sessionSnapshot = await fetchPracticeSession(sessionId);
-          if (sessionSnapshot.status === "active" && !sessionSnapshot.engagedSince) {
-            sessionSnapshot = await engagePracticeSession(sessionId);
-          }
-          setSession(sessionSnapshot);
-        } catch {
-          /* keep local snapshot */
-        }
-      }
+      const sessionSnapshot = s;
       const tileIds = new Set(sessionSnapshot.questionTiles?.map((t) => t.questionId) ?? []);
       let accessQuestion: PracticeQuestion | undefined;
       let inSession = tileIds.has(qid);
@@ -1119,6 +1084,7 @@ export default function PracticeQuestionPage() {
             questionId={questionId}
             family={family}
             onSelect={goVariant}
+            onPrefetchVariants={prefetchFamilyVariants}
           />
         )}
         <div
@@ -1143,7 +1109,7 @@ export default function PracticeQuestionPage() {
             )
           ) : isImageQuestion(q) ? (
             <ZoomableImage
-              src={imageSrc(q.questionImageUrl)}
+              src={cacheBustImageUrl(q.questionImageUrl, q.questionId)}
               alt={`Question ${q.questionNo}`}
             />
           ) : (
@@ -1258,7 +1224,7 @@ export default function PracticeQuestionPage() {
         {imgUrl ? (
           <div className="practice-run-question__media solve-page__solution-media">
             <ZoomableImage
-              src={imageSrc(imgUrl)}
+              src={cacheBustImageUrl(imgUrl, q.questionId)}
               alt={`Solution for question ${q.questionNo}`}
             />
           </div>

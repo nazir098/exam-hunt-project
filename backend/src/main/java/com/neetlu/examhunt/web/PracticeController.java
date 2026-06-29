@@ -196,6 +196,8 @@ public class PracticeController {
 
     public record McqOptionView(String id, String text) {}
 
+    public record AssetPlacementView(int index, String marker, String path, String url) {}
+
     public record QuestionPracticeView(
             String questionId,
             String packId,
@@ -224,7 +226,9 @@ public class PracticeController {
             java.util.List<McqOptionView> matchListB,
             boolean hasDiagram,
             String questionDiagramSvg,
-            String solutionDiagramSvg) {
+            String solutionDiagramSvg,
+            String renderMode,
+            java.util.List<AssetPlacementView> assetPlacements) {
         static QuestionPracticeView from(Question q) {
             return new QuestionPracticeView(
                     q.getQuestionId(),
@@ -254,7 +258,9 @@ public class PracticeController {
                     QuestionVariantMapper.mapMatchListBForPractice(q),
                     q.isHasDiagram(),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
-                    QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()));
+                    QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()),
+                    QuestionVariantMapper.nullToEmpty(q.getRenderMode()),
+                    QuestionVariantMapper.mapAssetPlacementsForPractice(q));
         }
 
         private static java.util.List<McqOptionView> mapOptions(Question q) {

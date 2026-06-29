@@ -27,6 +27,18 @@ export type PackSummary = {
   };
 };
 
+export type McqOptionView = {
+  id: string;
+  text: string;
+};
+
+export type AssetPlacementView = {
+  index: number;
+  marker: string;
+  path: string;
+  url: string;
+};
+
 export type QuestionPublic = {
   questionId: string;
   packId: string;
@@ -56,11 +68,8 @@ export type QuestionPublic = {
   hasDiagram?: boolean;
   questionDiagramSvg?: string;
   solutionDiagramSvg?: string;
-};
-
-export type McqOptionView = {
-  id: string;
-  text: string;
+  renderMode?: string;
+  assetPlacements?: AssetPlacementView[];
 };
 
 export type QuestionDetail = QuestionPublic & {
@@ -289,6 +298,8 @@ export type PracticeQuestion = {
   hasDiagram?: boolean;
   questionDiagramSvg?: string;
   solutionDiagramSvg?: string;
+  renderMode?: string;
+  assetPlacements?: AssetPlacementView[];
 };
 
 export type SubmitResult = {
@@ -908,9 +919,8 @@ export function pausePracticeSession(sessionId: string) {
 }
 
 export function fetchPracticeQuestion(questionId: string) {
-  return getJsonCached<PracticeQuestion>(
-    `/api/practice/questions/${encodeURIComponent(questionId)}`
-  );
+  const path = `/api/practice/questions/${encodeURIComponent(questionId)}`;
+  return getJsonCached<PracticeQuestion>(path, path);
 }
 
 export function fetchPracticeSolution(questionId: string) {

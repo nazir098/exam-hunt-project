@@ -237,12 +237,15 @@ public class PracticeService {
     }
 
     public Question requireQuestion(String questionId) {
-        Question q =
-                questions
-                        .findByQuestionId(questionId)
-                        .orElseThrow(
-                                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
-        return manifestImportService.enrichVariantFromDisk(q);
+        Question q = lookupQuestion(questionId);
+        return manifestImportService.enrichFromDisk(q);
+    }
+
+    private Question lookupQuestion(String questionId) {
+        return questions
+                .findByQuestionId(questionId)
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
     }
 
     /**
@@ -296,7 +299,7 @@ public class PracticeService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Question already answered in this session");
         });
 
-        Question q = requireQuestion(req.questionId());
+        Question q = lookupQuestion(req.questionId());
         boolean correct = validation.isCorrect(q.getAnswer(), req.selectedAnswer());
         int marks = marksForAttempt(q, session.getMode(), correct);
 
@@ -359,7 +362,7 @@ public class PracticeService {
         if (userId == null || userId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in required");
         }
-        Question q = requireQuestion(questionId);
+        Question q = lookupQuestion(questionId);
         if (!isAiVariant(q)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only AI variant questions can be checked here");
         }
