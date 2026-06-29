@@ -45,36 +45,34 @@ function GoogleSignInControl({
   onCredential,
   onError,
 }: Omit<Props, never>) {
-  const gsiHostRef = useRef<HTMLDivElement>(null);
+  const controlRef = useRef<HTMLDivElement>(null);
+  const [btnWidth, setBtnWidth] = useState(320);
   const labelText = label === "signup" ? "Sign up with Google" : "Continue with Google";
 
-  function openGoogleSignIn() {
-    if (disabled) return;
-    const node = gsiHostRef.current?.querySelector('[role="button"]') as HTMLElement | null;
-    if (!node) {
-      onError("Google sign-in is not ready yet. Please try again.");
-      return;
-    }
-    node.click();
-  }
+  useEffect(() => {
+    const el = controlRef.current;
+    if (!el) return;
+    const syncWidth = () => {
+      setBtnWidth(Math.max(200, Math.floor(el.clientWidth)));
+    };
+    syncWidth();
+    const ro = new ResizeObserver(syncWidth);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <>
-      <button
-        type="button"
-        className="auth-google__btn"
-        disabled={disabled}
-        onClick={openGoogleSignIn}
-      >
+    <div ref={controlRef} className="auth-google__control">
+      <div className="auth-google__btn auth-google__btn--visual" aria-hidden>
         <GoogleGIcon />
         <span>{labelText}</span>
-      </button>
-      <div ref={gsiHostRef} className="auth-google__gsi-host" aria-hidden>
+      </div>
+      <div className={disabled ? "auth-google__gsi-overlay auth-google__gsi-overlay--disabled" : "auth-google__gsi-overlay"}>
         <GoogleLogin
           text={label === "signup" ? "signup_with" : "continue_with"}
           theme="filled_black"
           size="large"
-          width={320}
+          width={btnWidth}
           onSuccess={(res) => {
             if (!res.credential) {
               onError("Google sign-in did not return a credential");
@@ -85,7 +83,7 @@ function GoogleSignInControl({
           onError={() => onError("Google sign-in was cancelled or failed")}
         />
       </div>
-    </>
+    </div>
   );
 }
 

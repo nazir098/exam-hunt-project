@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # Explicit pass-through: Compose does not recreate the container when only .env changes.
+    environment:
+      GOOGLE_AUTH_ENABLED: ${GOOGLE_AUTH_ENABLED:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     ports:
       - "8081:8081"
     labels:

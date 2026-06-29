@@ -132,6 +132,15 @@ curl -s https://api.techmuzzle.in/actuator/info
 
 If `commit` is older than your latest `main` push, `docker compose pull api` did not run or GHCR login failed — re-run `docker login ghcr.io` and `./rollout-api.sh`.
 
+**`.env` changed but app still sees old values:** Docker keeps the container’s environment from create time. After editing `.env`, always recreate:
+
+```bash
+docker-compose up -d api --force-recreate
+docker exec exam-hunt-api printenv | grep GOOGLE
+```
+
+On Amazon Linux you may have `docker-compose` (hyphen) instead of `docker compose` (plugin). Use whichever works: `docker compose version` or `docker-compose version`.
+
 Check Watchtower:
 
 ```bash

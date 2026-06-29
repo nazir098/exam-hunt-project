@@ -5,6 +5,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+else
+  echo "Docker Compose not found (install plugin or docker-compose)." >&2
+  exit 1
+fi
+
 if [[ ! -f .env ]]; then
   echo "Missing .env — copy from .env.example and fill in secrets first." >&2
   exit 1
@@ -18,10 +27,10 @@ if ! grep -q '^GOOGLE_AUTH_ENABLED=true' .env; then
 fi
 
 echo "Pulling latest API image from GHCR..."
-docker compose pull api
+"${COMPOSE[@]}" pull api
 
-echo "Restarting API..."
-docker compose up -d api
+echo "Restarting API (recreate to pick up .env changes)..."
+"${COMPOSE[@]}" up -d api --force-recreate
 
 echo "Waiting for health..."
 for _ in $(seq 1 30); do
