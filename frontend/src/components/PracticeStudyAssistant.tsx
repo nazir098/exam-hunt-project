@@ -148,10 +148,6 @@ export default function PracticeStudyAssistant({
   const { settings, loading: settingsLoading } = usePlatformSettings();
   const available = settings.aiSuggestEnabled && settings.aiLlmConfigured;
 
-  const unavailableMessage = !settings.aiLlmConfigured
-    ? "AI hints need the LLM service (OPENAI_API_KEY + FreeLLMAPI). Official solutions still work below."
-    : "AI hints are turned off in platform settings. Official solutions still work below.";
-
   const tabs = useMemo(
     () => buildTabs(formulaRelevant, submitted, correct),
     [formulaRelevant, submitted, correct]
@@ -449,16 +445,8 @@ export default function PracticeStudyAssistant({
     </>
   );
 
-  if (settingsLoading) {
-    return (
-      <aside className={`study-assistant study-assistant--off study-assistant--${layout}`}>
-        <div className="study-assistant__head">
-          <span className="material-symbols-outlined study-assistant__badge-icon">auto_awesome</span>
-          <h3 className="study-assistant__title">AI Study Assistant</h3>
-        </div>
-        <p className="study-assistant__off-text">Checking AI availability…</p>
-      </aside>
-    );
+  if (settingsLoading || !available) {
+    return null;
   }
 
   if (!user) {
@@ -535,9 +523,6 @@ export default function PracticeStudyAssistant({
       </button>
 
       <div className="study-assistant__collapsible">
-      {!available && (
-        <p className="study-assistant__unavailable-banner">{unavailableMessage}</p>
-      )}
       <div className="study-assistant__tabs" role="tablist" aria-label="AI study tools">
         <div className="study-assistant__tabs-row study-assistant__tabs-row--uniform">
           {tabs.map((tab) => renderTab({ ...tab, tier: "primary" }))}

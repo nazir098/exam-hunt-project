@@ -10,7 +10,6 @@ import AiMarkdown from "../components/AiMarkdown";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
-import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import ZoomableImage from "../components/ZoomableImage";
 import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
@@ -333,15 +332,6 @@ export default function QuestionPage() {
     Boolean(q?.solutionTextPreview?.trim());
   const distinctSolution = q ? hasDistinctSolution(q) : false;
   const showSolutionPanel = solutionOpen && hasSolution && distinctSolution && checked;
-
-  const assistantProps = {
-    questionId,
-    selectedAnswer: selected,
-    submitted: checked,
-    correct: checked ? isCorrect : null,
-    formulaRelevant: q?.formulaRelevant ?? true,
-    hasSolution: distinctSolution,
-  };
 
   const variantLoader = useMemo(() => {
     if (!contentLoading) return null;
@@ -716,7 +706,6 @@ export default function QuestionPage() {
               className="solve-page__feedback"
             />
           )}
-          {!questionPending && <PracticeStudyAssistant {...assistantProps} layout="sidebar" />}
         </aside>
       </div>
 
@@ -733,11 +722,6 @@ export default function QuestionPage() {
               className="solve-page__feedback"
             />
           </div>
-        )}
-        {!questionPending && (
-        <div className="practice-run-ai-inline">
-          <PracticeStudyAssistant {...assistantProps} layout="inline" />
-        </div>
         )}
       </div>
 

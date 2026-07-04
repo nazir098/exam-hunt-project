@@ -905,7 +905,8 @@ export default function PracticeQuestionPage() {
   const showPracticeAssistant =
     routeMode === "practice" && (practiceRevealed || variantChecked);
   const showAssistantPanel =
-    (routeMode === "practice" || isTestActive) && questionContentReady;
+    questionContentReady &&
+    (isTestActive || (routeMode === "practice" && showPracticeAssistant));
   const feedbackCorrect = practiceAnswerReview
     ? practiceAnswerReview.correct
     : activeTile?.status === "correct";

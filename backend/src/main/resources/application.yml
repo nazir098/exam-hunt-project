@@ -31,8 +31,6 @@ app:
     s-max-age-seconds: ${PUBLIC_API_CACHE_S_MAX_AGE:300}
     stale-while-revalidate-seconds: ${PUBLIC_API_CACHE_STALE_WHILE_REVALIDATE:60}
     memory-ttl-seconds: ${PUBLIC_API_CACHE_MEMORY_TTL:120}
-  analytics:
-    events-enabled: ${ANALYTICS_EVENTS_ENABLED:true}
 
 logging:
   level:

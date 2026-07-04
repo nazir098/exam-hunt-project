@@ -977,6 +977,131 @@ html:not(.dark) .stitch-viewport {
     padding: 2.5rem 2.5rem 1.5rem;
   }
 
+  .stitch-site-footer {
+    margin-top: auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 15, 30, 0.6);
+    padding: 1.25rem 1rem 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .stitch-site-footer {
+      padding: 2.5rem 2.5rem 1.5rem;
+    }
+  }
+
+  .site-legal-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .site-legal-links a {
+    color: #c4b5fd;
+    text-decoration: none;
+  }
+
+  .site-legal-links a:hover {
+    text-decoration: underline;
+  }
+
+  .site-legal-links__sep {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .stitch-site-footer__legal {
+    margin-top: 0.5rem;
+  }
+
+  .legal-page {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .legal-page__card {
+    padding: 1.5rem 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .legal-page__card {
+      padding: 2rem 2.25rem;
+    }
+  }
+
+  .legal-page__eyebrow {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .legal-page__title {
+    margin: 0;
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    line-height: 1.2;
+  }
+
+  .legal-page__meta {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+  }
+
+  .legal-page__body {
+    margin-top: 1.5rem;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+  }
+
+  .legal-page__body h2 {
+    margin: 1.75rem 0 0.65rem;
+    font-size: 1.05rem;
+    line-height: 1.35;
+    color: #fff;
+  }
+
+  .legal-page__body p {
+    margin: 0.75rem 0 0;
+  }
+
+  .legal-page__body ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+  }
+
+  .legal-page__body li {
+    margin-top: 0.45rem;
+  }
+
+  .legal-page__body a {
+    color: #c4b5fd;
+  }
+
+  .legal-page__foot {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .legal-page__nav a {
+    color: #c4b5fd;
+    text-decoration: none;
+  }
+
+  .legal-page__nav a:hover {
+    text-decoration: underline;
+  }
+
+  .legal-page__link {
+    color: #c4b5fd;
+  }
+
   .stitch-desktop-footer__inner {
     max-width: 1280px;
     margin: 0 auto;
@@ -1596,6 +1721,11 @@ html:not(.dark) .stitch-viewport {
     margin: 0.75rem 0 0;
     font-size: 0.8125rem;
     text-align: center;
+  }
+
+  .auth-card__legal {
+    justify-content: center;
+    margin-top: 1rem;
   }
 
   .auth-link {

@@ -30,8 +30,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int REGISTER_MAX = 10;
     private static final Duration CATALOG_WINDOW = Duration.ofMinutes(1);
     private static final int CATALOG_MAX = 120;
-    private static final Duration ANALYTICS_WINDOW = Duration.ofMinutes(1);
-    private static final int ANALYTICS_MAX = 90;
     private static final Duration AI_WINDOW = Duration.ofMinutes(1);
     private static final int AI_MAX = 30;
 
@@ -74,9 +72,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         if (HttpMethod.POST.matches(method) && "/api/auth/register".equals(path)) {
             return new RateRule("auth-register", REGISTER_MAX, REGISTER_WINDOW);
-        }
-        if (HttpMethod.POST.matches(method) && "/api/analytics/events".equals(path)) {
-            return new RateRule("analytics", ANALYTICS_MAX, ANALYTICS_WINDOW);
         }
         if (HttpMethod.POST.matches(method) && "/api/practice-ai/assist".equals(path)) {
             return new RateRule("practice-ai", AI_MAX, AI_WINDOW);

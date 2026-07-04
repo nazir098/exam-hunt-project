@@ -7,7 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_GA_MEASUREMENT_ID?: string;
   readonly VITE_PLAUSIBLE_DOMAIN?: string;
   readonly VITE_ANALYTICS_ENABLED?: string;
-  readonly VITE_ANALYTICS_BACKEND?: string;
   readonly VITE_GOOGLE_AUTH_ENABLED?: string;
   readonly VITE_GOOGLE_CLIENT_ID?: string;
 }

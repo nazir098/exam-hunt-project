@@ -143,16 +143,7 @@ This is **stricter** than the app limit (120/min) and slows bulk download of ste
 | **Requests** | 20 per 1 minute |
 | **Action** | Block |
 
-### Rule 5 — Analytics spam
-
-| Field | Value |
-|-------|--------|
-| **Name** | Analytics ingest limit |
-| **Expression** | `(http.host eq "api.techmuzzle.in" and http.request.uri.path eq "/api/analytics/events" and http.request.method eq "POST")` |
-| **Requests** | 90 per 1 minute |
-| **Action** | Block |
-
-### Rule 6 — SEO sitemap (optional cap)
+### Rule 5 — SEO sitemap (optional cap)
 
 | Field | Value |
 |-------|--------|

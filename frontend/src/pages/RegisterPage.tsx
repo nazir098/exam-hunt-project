@@ -4,6 +4,7 @@ import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
 import { useAuthRedirect } from "../auth/useAuthRedirect";
 import AuthGoogleSection from "../components/AuthGoogleSection";
+import SiteLegalLinks from "../components/SiteLegalLinks";
 
 export default function RegisterPage() {
   const { register, loginWithGoogle } = useAuth();
@@ -112,6 +113,7 @@ export default function RegisterPage() {
             ← Back to {BRAND_NAME}
           </Link>
         </p>
+        <SiteLegalLinks className="auth-card__legal" />
       </div>
     </main>
   );

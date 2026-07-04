@@ -99,15 +99,7 @@ export default function PracticeAiPanel({
   }
 
   if (!available) {
-    return (
-      <section className="practice-ai-panel practice-ai-panel--off glass-card">
-        <p className="practice-ai-panel__title">{title}</p>
-        <p className="text-caption text-outline">
-          AI practice is off — add <code>OPENAI_API_KEY</code> to <code>.env</code> and start FreeLLMAPI
-          (port 3001), or enable AI in admin settings.
-        </p>
-      </section>
-    );
+    return null;
   }
 
   if (!user) {

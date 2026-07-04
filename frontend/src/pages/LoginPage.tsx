@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import SiteLegalLinks from "../components/SiteLegalLinks";
 import { BRAND_NAME } from "../design/stitchAssets";
 import { useAuth } from "../auth/AuthContext";
 import { useAuthRedirect } from "../auth/useAuthRedirect";
@@ -99,6 +100,7 @@ export default function LoginPage() {
             ← Back to {BRAND_NAME}
           </Link>
         </p>
+        <SiteLegalLinks className="auth-card__legal" />
       </div>
     </main>
   );

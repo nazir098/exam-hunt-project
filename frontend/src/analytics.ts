@@ -1,10 +1,5 @@
 type EventProps = Record<string, string | number | boolean | null | undefined>;
 
-type QueuedEvent = {
-  name: string;
-  properties: Record<string, string | number | boolean>;
-};
-
 declare global {
   interface Window {
     dataLayer?: unknown[];
@@ -16,39 +11,13 @@ declare global {
 const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID?.trim() ?? "";
 const PLAUSIBLE_DOMAIN = import.meta.env.VITE_PLAUSIBLE_DOMAIN?.trim() ?? "";
 const CF_TOKEN = import.meta.env.VITE_CF_WEB_ANALYTICS_TOKEN?.trim() ?? "";
-const BACKEND_EVENTS =
-  import.meta.env.PROD || import.meta.env.VITE_ANALYTICS_BACKEND === "true";
 
 let initialized = false;
-const queue: QueuedEvent[] = [];
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-function resolveApiBase(): string {
-  const configured = import.meta.env.VITE_API_BASE_URL || "";
-  if (import.meta.env.DEV && import.meta.env.VITE_API_BASE_URL_FORCE !== "true") {
-    return "";
-  }
-  return configured;
-}
 
 function analyticsEnabled(): boolean {
   if (import.meta.env.VITE_ANALYTICS_ENABLED === "false") return false;
   if (import.meta.env.DEV && import.meta.env.VITE_ANALYTICS_ENABLED !== "true") return false;
-  return Boolean(GA_ID || PLAUSIBLE_DOMAIN || CF_TOKEN || BACKEND_EVENTS);
-}
-
-function anonymousSessionId(): string {
-  const key = "exam-hunt-analytics-session";
-  try {
-    let id = sessionStorage.getItem(key);
-    if (!id) {
-      id = crypto.randomUUID();
-      sessionStorage.setItem(key, id);
-    }
-    return id;
-  } catch {
-    return "anonymous";
-  }
+  return Boolean(GA_ID || PLAUSIBLE_DOMAIN || CF_TOKEN);
 }
 
 function sanitizeProps(props?: EventProps): Record<string, string | number | boolean> {
@@ -107,10 +76,6 @@ export function initAnalytics(): void {
   initCloudflareBeacon();
   initGa4();
   initPlausible();
-  window.addEventListener("pagehide", flushAnalyticsEvents);
-  window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void flushAnalyticsEvents();
-  });
 }
 
 export function setAnalyticsUser(userId: string | null): void {
@@ -138,45 +103,4 @@ export function trackEvent(name: string, properties?: EventProps): void {
   const props = sanitizeProps(properties);
   window.gtag?.("event", safeName, props);
   window.plausible?.(safeName, { props });
-  enqueueBackendEvent(safeName, props);
-}
-
-function enqueueBackendEvent(name: string, properties: Record<string, string | number | boolean>): void {
-  if (!BACKEND_EVENTS) return;
-  queue.push({ name, properties });
-  if (queue.length >= 20) {
-    void flushAnalyticsEvents();
-    return;
-  }
-  if (flushTimer) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    void flushAnalyticsEvents();
-  }, 2500);
-}
-
-export async function flushAnalyticsEvents(): Promise<void> {
-  if (!BACKEND_EVENTS || queue.length === 0) return;
-  const batch = queue.splice(0, 20);
-  const payload = JSON.stringify({
-    sessionId: anonymousSessionId(),
-    events: batch,
-  });
-  const url = `${resolveApiBase()}/api/analytics/events`;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  try {
-    const token = localStorage.getItem("exam-hunt-token");
-    if (token) headers.Authorization = `Bearer ${token}`;
-  } catch {
-    /* ignore */
-  }
-  try {
-    if (navigator.sendBeacon && document.visibilityState === "hidden") {
-      const blob = new Blob([payload], { type: "application/json" });
-      if (navigator.sendBeacon(url, blob)) return;
-    }
-    await fetch(url, { method: "POST", headers, body: payload, keepalive: true });
-  } catch {
-    queue.unshift(...batch);
-  }
 }

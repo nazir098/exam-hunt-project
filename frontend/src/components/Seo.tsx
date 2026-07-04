@@ -327,6 +327,24 @@ function getSeoConfig(pathname: string): SeoConfig {
     };
   }
 
+  if (pathname === "/privacy") {
+    return {
+      title: "Privacy Policy | EduMaster AI",
+      description:
+        "How EduMaster AI by Techmuzzle collects, uses, and protects your data when you practice NEET previous year questions.",
+      path: "/privacy",
+    };
+  }
+
+  if (pathname === "/terms") {
+    return {
+      title: "Terms of Use | EduMaster AI",
+      description:
+        "Terms of use for EduMaster AI — NEET PYQ practice, mock tests, and study tools operated by Techmuzzle.",
+      path: "/terms",
+    };
+  }
+
   if (pathname === "/review/wrong-attempts") {
     return {
       title: "NEET Wrong Attempts Review - Learn from Mistakes | EduMaster AI",

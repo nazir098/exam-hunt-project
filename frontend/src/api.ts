@@ -747,18 +747,6 @@ export function fetchAdminPacks() {
   return request<{ packs: AdminPackRow[]; count: number }>("/api/admin/packs");
 }
 
-export type AdminAnalyticsSummary = {
-  sampleSize: number;
-  uniqueSessions: number;
-  windowDays: number;
-  topEvents: { name: string; count: number }[];
-  dailyPageViews: { day: string; count: number }[];
-};
-
-export function fetchAdminAnalyticsSummary(days = 7) {
-  return request<AdminAnalyticsSummary>(`/api/admin/analytics/summary?days=${days}`);
-}
-
 export function adminDeletePack(packId: string) {
   return request<AdminActionResult>(`/api/admin/packs/${encodeURIComponent(packId)}`, {
     method: "DELETE",

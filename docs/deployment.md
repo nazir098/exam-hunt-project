@@ -250,15 +250,7 @@ VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 VITE_PLAUSIBLE_DOMAIN=techmuzzle.in
 ```
 
-Redeploy Pages after saving env vars. Page views are tracked client-side on route changes; product events (`sign_up`, `login`, `session_start`, `session_complete`) batch to the API.
-
-**Backend product events** (AWS EC2):
-
-```env
-ANALYTICS_EVENTS_ENABLED=true
-```
-
-Events are stored in MongoDB collection `analytics_events`. Admin summary: `GET /api/admin/analytics/summary?days=7` (also shown on `/admin`).
+Redeploy Pages after saving env vars. Page views and product events (`sign_up`, `login`, `session_start`, `session_complete`) are sent to Cloudflare Web Analytics / GA4 / Plausible when configured.
 
 Local dev: analytics is off unless `VITE_ANALYTICS_ENABLED=true` in `frontend/.env`.
 

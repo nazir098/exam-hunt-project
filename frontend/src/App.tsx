@@ -7,6 +7,8 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import PracticePage from "./pages/PracticePage";
 import PracticeQuestionPage from "./pages/PracticeQuestionPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsPage from "./pages/TermsPage";
 import QuestionPage from "./pages/QuestionPage";
 import RegisterPage from "./pages/RegisterPage";
 import AdminPage from "./pages/AdminPage";
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="/ai-tutor" element={<Navigate to="/analytics" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
         <Route path="/admin/questions" element={<AdminQuestionEditorPage />} />
