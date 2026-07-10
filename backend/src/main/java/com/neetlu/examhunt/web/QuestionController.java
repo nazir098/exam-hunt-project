@@ -3,6 +3,7 @@ package com.neetlu.examhunt.web;
 import com.neetlu.examhunt.model.Question;
 import com.neetlu.examhunt.repository.QuestionRepository;
 import com.neetlu.examhunt.service.FormulaEligibility;
+import com.neetlu.examhunt.service.AiTextNormalizer;
 import com.neetlu.examhunt.service.AiVariantCatalog;
 import com.neetlu.examhunt.service.ManifestImportService;
 import com.neetlu.examhunt.service.QuestionBrowseService;
@@ -243,7 +244,9 @@ public class QuestionController {
             String questionDiagramSvg,
             String solutionDiagramSvg,
             String renderMode,
-            java.util.List<AssetPlacementView> assetPlacements
+            java.util.List<AssetPlacementView> assetPlacements,
+            java.util.List<AssetPlacementView> solutionAssetPlacements,
+            boolean contentTextNormalized
     ) {
         static QuestionDetail from(Question q) {
             return from(q, true);
@@ -272,7 +275,9 @@ public class QuestionController {
                     q.getQuestionImageUrl(),
                     includeSensitive && hasSolution ? nullToEmpty(q.getSolutionImageUrl()) : "",
                     q.getQuestionTextPreview(),
-                    includeSensitive && hasSolution ? nullToEmpty(q.getSolutionTextPreview()) : "",
+                    includeSensitive && hasSolution
+                            ? nullToEmpty(q.getSolutionTextPreview())
+                            : "",
                     mapOptions(q),
                     q.getSourceType() != null ? q.getSourceType() : "pyq",
                     q.getParentQuestionId(),
@@ -288,8 +293,10 @@ public class QuestionController {
                     includeSensitive
                             ? QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg())
                             : "",
-                    QuestionVariantMapper.nullToEmpty(q.getRenderMode()),
-                    QuestionVariantMapper.mapAssetPlacements(q));
+                    QuestionVariantMapper.normalizeRenderMode(q.getRenderMode()),
+                    QuestionVariantMapper.mapAssetPlacements(q),
+                    QuestionVariantMapper.mapSolutionAssetPlacements(q),
+                    q.isContentTextNormalized());
         }
     }
 

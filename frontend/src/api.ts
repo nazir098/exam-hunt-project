@@ -70,6 +70,8 @@ export type QuestionPublic = {
   solutionDiagramSvg?: string;
   renderMode?: string;
   assetPlacements?: AssetPlacementView[];
+  solutionAssetPlacements?: AssetPlacementView[];
+  contentTextNormalized?: boolean;
 };
 
 export type QuestionDetail = QuestionPublic & {
@@ -80,6 +82,7 @@ export type QuestionDetail = QuestionPublic & {
   hasEquation: boolean;
   formulaRelevant: boolean;
   solutionTextPreview: string;
+  contentTextNormalized?: boolean;
 };
 
 export type PageResponse<T> = {
@@ -284,6 +287,7 @@ export type PracticeQuestion = {
   questionImageUrl: string;
   questionTextPreview: string;
   solutionTextPreview?: string;
+  solutionImageUrl?: string;
   options?: McqOptionView[];
   sourceType?: string;
   parentQuestionId?: string | null;
@@ -300,6 +304,8 @@ export type PracticeQuestion = {
   solutionDiagramSvg?: string;
   renderMode?: string;
   assetPlacements?: AssetPlacementView[];
+  solutionAssetPlacements?: AssetPlacementView[];
+  contentTextNormalized?: boolean;
 };
 
 export type SubmitResult = {
@@ -558,10 +564,42 @@ export function fetchQuestions(
   return getJson<PageResponse<QuestionPublic>>(`/api/questions?${q}`);
 }
 
+/** Fetches every page — the API caps each page at 100 rows. */
+export async function fetchAllPackQuestions(
+  packId: string,
+  params: {
+    subject?: string;
+    chapter?: string;
+    topic?: string;
+    difficulty?: string;
+    q?: string;
+    questionNo?: number;
+  } = {}
+): Promise<{ content: QuestionPublic[]; totalElements: number }> {
+  const pageSize = 100;
+  const all: QuestionPublic[] = [];
+  let totalElements = 0;
+  for (let page = 0; ; page += 1) {
+    const res = await fetchQuestions(packId, { ...params, page, size: pageSize });
+    totalElements = res.totalElements;
+    all.push(...res.content);
+    if (all.length >= totalElements || res.content.length === 0) break;
+  }
+  return { content: all, totalElements };
+}
+
 export function fetchQuestion(questionId: string) {
   const path = `/api/questions/${encodeURIComponent(questionId)}`;
   const cacheKey = `${path}:${getToken() ? "auth" : "anon"}`;
   return getJsonCached<QuestionDetail>(path, cacheKey);
+}
+
+/** Bypass short-lived GET cache — use when revealing solution so enrichment can refresh Mongo. */
+export function fetchQuestionFresh(questionId: string) {
+  const path = `/api/questions/${encodeURIComponent(questionId)}`;
+  const cacheKey = `${path}:${getToken() ? "auth" : "anon"}`;
+  shortLivedGetCache.delete(cacheKey);
+  return getJson<QuestionDetail>(path);
 }
 
 export function fetchQuestionFamily(questionId: string): Promise<QuestionFamily> {
@@ -1282,6 +1320,13 @@ export function updateAdminQuestionContent(
   });
 }
 
+export function resetAdminQuestionFromMetadata(questionId: string) {
+  return request<AdminQuestionDetail>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/reset-from-metadata`,
+    { method: "POST" }
+  );
+}
+
 export function updateAdminQuestionEnrichment(
   questionId: string,
   body: Partial<{
@@ -1299,6 +1344,64 @@ export function updateAdminQuestionEnrichment(
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+export type AdminContentFormatView = {
+  questionId: string;
+  folder: string;
+  metadataWritable: boolean;
+  message: string;
+  renderMode: string;
+  contentRenderApproved: boolean;
+  questionFormat: string;
+  questionStem: string;
+  options: McqOptionView[];
+  answer: string;
+  hasDiagram: boolean;
+  hasEquation: boolean;
+  questionRawField: string;
+  questionTextMineru: string;
+  solutionRawField: string;
+  metadataSolutionText: string;
+  solutionRawText: string;
+  questionImageUrl: string;
+  solutionImageUrl: string;
+  mineruDiagramUrls: string[];
+  questionAssetPlacements: { index: number; marker: string; path: string; url: string; hidden: boolean }[];
+  solutionAssetPlacements: { index: number; marker: string; path: string; url: string; hidden: boolean }[];
+  mongoQuestionTextPreview: string;
+  mongoSolutionTextPreview: string;
+  mongoOptions: McqOptionView[];
+  studentViewStale: boolean;
+  studentViewLocked: boolean;
+  solutionViewStale: boolean;
+  contentTextNormalized: boolean;
+};
+
+export function fetchAdminQuestionContentFormat(questionId: string) {
+  return request<AdminContentFormatView>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/content-format`
+  );
+}
+
+export function saveAdminQuestionRawText(
+  questionId: string,
+  body: { target: "question" | "solution"; text: string }
+) {
+  return request<AdminContentFormatView>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/content-format/raw-text`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export function fixAdminQuestionRawTextLatex(
+  questionId: string,
+  body: { target: "question" | "solution"; text: string }
+) {
+  return request<AdminContentFormatView>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/content-format/fix-raw-text-latex`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
 }
 
 export function fetchAdminAiPromptFeatures() {

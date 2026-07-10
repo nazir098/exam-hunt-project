@@ -3,6 +3,7 @@ package com.neetlu.examhunt.web;
 import com.neetlu.examhunt.model.AssetPlacement;
 import com.neetlu.examhunt.model.McqOption;
 import com.neetlu.examhunt.model.Question;
+import com.neetlu.examhunt.service.QuestionRenderMode;
 
 import java.util.List;
 
@@ -67,6 +68,11 @@ final class QuestionVariantMapper {
         return value == null ? "" : value;
     }
 
+    /** API default: only structured/hybrid use text layout; everything else is image. */
+    static String normalizeRenderMode(String renderMode) {
+        return QuestionRenderMode.normalize(renderMode);
+    }
+
     static List<QuestionController.AssetPlacementView> mapAssetPlacements(Question q) {
         if (q.getAssetPlacements() == null || q.getAssetPlacements().isEmpty()) {
             return List.of();
@@ -79,6 +85,25 @@ final class QuestionVariantMapper {
             return List.of();
         }
         return q.getAssetPlacements().stream()
+                .map(
+                        p ->
+                                new PracticeController.AssetPlacementView(
+                                        p.getIndex(), p.getMarker(), p.getPath(), p.getUrl()))
+                .toList();
+    }
+
+    static List<QuestionController.AssetPlacementView> mapSolutionAssetPlacements(Question q) {
+        if (q.getSolutionAssetPlacements() == null || q.getSolutionAssetPlacements().isEmpty()) {
+            return List.of();
+        }
+        return q.getSolutionAssetPlacements().stream().map(QuestionVariantMapper::toAssetView).toList();
+    }
+
+    static List<PracticeController.AssetPlacementView> mapSolutionAssetPlacementsForPractice(Question q) {
+        if (q.getSolutionAssetPlacements() == null || q.getSolutionAssetPlacements().isEmpty()) {
+            return List.of();
+        }
+        return q.getSolutionAssetPlacements().stream()
                 .map(
                         p ->
                                 new PracticeController.AssetPlacementView(

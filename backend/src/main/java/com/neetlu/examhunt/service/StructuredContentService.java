@@ -38,6 +38,11 @@ public class StructuredContentService {
             return false;
         }
 
+        if (!structuredExportAllowed(meta)) {
+            doc.setRenderMode("image");
+            return false;
+        }
+
         String stem = text(meta, "question_stem");
         if (stem.isBlank()) {
             stem = text(meta, "question_text");
@@ -51,24 +56,30 @@ public class StructuredContentService {
         }
 
         doc.setRenderMode(renderMode);
-        doc.setQuestionTextPreview(AiTextNormalizer.sanitizeEnrichmentText(stem));
+        if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)) {
+            doc.setQuestionTextPreview(AiTextNormalizer.sanitizeQuestionStemText(stem));
+        }
 
         String format = text(meta, "question_format");
         if (format.isBlank()) {
             format = "mcq";
         }
-        doc.setQuestionFormat(format);
+        if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_FORMAT)) {
+            doc.setQuestionFormat(format);
+        }
 
-        if (options.size() >= 4) {
+        if (options.size() >= 4 && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.OPTIONS)) {
             doc.setOptions(options);
         }
 
         List<McqOption> statements = readMcqOptions(meta.path("statements"));
-        if (!statements.isEmpty()) {
+        if (!statements.isEmpty() && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.STATEMENTS)) {
             doc.setStatements(statements);
         }
 
         applyDiagramAssets(doc, meta, sourceFolder, renderMode);
+        applySolutionAssets(doc, meta, sourceFolder);
+        doc.setContentTextNormalized(true);
         return true;
     }
 
@@ -87,12 +98,143 @@ public class StructuredContentService {
         return doc.getOptions() != null && doc.getOptions().size() >= 4;
     }
 
-    /** Skip disk/R2 metadata fetch when render mode was resolved at import or a prior enrich pass. */
+    /** Re-parse List-I/II when Mongo has OCR-flattened matching columns but metadata has a MinerU table. */
+    public boolean needsMatchListsMetadataRefresh(Question doc, JsonNode meta) {
+        if (doc == null || meta == null || meta.isMissingNode()) {
+            return false;
+        }
+        if (!"matching".equalsIgnoreCase(text(meta, "question_format"))
+                && !"matching".equalsIgnoreCase(
+                        Optional.ofNullable(doc.getQuestionFormat()).orElse(""))) {
+            return false;
+        }
+        if (AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_A)
+                && AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_B)) {
+            return false;
+        }
+        String stem = text(meta, "question_stem");
+        if (stem.isBlank() || !stem.contains("|")) {
+            stem = text(meta, "question_text_mineru");
+        }
+        if (stem.isBlank() || !stem.contains("|")) {
+            return false;
+        }
+        return MatchingVariantParser.listsLookCorrupt(doc.getMatchListA(), doc.getMatchListB());
+    }
+
+    /** Re-apply metadata when structured stem or options in MongoDB no longer match extractor output. */
+    public boolean needsPyqStemMetadataRefresh(Question doc, JsonNode meta) {
+        if (doc == null || meta == null || meta.isMissingNode()) {
+            return false;
+        }
+        if (!structuredExportAllowed(meta)) {
+            return false;
+        }
+        if (AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)
+                && AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.OPTIONS)) {
+            return false;
+        }
+        String mode = Optional.ofNullable(text(meta, "render_mode")).orElse("").strip().toLowerCase();
+        if (!"structured".equals(mode) && !"hybrid".equals(mode)) {
+            return false;
+        }
+        String stem = text(meta, "question_stem");
+        if (stem.isBlank()) {
+            stem = text(meta, "question_text");
+        }
+        if (stem.isBlank()) {
+            return false;
+        }
+        String expectedStem = AiTextNormalizer.sanitizeQuestionStemText(stem);
+        String currentStem = Optional.ofNullable(doc.getQuestionTextPreview()).orElse("").strip();
+        if (!expectedStem.equals(currentStem)) {
+            return true;
+        }
+        List<McqOption> expectedOptions = readMcqOptions(meta.path("options"));
+        if (expectedOptions.size() < 4) {
+            return false;
+        }
+        List<McqOption> currentOptions = doc.getOptions();
+        if (currentOptions == null || currentOptions.size() < 4) {
+            return true;
+        }
+        for (int i = 0; i < 4; i++) {
+            McqOption expected = expectedOptions.get(i);
+            McqOption current = currentOptions.get(i);
+            if (!expected.getId().equals(current.getId())) {
+                return true;
+            }
+            if (!expected.getText().equals(Optional.ofNullable(current.getText()).orElse("").strip())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Re-apply metadata when structured solution text in MongoDB no longer matches extractor output. */
+    public boolean needsSolutionMetadataRefresh(Question doc, JsonNode meta) {
+        if (doc == null || meta == null || meta.isMissingNode()) {
+            return false;
+        }
+        if (AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.SOLUTION_TEXT)) {
+            return false;
+        }
+        String expected = QuestionMetadataStore.resolveSolutionText(meta).strip();
+        if (expected.isBlank()) {
+            return false;
+        }
+        String current = Optional.ofNullable(doc.getSolutionTextPreview()).orElse("").strip();
+        if (looksLikeCorruptSolution(current)) {
+            return true;
+        }
+        if (expected.equals(current)) {
+            return false;
+        }
+        String expectedSanitized = AiTextNormalizer.sanitizeSolutionText(expected);
+        String currentSanitized = AiTextNormalizer.sanitizeSolutionText(current);
+        return !expectedSanitized.equals(currentSanitized);
+    }
+
+    private static boolean looksLikeCorruptSolution(String text) {
+        return AiTextNormalizer.looksLikeCorruptSolution(text);
+    }
+
+    /** Backfill solution diagram URLs when solution text has {{asset:N}} but Mongo has no placements. */
+    public boolean needsSolutionAssetRefresh(Question doc, JsonNode meta) {
+        if (doc == null || meta == null || meta.isMissingNode()) {
+            return false;
+        }
+        String solution = Optional.ofNullable(doc.getSolutionTextPreview()).orElse("").strip();
+        if (solution.isBlank()) {
+            solution = AiTextNormalizer.sanitizeSolutionText(QuestionMetadataStore.resolveSolutionText(meta));
+        }
+        if (!solution.contains("{{asset:")) {
+            return false;
+        }
+        if (doc.getSolutionAssetPlacements() != null && !doc.getSolutionAssetPlacements().isEmpty()) {
+            return false;
+        }
+        JsonNode placements = meta.path("solution_asset_placements");
+        if (placements.isArray() && !placements.isEmpty()) {
+            return true;
+        }
+        JsonNode diagrams = meta.path("solution_mineru_diagrams");
+        return diagrams.isArray() && !diagrams.isEmpty();
+    }
+
+    public void applySolutionAssets(Question doc, JsonNode meta, String sourceFolder) {
+        List<AssetPlacement> placements = resolveSolutionAssetPlacements(meta, sourceFolder);
+        if (!placements.isEmpty()) {
+            doc.setSolutionAssetPlacements(placements);
+        }
+    }
+
+    /** Skip disk/R2 metadata fetch when structured text layout is already stored. */
     public boolean needsPyqDiskEnrichment(Question doc) {
         if (doc == null) {
             return false;
         }
-        return Optional.ofNullable(doc.getRenderMode()).orElse("").isBlank();
+        return !alreadyStructured(doc);
     }
 
     /** Skip variant metadata fetch when text/options/format content is already stored. */
@@ -107,6 +249,41 @@ public class StructuredContentService {
             return false;
         }
         return !isImageOnlyVariant(doc);
+    }
+
+    /**
+     * Matches pdf-qa-extractor publish: structured text only when reviewer approved.
+     * Manifest rows omit the flag but are only exported as structured when approved.
+     */
+    public boolean structuredExportAllowed(JsonNode meta) {
+        return isStructuredExportApproved(meta);
+    }
+
+    /** Static helper for import paths that do not have a service instance. */
+    public static boolean isStructuredExportApproved(JsonNode meta) {
+        if (meta == null || meta.isMissingNode()) {
+            return false;
+        }
+        String mode = text(meta, "render_mode").strip().toLowerCase();
+        if (!"structured".equals(mode) && !"hybrid".equals(mode)) {
+            return false;
+        }
+        if (!meta.has("content_render_approved")) {
+            return true;
+        }
+        return meta.path("content_render_approved").asBoolean(false);
+    }
+
+    /** Approved hybrid/structured metadata with a dedicated {@code question_stem} field. */
+    public boolean hasStructuredStemMetadata(JsonNode meta) {
+        if (!structuredExportAllowed(meta)) {
+            return false;
+        }
+        String mode = text(meta, "render_mode").strip().toLowerCase();
+        if (!"structured".equals(mode) && !"hybrid".equals(mode)) {
+            return false;
+        }
+        return !text(meta, "question_stem").isBlank();
     }
 
     private static boolean hasVariantOptions(Question doc) {
@@ -155,6 +332,9 @@ public class StructuredContentService {
         }
 
         if ("hybrid".equals(renderMode) || "structured".equals(renderMode)) {
+            if (!diagramUrl.isBlank()) {
+                diagramUrl = preferDiagramOnlyUrl(diagramUrl);
+            }
             if (!diagramUrl.isBlank() && !stemHasInlineAssets(doc.getQuestionTextPreview())) {
                 doc.setQuestionImageUrl(diagramUrl);
                 doc.setHasDiagram(true);
@@ -162,7 +342,40 @@ public class StructuredContentService {
                 doc.setHasDiagram(true);
                 doc.setQuestionImageUrl("");
             }
+            ensureInlineAssetMarkers(doc);
         }
+    }
+
+    /** Backfill {{asset:N}} when metadata placements exist but the stored stem omitted the marker. */
+    private void ensureInlineAssetMarkers(Question doc) {
+        if (doc.getAssetPlacements() == null || doc.getAssetPlacements().isEmpty()) {
+            return;
+        }
+        String stem = Optional.ofNullable(doc.getQuestionTextPreview()).orElse("").trim();
+        if (stem.contains("{{asset:")) {
+            return;
+        }
+        String marker = "{{asset:0}}";
+        int paren = stem.indexOf("\n(take ");
+        if (paren < 0) {
+            paren = stem.indexOf("(take ");
+        }
+        String updated =
+                paren > 0
+                        ? stem.substring(0, paren).strip() + "\n" + marker + "\n" + stem.substring(paren).strip()
+                        : stem + "\n" + marker;
+        doc.setQuestionTextPreview(AiTextNormalizer.sanitizeQuestionStemText(updated));
+    }
+
+    private static String preferDiagramOnlyUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        String trimmed = url.strip();
+        if (trimmed.contains("/questions/")) {
+            return "";
+        }
+        return trimmed;
     }
 
     private static boolean stemHasInlineAssets(String stem) {
@@ -174,8 +387,18 @@ public class StructuredContentService {
         if (!placementsNode.isArray() || placementsNode.isEmpty()) {
             placementsNode = meta.path("question_asset_placements");
         }
+        return buildAssetPlacements(placementsNode, readDiagramPaths(meta), sourceFolder);
+    }
 
-        List<String> diagramPaths = readDiagramPaths(meta);
+    private List<AssetPlacement> resolveSolutionAssetPlacements(JsonNode meta, String sourceFolder) {
+        JsonNode placementsNode = meta.path("solution_asset_placements");
+        List<String> diagramPaths = new ArrayList<>();
+        appendDiagramPaths(diagramPaths, meta.path("solution_mineru_diagrams"));
+        return buildAssetPlacements(placementsNode, diagramPaths, sourceFolder);
+    }
+
+    private List<AssetPlacement> buildAssetPlacements(
+            JsonNode placementsNode, List<String> diagramPaths, String sourceFolder) {
         List<AssetPlacement> out = new ArrayList<>();
 
         if (placementsNode.isArray() && !placementsNode.isEmpty()) {
@@ -301,7 +524,7 @@ public class StructuredContentService {
             }
             McqOption option = new McqOption();
             option.setId(id.strip());
-            option.setText(AiTextNormalizer.sanitizeEnrichmentText(optionText));
+            option.setText(AiTextNormalizer.sanitizeMcqOptionText(optionText));
             out.add(option);
         }
         return out;

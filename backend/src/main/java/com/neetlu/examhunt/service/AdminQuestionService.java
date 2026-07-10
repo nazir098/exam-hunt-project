@@ -98,6 +98,14 @@ public class AdminQuestionService {
         return AdminQuestionDetail.from(q);
     }
 
+    public AdminQuestionDetail resetContentFromMetadata(String questionId) {
+        Question q = require(questionId);
+        AdminQuestionPreserve.unlockContentFields(q);
+        questions.save(q);
+        q = manifestImportService.enrichFromDisk(q);
+        return AdminQuestionDetail.from(q);
+    }
+
     public AdminQuestionDetail updateEnrichment(String questionId, UpdateEnrichmentRequest body) {
         Question q = require(questionId);
         if (body.clearFeatures() != null) {
@@ -366,7 +374,7 @@ public class AdminQuestionService {
                     nullToEmpty(q.getRevisionNotes()),
                     q.getWhyWrongByAnswer() != null ? Map.copyOf(q.getWhyWrongByAnswer()) : Map.of(),
                     q.getAdminLockedFields() != null ? Set.copyOf(q.getAdminLockedFields()) : Set.of(),
-                    nullToEmpty(q.getRenderMode()),
+                    QuestionRenderMode.normalize(q.getRenderMode()),
                     mapAssetPlacements(q));
         }
 

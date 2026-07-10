@@ -16,15 +16,14 @@ import TextMcqQuestion from "../components/TextMcqQuestion";
 import ZoomableImage from "../components/ZoomableImage";
 import { practiceReviewRoute, sessionResultRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
-import { formatVariantTypeLabel, isAiVariantQuestion } from "../utils/variantLabels";
 import {
   cacheBustImageUrl,
   hybridDiagramUrl,
   isImageQuestion,
+  textMcqDisplayProps,
 } from "../utils/questionRender";
 
 function variantMcqProps(q: PracticeQuestion) {
-  const isVariant = isAiVariantQuestion(q);
   return {
     questionFormat: q.questionFormat,
     variantType: q.variantType,
@@ -37,8 +36,7 @@ function variantMcqProps(q: PracticeQuestion) {
     questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
     assetPlacements: q.assetPlacements,
-    variantTheme: isVariant,
-    variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
+    ...textMcqDisplayProps(q),
   };
 }
 

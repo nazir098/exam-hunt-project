@@ -17,7 +17,6 @@ import {
   type VariantCheckResult,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import AiMarkdown from "../components/AiMarkdown";
 import AppLoader from "../components/AppLoader";
 import PageLoadShell from "../components/PageLoadShell";
 import PracticeStudyAssistant, { explainFeatureForResult } from "../components/PracticeStudyAssistant";
@@ -44,10 +43,14 @@ import {
   type VariantSwitchGate,
 } from "../utils/variantSwitchTiming";
 import { hasDistinctSolution } from "../utils/questionSolution";
+import OfficialSolutionBody from "../components/OfficialSolutionBody";
+import AdminSolutionEditLink from "../components/AdminSolutionEditLink";
 import {
   cacheBustImageUrl,
   hybridDiagramUrl,
   isImageQuestion,
+  textMcqDisplayProps,
+  usesQuestionCardLayout,
 } from "../utils/questionRender";
 
 const OPTIONS = [
@@ -58,7 +61,6 @@ const OPTIONS = [
 ];
 
 function variantMcqProps(q: PracticeQuestion) {
-  const isVariant = isAiVariantQuestion(q);
   return {
     questionFormat: q.questionFormat,
     variantType: q.variantType,
@@ -71,8 +73,10 @@ function variantMcqProps(q: PracticeQuestion) {
     questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
     assetPlacements: q.assetPlacements,
-    variantTheme: isVariant,
-    variantLabel: isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined,
+    renderMode: q.renderMode,
+    sourceType: q.sourceType,
+    contentTextNormalized: q.contentTextNormalized,
+    ...textMcqDisplayProps(q),
   };
 }
 
@@ -949,7 +953,9 @@ export default function PracticeQuestionPage() {
     examLocked: isTestActive,
     directSolutionReveal: variantChecked && hasSolution,
     prefetchedSolutionImage: variantCheck?.solutionImageUrl ?? "",
-    prefetchedSolutionText: variantCheck?.solutionTextPreview ?? "",
+    prefetchedSolutionText: variantCheck?.solutionTextPreview ?? q.solutionTextPreview ?? "",
+    contentTextNormalized: q.contentTextNormalized,
+    renderMode: q.renderMode,
   };
 
   function renderPracticeAnswerActions(isCorrect: boolean) {
@@ -1048,7 +1054,8 @@ export default function PracticeQuestionPage() {
       ? variantSwitchLoaderForTarget(questionId, family)
       : null;
     const mediaLoading = Boolean(switchLoader);
-    const isVariant = isAiVariantQuestion(q) || switchLoader?.mode === "ai";
+    const isAiVariant = isAiVariantQuestion(q) || switchLoader?.mode === "ai";
+    const questionCardChrome = isAiVariant || usesQuestionCardLayout(q);
     const variantAnswer = variantCheck?.correctAnswer ?? "";
     const answerRevealed = practiceRevealed || (variantPreview && variantChecked);
     const revealedAnswer =
@@ -1057,7 +1064,7 @@ export default function PracticeQuestionPage() {
     return (
       <section
         key={questionId}
-        className={`practice-run-question glass-card${isVariant ? " practice-run-question--variant" : ""}`}
+        className={`practice-run-question glass-card${questionCardChrome ? " practice-run-question--variant" : ""}`}
       >
         {(routeMode !== "practice" || includeMarkReview) && (
           <div className="practice-run-question__head">
@@ -1072,7 +1079,7 @@ export default function PracticeQuestionPage() {
                     q.exam,
                     q.questionNo,
                     q.topic || q.chapter,
-                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
+                    isAiVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : null
                   )}
                 </h1>
               </div>
@@ -1126,6 +1133,9 @@ export default function PracticeQuestionPage() {
                 answerRevealed && !!selected && !!revealedAnswer && selected !== revealedAnswer
               }
               {...variantMcqProps(q)}
+              adminEditHref={
+                user?.admin ? `/admin/questions/${encodeURIComponent(questionId)}` : ""
+              }
             />
           )}
         </div>
@@ -1215,34 +1225,27 @@ export default function PracticeQuestionPage() {
 
   function renderPracticeSolutionPanel() {
     if (!q || !showSolution || !hasSolution) return null;
-    const imgUrl = solutionUrl?.trim();
+    const solutionText =
+      variantCheck?.solutionTextPreview?.trim() || q.solutionTextPreview?.trim() || "";
     return (
       <section className="solve-page__solution glass-card" aria-label="Official solution">
         <div className="solve-page__solution-head">
           <span className="material-symbols-outlined">menu_book</span>
           <h2 className="solve-page__solution-title">Official solution</h2>
+          {user?.admin ? <AdminSolutionEditLink questionId={q.questionId} /> : null}
         </div>
-        {imgUrl ? (
-          <div className="practice-run-question__media solve-page__solution-media">
-            <ZoomableImage
-              src={cacheBustImageUrl(imgUrl, q.questionId)}
-              alt={`Solution for question ${q.questionNo}`}
-            />
-          </div>
-        ) : q.solutionDiagramSvg?.trim() ? (
-          <div className="solve-page__solution-text text-mcq-paper">
-            <div
-              className="variant-diagram__svg"
-              dangerouslySetInnerHTML={{ __html: q.solutionDiagramSvg }}
-            />
-          </div>
-        ) : q.solutionTextPreview?.trim() ? (
-          <div className="solve-page__solution-text text-mcq-paper">
-            <AiMarkdown text={q.solutionTextPreview} className="ai-markdown--paper" />
-          </div>
-        ) : (
-          <p className="muted">Solution is marked available but not loaded — try re-syncing the pack.</p>
-        )}
+        <OfficialSolutionBody
+          questionId={q.questionId}
+          questionNo={q.questionNo}
+          assetPlacements={q.assetPlacements}
+          solutionAssetPlacements={q.solutionAssetPlacements}
+          solutionTextPreview={solutionText}
+          solutionImageUrl={q.solutionImageUrl}
+          solutionDiagramSvg={q.solutionDiagramSvg}
+          contentTextNormalized={q.contentTextNormalized}
+          renderMode={q.renderMode}
+          sourceType={q.sourceType}
+        />
       </section>
     );
   }

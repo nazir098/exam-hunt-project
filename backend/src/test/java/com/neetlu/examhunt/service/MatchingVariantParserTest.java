@@ -90,4 +90,39 @@ class MatchingVariantParserTest {
             MatchingVariantParser.parse(node).listB().stream().map(McqOption::getText).toList(),
             "shuffle should be stable for the same question id");
   }
+
+  @Test
+  void parsesMineruMatchingTableFromQuestionStem() throws Exception {
+    String json =
+        """
+        {
+          "question_id": "NEET_2025_Q101",
+          "question_format": "matching",
+          "question_stem": "Match List-I with List-II.\\n| | List-I | | List-II |\\n| --- | --- | --- | --- |\\n| A. | Emphysema | I. | Rapid spasms in muscle due to low Ca++ in body fluid |\\n| B. | Angina Pectoris | II. | Damaged alveolar walls and decreased respiratory surface |\\n| C. | Glomerulonephritis | III. | Acute chest pain when not enough oxygen is reaching to heart muscle |\\n| D. | Tetany | IV. | Inflammation of glomeruli of kidney |",
+          "question_text": "garbage ocr text"
+        }
+        """;
+    var node = mapper.readTree(json);
+    MatchingVariantParser.ParsedMatching parsed = MatchingVariantParser.parse(node);
+    assertEquals("Match List-I with List-II", parsed.intro());
+    assertEquals(4, parsed.listA().size());
+    assertEquals("Emphysema", parsed.listA().get(0).getText());
+    assertEquals("Angina Pectoris", parsed.listA().get(1).getText());
+    assertEquals(4, parsed.listB().size());
+    assertEquals("I", parsed.listB().get(0).getId());
+    assertEquals(
+            "Rapid spasms in muscle due to low Ca++ in body fluid",
+            parsed.listB().get(0).getText());
+    assertTrue(MatchingVariantParser.listsLookCorrupt(
+            List.of(
+                    option("A", "I. Rapid spasms in muscle due to low Ca++ in body fluid Emphysema")),
+            List.of(option("1", "I"))));
+  }
+
+  private static McqOption option(String id, String text) {
+    McqOption o = new McqOption();
+    o.setId(id);
+    o.setText(text);
+    return o;
+  }
 }

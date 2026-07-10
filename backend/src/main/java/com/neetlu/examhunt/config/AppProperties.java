@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AppProperties(
         String corsOrigins,
         String extractorRoot,
+        /** pdf-qa-extractor src/ path for Python metadata refresh (EXTRACTOR_SOURCE_ROOT) */
+        String extractorSourceRoot,
         String extractorManifestBaseUrl,
         String publicFilesBaseUrl,
         /** Comma-separated year folders on remote storage, e.g. 2016,2025 */

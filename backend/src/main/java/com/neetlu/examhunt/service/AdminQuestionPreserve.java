@@ -70,6 +70,21 @@ final class AdminQuestionPreserve {
         }
     }
 
+    /** Clear admin locks on question stem, options, and related content fields. */
+    static void unlockContentFields(Question q) {
+        unlock(q, QUESTION_TEXT);
+        unlock(q, SOLUTION_TEXT);
+        unlock(q, OPTIONS);
+        unlock(q, QUESTION_FORMAT);
+        unlock(q, ASSERTION);
+        unlock(q, REASON);
+        unlock(q, STATEMENTS);
+        unlock(q, MATCH_LIST_A);
+        unlock(q, MATCH_LIST_B);
+        unlock(q, QUESTION_DIAGRAM_SVG);
+        unlock(q, SOLUTION_DIAGRAM_SVG);
+    }
+
     static void unlockForFeature(Question q, String feature) {
         String normalized = feature == null ? "" : feature.trim().toLowerCase(Locale.ROOT).replace('-', '_');
         switch (normalized) {

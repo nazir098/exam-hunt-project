@@ -1,0 +1,94 @@
+[
+  {
+    "id": "left-right-dollar-options",
+    "pipeline": "math",
+    "input": "g_h=g\\left$$\\frac{R}{R+h}\\right)$$^2",
+    "expectedContains": ["g_h=g\\left(\\frac{R}{R+h}\\right)^2"]
+  },
+  {
+    "id": "stem-parenthetical-math",
+    "pipeline": "stem",
+    "input": "angle $\\theta_0 (\\theta_0 << 1)$ with the $x$ -axis at $x = L$ . If $y(x)$ is the height",
+    "expectedContains": ["$\\theta_0 (\\theta_0 << 1)$", "with the $x$"],
+    "expectedExcludes": ["$\\theta_0$\\theta_0"]
+  },
+  {
+    "id": "option-left-delimiters",
+    "pipeline": "option",
+    "input": "B_{y} = 2 \\times 10^{-7} \\cos\\left$$5x + 1.5 \\times 10^{9} t \\right)$$T",
+    "expectedContains": ["\\cos\\left(", "$"],
+    "expectedExcludes": ["\\left$$"]
+  },
+  {
+    "id": "option-cos-double-dollar",
+    "pipeline": "option",
+    "input": "B_y=2\\times10^{-7}\\cos$$5x+1.5\\times10^9t$$\\,\\text{T}",
+    "expectedContains": ["\\cos(", "B_{y}"],
+    "expectedExcludes": ["$$"]
+  },
+  {
+    "id": "stem-trim-embedded-options",
+    "pipeline": "stem",
+    "input": "Then expression for the magnetic field is :\n(1) B_{y} = 2\\times 10^{-7} T (2) B_{x} = 2\\times 10^{-7} T (3) B_{z} = 60 T (4) B_{y} = 60 T",
+    "expectedEquals": "Then expression for the magnetic field is :"
+  },
+  {
+    "id": "stem-prose-mu-k",
+    "pipeline": "stem",
+    "input": "There are two inclined surfaces of equal length (L) and same angle of inclination 45° with the horizontal. The coefficient of kinetic friction (\\mu_k) between the object and the rough surface is close to (1)0.25 (2)0.40 (3)0.5 (4)0.75",
+    "expectedContains": ["There are two inclined surfaces"],
+    "expectedExcludes": ["(1)0.25", "$There"]
+  },
+  {
+    "id": "solution-broken-delimiters",
+    "pipeline": "solution",
+    "input": "$t_{\\text{rough}} = 2t_{\\text{smooth}}$\n$$t \\propto \\frac{1}{\\sqrt{a}}\\quad\\Rightarrow\\quad t_{\\mathrm{smooth}} \\propto \\frac{1}{\\sqrt{g\\sin\\theta}}\n$a_{\\text{rough}} = g \\sin \\theta - \\mu_k g \\cos \\theta$ \\frac{t_{\\mathrm{rough}}}{t_{\\mathrm{smooth}}} = 4\n1-\\mu_k=\\frac{1}{4}$$$$\\mu_k=\\frac{3}{4}=0.75$",
+    "expectedContains": ["$t_{\\text{rough}} = 2t_{\\text{smooth}}$", "\\mu_k", "0.75"],
+    "expectedExcludes": ["$$$$"]
+  },
+  {
+    "id": "solution-array-rl",
+    "pipeline": "solution",
+    "input": "By work-energy theorem,\n\\begin{array}{rl}\n&F S=\\Delta K \\\\\n\\Rightarrow&-F S=k_{f}-k_{i} \\\\\n\\end{array}",
+    "expectedContains": ["By work-energy theorem,", "$$", "\\begin{array}{rl}", "end{array}"]
+  },
+  {
+    "id": "solution-array-inline-dollars",
+    "pipeline": "solution",
+    "input": "By work-energy theorem,\n$\\begin{array}{rl}\n&F S=\\Delta K \\cdot E \\\\\n\\implies &-F S=k_{f}-k_{i} \\\\\n& = \\frac{150}{225} = \\frac{2}{3}\n\\end{array}$",
+    "expectedContains": ["By work-energy theorem,", "$$", "\\begin{array}{rl}"],
+    "expectedExcludes": ["$\\begin{array}{rl}"]
+  },
+  {
+    "id": "solution-array-l-column",
+    "pipeline": "solution",
+    "input": "Impulse,\n\\begin{array}{l}\n = \\frac{1}{2} (14 - (- 28)) \\\\\n = 21 \\text{NS}\n\\end{array}",
+    "expectedContains": ["$$", "\\begin{array}{l}", "21"],
+    "expectedExcludes": ["\\begin{array{l}"]
+  },
+  {
+    "id": "solution-corrupt-array-opener",
+    "pipeline": "solution",
+    "input": "$$\n\\begin{array{l}\n = \\frac{1}{2} (14 - (- 28)) \\\\\n = 21 \\text{NS}\n\\end{array}\n$$",
+    "expectedContains": ["\\begin{array}{l}"],
+    "expectedExcludes": ["\\begin{array{l}"]
+  },
+  {
+    "id": "solution-aligned-env",
+    "pipeline": "solution",
+    "input": "$Y_1 = \\overline{A+B}$\n$Y_2 = \\overline{A \\cdot B}$\n\n\\begin{aligned}\nY &= Y_1 \\cdot Y_2 \\\\\n&= \\overline{A+B}\n\\end{aligned}",
+    "expectedContains": ["$$", "begin{aligned}"]
+  },
+  {
+    "id": "json-escape-frac",
+    "pipeline": "math",
+    "input": "\u000crac{a}{b}",
+    "expectedContains": ["\\frac{a}{b}"]
+  },
+  {
+    "id": "json-escape-beta",
+    "pipeline": "math",
+    "input": "\u0008eta",
+    "expectedContains": ["\\beta"]
+  }
+]

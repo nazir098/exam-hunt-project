@@ -9,6 +9,7 @@ import { initFonts, removeAppBootShell } from "./utils/initFonts";
 import { initTheme } from "./utils/theme";
 import "./styles/stitch.css";
 import "./styles/analytics.css";
+import "./styles/typography.css";
 import "./styles.css";
 
 initTheme();

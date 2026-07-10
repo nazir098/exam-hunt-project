@@ -103,8 +103,11 @@ public class FreeLlmClient {
         CompletionResult result = completeInternal(systemPrompt, userPrompt, options, true);
         String raw = result.text();
         String json = LlmResponseParser.extractJsonObject(raw);
-        if (json != null && LlmResponseParser.isValidJson(json, objectMapper)) {
-            return new StructuredCompletion(raw, json);
+        if (json != null) {
+            String parseable = LlmResponseParser.bestParseableJson(json, objectMapper);
+            if (parseable != null) {
+                return new StructuredCompletion(raw, parseable);
+            }
         }
         if (result.capabilities().supportsJsonMode() || result.capabilities().supportsJsonSchema()) {
             log.warn(

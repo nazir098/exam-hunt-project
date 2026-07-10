@@ -6,6 +6,7 @@ import {
   fetchAdminAiPromptFeatures,
   fetchAdminQuestion,
   practiceAiAssist,
+  resetAdminQuestionFromMetadata,
   updateAdminQuestionContent,
   updateAdminQuestionEnrichment,
   type AdminAiPromptFeature,
@@ -16,24 +17,18 @@ import {
   type PracticeAiFeature,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import AdminQuestionContentPanel from "../components/AdminQuestionContentPanel";
 import AdminLatexField from "../components/AdminLatexField";
 import AiMarkdown from "../components/AiMarkdown";
 import AppLoader from "../components/AppLoader";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import { PRACTICE_AI_FEATURES } from "../utils/practiceAiFeatures";
-import { hybridDiagramUrl, isImageQuestion } from "../utils/questionRender";
+import { hybridDiagramUrl, isImageQuestion, textMcqDisplayProps } from "../utils/questionRender";
 
 const OPTION_IDS = ["1", "2", "3", "4"];
 
-function emptyOptions(): McqOptionView[] {
-  return OPTION_IDS.map((id) => ({ id, text: "" }));
-}
-
-function normalizeOptions(options: McqOptionView[] | undefined): McqOptionView[] {
-  const byId = new Map((options ?? []).map((o) => [o.id, o.text]));
-  return OPTION_IDS.map((id) => ({ id, text: byId.get(id) ?? "" }));
-}
+type EditorTab = "fix" | "override" | "ai";
 
 type ContentDraft = {
   questionTextPreview: string;
@@ -57,6 +52,15 @@ type EnrichmentDraft = {
   whyWrongByAnswer: Record<string, string>;
   formulaCards: { name: string; formula: string; description: string }[];
 };
+
+function emptyOptions(): McqOptionView[] {
+  return OPTION_IDS.map((id) => ({ id, text: "" }));
+}
+
+function normalizeOptions(options: McqOptionView[] | undefined): McqOptionView[] {
+  const byId = new Map((options ?? []).map((o) => [o.id, o.text]));
+  return OPTION_IDS.map((id) => ({ id, text: byId.get(id) ?? "" }));
+}
 
 function draftFromQuestion(q: AdminQuestionDetail): ContentDraft {
   return {
@@ -103,10 +107,29 @@ function previewQuestion(draft: ContentDraft, base: AdminQuestionDetail): AdminQ
   };
 }
 
+const EDITOR_TABS: { id: EditorTab; label: string; hint: string }[] = [
+  {
+    id: "fix",
+    label: "Fix question",
+    hint: "Compare PDF → edit text → save (most common)",
+  },
+  {
+    id: "override",
+    label: "Quick override",
+    hint: "Edit stem & options directly in the app",
+  },
+  {
+    id: "ai",
+    label: "AI assistant",
+    hint: "Hints, basics, revision notes",
+  },
+];
+
 export default function AdminQuestionEditorPage() {
   const { questionId: routeQuestionId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const initialFixSection = searchParams.get("section") === "solution" ? "solution" : "question";
   const { user, loading: authLoading } = useAuth();
 
   const [searchQ, setSearchQ] = useState(searchParams.get("q") ?? "Q1");
@@ -117,7 +140,8 @@ export default function AdminQuestionEditorPage() {
   const [q, setQ] = useState<AdminQuestionDetail | null>(null);
   const [contentDraft, setContentDraft] = useState<ContentDraft | null>(null);
   const [enrichmentDraft, setEnrichmentDraft] = useState<EnrichmentDraft | null>(null);
-  const [showSolution, setShowSolution] = useState(true);
+  const [activeTab, setActiveTab] = useState<EditorTab>("fix");
+  const [showSolution, setShowSolution] = useState(false);
   const [selectedPreview, setSelectedPreview] = useState("");
   const [aiSelectedAnswer, setAiSelectedAnswer] = useState("2");
   const [promptFeatures, setPromptFeatures] = useState<AdminAiPromptFeature[]>([]);
@@ -147,6 +171,12 @@ export default function AdminQuestionEditorPage() {
     if (!user?.admin || !questionId) return;
     loadQuestion(questionId).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [user?.admin, questionId, loadQuestion]);
+
+  useEffect(() => {
+    if (searchParams.get("section") === "solution") {
+      setActiveTab("fix");
+    }
+  }, [searchParams, questionId]);
 
   const runSearch = useCallback(async () => {
     if (!searchQ.trim()) return;
@@ -182,6 +212,26 @@ export default function AdminQuestionEditorPage() {
     []
   );
 
+  async function resetFromMetadata() {
+    if (!questionId) return;
+    if (!window.confirm("Replace stem and options with PDF extractor data? Your manual overrides will be cleared.")) {
+      return;
+    }
+    setBusy("reset-metadata");
+    setError("");
+    setSavedMsg("");
+    try {
+      const updated = await resetAdminQuestionFromMetadata(questionId);
+      setQ(updated);
+      setContentDraft(draftFromQuestion(updated));
+      setSavedMsg("Restored from PDF metadata.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Restore failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function saveContent() {
     if (!questionId || !contentDraft) return;
     setBusy("content");
@@ -191,7 +241,7 @@ export default function AdminQuestionEditorPage() {
       const updated = await updateAdminQuestionContent(questionId, contentDraft);
       setQ(updated);
       setContentDraft(draftFromQuestion(updated));
-      setSavedMsg("Question content saved.");
+      setSavedMsg("Saved — students will see these changes.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -221,7 +271,7 @@ export default function AdminQuestionEditorPage() {
       });
       setQ(updated);
       setEnrichmentDraft(enrichmentFromQuestion(updated));
-      setSavedMsg("AI enrichment overrides saved for future student hits.");
+      setSavedMsg("AI assistant overrides saved.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -237,7 +287,7 @@ export default function AdminQuestionEditorPage() {
       const updated = await updateAdminQuestionEnrichment(questionId, { clearFeatures: [feature] });
       setQ(updated);
       setEnrichmentDraft(enrichmentFromQuestion(updated));
-      setSavedMsg(`Cleared cached ${feature} data.`);
+      setSavedMsg(`Cleared cached ${feature}.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Clear failed");
     } finally {
@@ -261,7 +311,7 @@ export default function AdminQuestionEditorPage() {
           : res.text;
       setAiResponses((prev) => ({ ...prev, [feature]: text }));
       if (!res.llm) {
-        setSavedMsg(`${feature} returned cached/pre-imported content (not a new LLM call).`);
+        setSavedMsg("Returned cached content (no new LLM call).");
       }
       await loadQuestion(questionId);
     } catch (e) {
@@ -307,9 +357,9 @@ export default function AdminQuestionEditorPage() {
         <header className="admin-page__hero">
           <div>
             <p className="text-caption text-on-surface-variant uppercase tracking-wide">Administrator</p>
-            <h1 className="text-headline text-on-surface">Question editor</h1>
+            <h1 className="text-headline text-on-surface">Find a question</h1>
             <p className="text-body-sm text-on-surface-variant mt-2">
-              Preview how students see a question, fix text/options, and override AI assistant responses.
+              Search by question number, id, or subject — then open it to fix formatting.
             </p>
           </div>
           <Link to="/admin" className="btn">
@@ -323,14 +373,14 @@ export default function AdminQuestionEditorPage() {
               className="admin-page__input"
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
-              placeholder="Search by question id, Q number, subject…"
+              placeholder="e.g. Q1, NEET_2025_Q1, Physics"
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
             />
             <input
               className="admin-page__input"
               value={packFilter}
               onChange={(e) => setPackFilter(e.target.value)}
-              placeholder="Pack id filter (optional)"
+              placeholder="Pack (optional)"
             />
             <button type="button" className="btn primary" disabled={searching} onClick={runSearch}>
               {searching ? "Searching…" : "Search"}
@@ -386,414 +436,372 @@ export default function AdminQuestionEditorPage() {
   }
 
   return (
-    <main className="stitch-page admin-page admin-question-page">
-      <header className="admin-page__hero">
-        <div>
-          <p className="text-caption text-on-surface-variant uppercase tracking-wide">Administrator</p>
-          <h1 className="text-headline text-on-surface">Question editor</h1>
-          <p className="text-body-sm text-on-surface-variant mt-2">
-            {q.exam} {q.year} · Q{q.questionNo} · {q.subject} · {q.chapter}
-          </p>
-          <p className="text-caption muted">{q.questionId}</p>
+    <main className="stitch-page admin-page admin-question-page admin-question-page--focused">
+      <header className="admin-question-focus__header">
+        <Link to="/admin/questions" className="admin-question-focus__back muted">
+          ← All questions
+        </Link>
+        <div className="admin-question-focus__title-row">
+          <div>
+            <h1 className="admin-question-focus__title">
+              {q.exam} {q.year} · Question {q.questionNo}
+            </h1>
+            <p className="admin-question-focus__meta muted">
+              {q.subject} · {q.chapter}
+              {q.topic ? ` · ${q.topic}` : ""}
+            </p>
+          </div>
+          <Link
+            to={`/solve/${encodeURIComponent(questionId)}`}
+            className="btn primary"
+            target="_blank"
+            rel="noreferrer"
+          >
+            View as student ↗
+          </Link>
         </div>
-        <div className="admin-question-page__actions">
-          <Link to="/admin/questions" className="btn">
-            Search
-          </Link>
-          <Link to={`/solve/${encodeURIComponent(questionId)}`} className="btn" target="_blank" rel="noreferrer">
-            Open solve page
-          </Link>
-          <Link to="/admin" className="btn">
-            Admin home
-          </Link>
-        </div>
+        <QuestionVariantSwitcher
+          questionId={questionId}
+          onSelect={(qid) => navigate(`/admin/questions/${encodeURIComponent(qid)}`)}
+        />
       </header>
-
-      <QuestionVariantSwitcher
-        questionId={questionId}
-        onSelect={(qid) => navigate(`/admin/questions/${encodeURIComponent(qid)}`)}
-      />
 
       {(error || savedMsg) && (
         <p className={error ? "admin-page__folder-hint admin-page__folder-hint--error" : "admin-question-saved"}>
           {error || savedMsg}
         </p>
       )}
-      {q.adminLockedFields?.length > 0 && (
-        <p className="admin-question-locked-hint muted">
-          Admin-protected fields ({q.adminLockedFields.length}) — re-sync and AI cache will not overwrite these.
-        </p>
+
+      <section className="admin-question-workflow glass-card" aria-label="How to fix a question">
+        <h2 className="admin-question-workflow__title">How to fix broken formatting</h2>
+        <ol className="admin-question-workflow__steps">
+          <li>
+            <strong>Check the preview</strong> — does the question look wrong compared to the PDF?
+          </li>
+          <li>
+            <strong>Edit the text</strong> — fix LaTeX/OCR in the box, or click <em>Fix LaTeX (LLM)</em>
+          </li>
+          <li>
+            <strong>Save</strong> — click <em>Save raw text</em> (or <em>Save solution</em> on the Solution tab)
+          </li>
+        </ol>
+      </section>
+
+      <nav className="admin-question-tabs" aria-label="Editor sections">
+        {EDITOR_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`admin-question-tabs__btn${activeTab === tab.id ? " admin-question-tabs__btn--active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span className="admin-question-tabs__label">{tab.label}</span>
+            <span className="admin-question-tabs__hint">{tab.hint}</span>
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "fix" && (
+        <AdminQuestionContentPanel
+          questionId={questionId}
+          initialSection={initialFixSection}
+          onMongoRefresh={() => loadQuestion(questionId)}
+        />
       )}
 
-      <div className="admin-question-layout">
-        <section className="admin-question-preview glass-card">
-          <div className="admin-question-preview__head">
-            <h2 className="admin-page__section-title">Student preview</h2>
-            <label className="admin-question-preview__toggle">
-              <input
-                type="checkbox"
-                checked={showSolution}
-                onChange={(e) => setShowSolution(e.target.checked)}
-              />
-              Show solution
-            </label>
-          </div>
-          <div className="admin-question-preview__body">
-            {isImageQuestion(previewQ) ? (
-              <img
-                className="admin-question-preview__img"
-                src={previewQ.questionImageUrl}
-                alt={`Question ${previewQ.questionNo}`}
-              />
-            ) : (
-              <TextMcqQuestion
-                questionText={previewQ.questionTextPreview || "No question text"}
-                options={previewQ.options ?? []}
-                selected={selectedPreview}
-                onSelect={setSelectedPreview}
-                questionFormat={previewQ.questionFormat}
-                variantType={previewQ.variantType}
-                assertion={previewQ.assertion}
-                reason={previewQ.reason}
-                statements={previewQ.statements}
-                matchListA={previewQ.matchListA}
-                matchListB={previewQ.matchListB}
-                questionId={previewQ.questionId}
-                questionImageUrl={hybridDiagramUrl(previewQ)}
-                questionDiagramSvg={previewQ.questionDiagramSvg}
-                assetPlacements={previewQ.assetPlacements}
-                correctAnswer={previewQ.answer}
-                showCorrect={showSolution}
-              />
-            )}
-            {showSolution && (
-              <div className="admin-question-preview__solution">
-                <p className="admin-question-preview__solution-label">
-                  Correct answer: <strong>{previewQ.answer}</strong>
-                </p>
-                {previewQ.solutionImageUrl?.trim() ? (
-                  <img src={previewQ.solutionImageUrl} alt="Solution" />
-                ) : previewQ.solutionDiagramSvg?.trim() ? (
-                  <div
-                    className="variant-diagram__svg"
-                    dangerouslySetInnerHTML={{ __html: previewQ.solutionDiagramSvg }}
-                  />
-                ) : previewQ.solutionTextPreview?.trim() ? (
-                  <AiMarkdown text={previewQ.solutionTextPreview} className="ai-markdown--paper" />
-                ) : (
-                  <p className="muted">No solution content.</p>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="admin-question-edit glass-card">
-          <h2 className="admin-page__section-title">Edit content</h2>
-          <div className="admin-edit-paper">
-            <AdminLatexField
-              label="Question text"
-              rows={5}
-              value={contentDraft.questionTextPreview}
-              onChange={(questionTextPreview) =>
-                setContentDraft((d) => d && { ...d, questionTextPreview })
-              }
-            />
-            <label className="admin-latex-field admin-latex-field--inline">
-              <span className="admin-latex-field__label">Question format</span>
-              <select
-                className="admin-latex-field__input admin-latex-field__input--select"
-                value={contentDraft.questionFormat}
-                onChange={(e) =>
-                  setContentDraft((d) => d && { ...d, questionFormat: e.target.value })
-                }
-              >
-                <option value="">mcq</option>
-                <option value="assertion_reason">assertion_reason</option>
-                <option value="statement_based">statement_based</option>
-              </select>
-            </label>
-            <AdminLatexField
-              label="Assertion (A)"
-              rows={2}
-              value={contentDraft.assertion}
-              onChange={(assertion) => setContentDraft((d) => d && { ...d, assertion })}
-            />
-            <AdminLatexField
-              label="Reason (R)"
-              rows={2}
-              value={contentDraft.reason}
-              onChange={(reason) => setContentDraft((d) => d && { ...d, reason })}
-            />
-            <div className="admin-latex-field">
-              <span className="admin-latex-field__label">Options</span>
-              {contentDraft.options.map((opt) => (
-                <AdminLatexField
-                  key={opt.id}
-                  label={`Option ${opt.id}`}
-                  rows={2}
-                  compact
-                  value={opt.text}
-                  onChange={(text) =>
-                    setContentDraft((d) =>
-                      d
-                        ? {
-                            ...d,
-                            options: d.options.map((o) => (o.id === opt.id ? { ...o, text } : o)),
-                          }
-                        : d
-                    )
-                  }
+      {activeTab === "override" && (
+        <div className="admin-question-tab-panel">
+          <section className="glass-card admin-question-preview admin-question-preview--compact">
+            <div className="admin-question-preview__head">
+              <h2 className="admin-page__section-title">Live preview</h2>
+              <label className="admin-question-preview__toggle">
+                <input
+                  type="checkbox"
+                  checked={showSolution}
+                  onChange={(e) => setShowSolution(e.target.checked)}
                 />
-              ))}
+                Show answer
+              </label>
             </div>
-            <label className="admin-latex-field admin-latex-field--inline">
-              <span className="admin-latex-field__label">Correct answer</span>
+            <div className="admin-question-preview__body admin-question-preview__body--dark">
+              {isImageQuestion(previewQ) ? (
+                <img
+                  className="admin-question-preview__img"
+                  src={previewQ.questionImageUrl}
+                  alt={`Question ${previewQ.questionNo}`}
+                />
+              ) : (
+                <TextMcqQuestion
+                  questionText={previewQ.questionTextPreview || "No question text"}
+                  options={previewQ.options ?? []}
+                  selected={selectedPreview}
+                  onSelect={setSelectedPreview}
+                  questionFormat={previewQ.questionFormat}
+                  variantType={previewQ.variantType}
+                  assertion={previewQ.assertion}
+                  reason={previewQ.reason}
+                  statements={previewQ.statements}
+                  matchListA={previewQ.matchListA}
+                  matchListB={previewQ.matchListB}
+                  questionId={previewQ.questionId}
+                  questionImageUrl={hybridDiagramUrl(previewQ)}
+                  questionDiagramSvg={previewQ.questionDiagramSvg}
+                  assetPlacements={previewQ.assetPlacements}
+                  {...textMcqDisplayProps(previewQ)}
+                  correctAnswer={previewQ.answer}
+                  showCorrect={showSolution}
+                />
+              )}
+              {showSolution && (
+                <div className="admin-question-preview__solution">
+                  <p className="admin-question-preview__solution-label">
+                    Answer: <strong>{previewQ.answer}</strong>
+                  </p>
+                  {previewQ.solutionTextPreview?.trim() ? (
+                    <AiMarkdown text={previewQ.solutionTextPreview} className="ai-markdown--paper" />
+                  ) : (
+                    <p className="muted">No solution text.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="glass-card admin-question-edit">
+            <h2 className="admin-page__section-title">Edit fields directly</h2>
+            <p className="admin-page__section-desc muted">
+              Use this only when you need a quick tweak without re-parsing from the PDF extractor.
+              For OCR/LaTeX fixes, prefer the{" "}
+              <button type="button" className="admin-inline-link" onClick={() => setActiveTab("fix")}>
+                Fix question
+              </button>{" "}
+              tab.
+            </p>
+            {q.adminLockedFields?.length > 0 && (
+              <p className="admin-content-qc__lead muted admin-content-qc__lead--warn">
+                Manual overrides are locked ({q.adminLockedFields.length} fields) — re-import will not
+                change them until you restore from PDF data.
+              </p>
+            )}
+            <div className="admin-question-edit__toolbar">
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={busy === "reset-metadata"}
+                onClick={resetFromMetadata}
+              >
+                {busy === "reset-metadata" ? "Restoring…" : "Restore from PDF data"}
+              </button>
+            </div>
+            <div className="admin-edit-paper">
+              <AdminLatexField
+                label="Question text"
+                rows={5}
+                value={contentDraft.questionTextPreview}
+                onChange={(questionTextPreview) =>
+                  setContentDraft((d) => d && { ...d, questionTextPreview })
+                }
+              />
+              <div className="admin-latex-field">
+                <span className="admin-latex-field__label">Options</span>
+                {contentDraft.options.map((opt) => (
+                  <AdminLatexField
+                    key={opt.id}
+                    label={`(${opt.id})`}
+                    rows={2}
+                    compact
+                    value={opt.text}
+                    onChange={(text) =>
+                      setContentDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              options: d.options.map((o) => (o.id === opt.id ? { ...o, text } : o)),
+                            }
+                          : d
+                      )
+                    }
+                  />
+                ))}
+              </div>
+              <label className="admin-latex-field admin-latex-field--inline">
+                <span className="admin-latex-field__label">Correct answer</span>
+                <select
+                  className="admin-latex-field__input admin-latex-field__input--select admin-latex-field__input--narrow"
+                  value={contentDraft.answer}
+                  onChange={(e) => setContentDraft((d) => d && { ...d, answer: e.target.value })}
+                >
+                  {OPTION_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <AdminLatexField
+                label="Solution (optional)"
+                rows={4}
+                value={contentDraft.solutionTextPreview}
+                onChange={(solutionTextPreview) =>
+                  setContentDraft((d) => d && { ...d, solutionTextPreview })
+                }
+              />
+              <details className="admin-question-advanced-fields">
+                <summary>Assertion / reason / format</summary>
+                <label className="admin-latex-field admin-latex-field--inline">
+                  <span className="admin-latex-field__label">Format</span>
+                  <select
+                    className="admin-latex-field__input admin-latex-field__input--select"
+                    value={contentDraft.questionFormat}
+                    onChange={(e) =>
+                      setContentDraft((d) => d && { ...d, questionFormat: e.target.value })
+                    }
+                  >
+                    <option value="">mcq</option>
+                    <option value="assertion_reason">assertion_reason</option>
+                    <option value="statement_based">statement_based</option>
+                  </select>
+                </label>
+                <AdminLatexField
+                  label="Assertion"
+                  rows={2}
+                  value={contentDraft.assertion}
+                  onChange={(assertion) => setContentDraft((d) => d && { ...d, assertion })}
+                />
+                <AdminLatexField
+                  label="Reason"
+                  rows={2}
+                  value={contentDraft.reason}
+                  onChange={(reason) => setContentDraft((d) => d && { ...d, reason })}
+                />
+              </details>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy === "content"}
+                onClick={saveContent}
+              >
+                {busy === "content" ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab === "ai" && (
+        <section className="glass-card admin-question-ai admin-question-tab-panel">
+          <h2 className="admin-page__section-title">AI study assistant</h2>
+          <p className="admin-page__section-desc muted">
+            Test what students see when they tap Hint, Basics, etc. Edit the fields below to override
+            auto-generated text.
+          </p>
+          <div className="admin-question-ai__controls">
+            <label className="admin-field admin-field--inline">
+              <span>Wrong answer to simulate</span>
               <select
-                className="admin-latex-field__input admin-latex-field__input--select admin-latex-field__input--narrow"
-                value={contentDraft.answer}
-                onChange={(e) => setContentDraft((d) => d && { ...d, answer: e.target.value })}
+                className="admin-page__input admin-page__input--narrow"
+                value={aiSelectedAnswer}
+                onChange={(e) => setAiSelectedAnswer(e.target.value)}
               >
                 {OPTION_IDS.map((id) => (
                   <option key={id} value={id}>
-                    {id}
+                    Option {id}
                   </option>
                 ))}
               </select>
             </label>
-            <AdminLatexField
-              label="Solution text"
-              rows={4}
-              value={contentDraft.solutionTextPreview}
-              onChange={(solutionTextPreview) =>
-                setContentDraft((d) => d && { ...d, solutionTextPreview })
-              }
-            />
+          </div>
+
+          <div className="admin-question-ai__features">
+            {questionFeatures.map((feat) => {
+              const meta = promptFeatures.find((p) => p.id === feat.id);
+              const response = aiResponses[feat.id];
+              return (
+                <article key={feat.id} className="admin-ai-feature-card">
+                  <div className="admin-ai-feature-card__head">
+                    <h3>{feat.label}</h3>
+                    <div className="admin-ai-feature-card__actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={busy === `prompt-${feat.id}`}
+                        onClick={() => showPrompt(feat.id)}
+                      >
+                        Prompt
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm primary"
+                        disabled={busy === `ai-${feat.id}`}
+                        onClick={() => runAiFeature(feat.id)}
+                      >
+                        Run
+                      </button>
+                      {meta?.questionScoped && (
+                        <button
+                          type="button"
+                          className="btn btn-sm danger"
+                          disabled={busy === `clear-${feat.id}`}
+                          onClick={() => clearFeatureCache(feat.id)}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {response && (
+                    <div className="admin-ai-feature-card__response admin-edit-paper admin-edit-paper--inset">
+                      <AiMarkdown text={response} className="ai-markdown--paper" />
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <h3 className="admin-page__section-title">Override text</h3>
+          <div className="admin-edit-paper">
+            <div className="admin-enrichment-grid">
+              <div className="admin-latex-field">
+                <span className="admin-latex-field__label">Hints (3 lines)</span>
+                {enrichmentDraft.hints.map((hint, idx) => (
+                  <AdminLatexField
+                    key={idx}
+                    label={`Hint ${idx + 1}`}
+                    rows={2}
+                    compact
+                    value={hint}
+                    onChange={(value) =>
+                      setEnrichmentDraft((d) => {
+                        if (!d) return d;
+                        const hints = [...d.hints];
+                        hints[idx] = value;
+                        return { ...d, hints };
+                      })
+                    }
+                  />
+                ))}
+              </div>
+              <AdminLatexField
+                label="Concept explanation"
+                rows={3}
+                value={enrichmentDraft.conceptExplanation}
+                onChange={(conceptExplanation) =>
+                  setEnrichmentDraft((d) => d && { ...d, conceptExplanation })
+                }
+              />
+            </div>
             <button
               type="button"
               className="btn primary"
-              disabled={busy === "content"}
-              onClick={saveContent}
+              disabled={busy === "enrichment"}
+              onClick={saveEnrichment}
             >
-              {busy === "content" ? "Saving…" : "Save question content"}
+              {busy === "enrichment" ? "Saving…" : "Save AI overrides"}
             </button>
           </div>
         </section>
-      </div>
-
-      <section className="admin-question-ai glass-card">
-        <h2 className="admin-page__section-title">AI assistant review</h2>
-        <p className="admin-page__section-desc muted">
-          Run each feature as a student would, inspect the response, then edit cached fields below so
-          future hits use your override. Use <strong>View prompt</strong> to copy the exact system +
-          user prompt into ChatGPT.
-        </p>
-        <div className="admin-question-ai__controls">
-          <label className="admin-field admin-field--inline">
-            <span>Simulated wrong answer (why_wrong / basics)</span>
-            <select
-              className="admin-page__input admin-page__input--narrow"
-              value={aiSelectedAnswer}
-              onChange={(e) => setAiSelectedAnswer(e.target.value)}
-            >
-              {OPTION_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="admin-question-ai__features">
-          {questionFeatures.map((feat) => {
-            const meta = promptFeatures.find((p) => p.id === feat.id);
-            const response = aiResponses[feat.id];
-            return (
-              <article key={feat.id} className="admin-ai-feature-card">
-                <div className="admin-ai-feature-card__head">
-                  <h3>{feat.label}</h3>
-                  <div className="admin-ai-feature-card__actions">
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      disabled={busy === `prompt-${feat.id}`}
-                      onClick={() => showPrompt(feat.id)}
-                    >
-                      View prompt
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm primary"
-                      disabled={busy === `ai-${feat.id}`}
-                      onClick={() => runAiFeature(feat.id)}
-                    >
-                      Run AI
-                    </button>
-                    {meta?.questionScoped && (
-                      <button
-                        type="button"
-                        className="btn btn-sm danger"
-                        disabled={busy === `clear-${feat.id}`}
-                        onClick={() => clearFeatureCache(feat.id)}
-                      >
-                        Clear cache
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <p className="muted admin-ai-feature-card__desc">{feat.description}</p>
-                {response && (
-                  <div className="admin-ai-feature-card__response admin-edit-paper admin-edit-paper--inset">
-                    <AiMarkdown text={response} className="ai-markdown--paper" />
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-
-        <h3 className="admin-page__section-title">Override cached enrichment</h3>
-        <div className="admin-edit-paper">
-          <div className="admin-enrichment-grid">
-            <div className="admin-latex-field">
-              <span className="admin-latex-field__label">Hints (3 lines — used by Hint feature)</span>
-              {enrichmentDraft.hints.map((hint, idx) => (
-                <AdminLatexField
-                  key={idx}
-                  label={`Hint ${idx + 1}`}
-                  rows={2}
-                  compact
-                  value={hint}
-                  onChange={(value) =>
-                    setEnrichmentDraft((d) => {
-                      if (!d) return d;
-                      const hints = [...d.hints];
-                      hints[idx] = value;
-                      return { ...d, hints };
-                    })
-                  }
-                />
-              ))}
-            </div>
-            <AdminLatexField
-              label="Revision notes"
-              rows={5}
-              value={enrichmentDraft.revisionNotes}
-              onChange={(revisionNotes) =>
-                setEnrichmentDraft((d) => d && { ...d, revisionNotes })
-              }
-            />
-            <AdminLatexField
-              label="Concept explanation (Basics)"
-              rows={4}
-              value={enrichmentDraft.conceptExplanation}
-              onChange={(conceptExplanation) =>
-                setEnrichmentDraft((d) => d && { ...d, conceptExplanation })
-              }
-            />
-            <AdminLatexField
-              label="Practice pattern (Pitfalls)"
-              rows={3}
-              value={enrichmentDraft.practicePattern}
-              onChange={(practicePattern) =>
-                setEnrichmentDraft((d) => d && { ...d, practicePattern })
-              }
-            />
-            <div className="admin-latex-field">
-              <span className="admin-latex-field__label">Why wrong (per option)</span>
-              {OPTION_IDS.map((id) => (
-                <AdminLatexField
-                  key={id}
-                  label={`Option ${id}`}
-                  rows={2}
-                  compact
-                  value={enrichmentDraft.whyWrongByAnswer[id] ?? ""}
-                  onChange={(value) =>
-                    setEnrichmentDraft((d) =>
-                      d
-                        ? {
-                            ...d,
-                            whyWrongByAnswer: { ...d.whyWrongByAnswer, [id]: value },
-                          }
-                        : d
-                    )
-                  }
-                />
-              ))}
-            </div>
-            <div className="admin-latex-field admin-latex-field--wide">
-              <span className="admin-latex-field__label">Formula cards</span>
-              {enrichmentDraft.formulaCards.map((card, idx) => (
-                <div key={idx} className="admin-formula-card-edit">
-                  <label className="admin-latex-field admin-latex-field--inline">
-                    <span className="admin-latex-field__label">Name</span>
-                    <input
-                      className="admin-latex-field__input"
-                      placeholder="Formula name"
-                      value={card.name}
-                      onChange={(e) =>
-                        setEnrichmentDraft((d) => {
-                          if (!d) return d;
-                          const formulaCards = [...d.formulaCards];
-                          formulaCards[idx] = { ...formulaCards[idx], name: e.target.value };
-                          return { ...d, formulaCards };
-                        })
-                      }
-                    />
-                  </label>
-                  <AdminLatexField
-                    label="LaTeX equation"
-                    rows={2}
-                    previewMode="formula"
-                    value={card.formula}
-                    onChange={(formula) =>
-                      setEnrichmentDraft((d) => {
-                        if (!d) return d;
-                        const formulaCards = [...d.formulaCards];
-                        formulaCards[idx] = { ...formulaCards[idx], formula };
-                        return { ...d, formulaCards };
-                      })
-                    }
-                  />
-                  <AdminLatexField
-                    label="When to use"
-                    rows={2}
-                    compact
-                    value={card.description}
-                    onChange={(description) =>
-                      setEnrichmentDraft((d) => {
-                        if (!d) return d;
-                        const formulaCards = [...d.formulaCards];
-                        formulaCards[idx] = { ...formulaCards[idx], description };
-                        return { ...d, formulaCards };
-                      })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <AdminLatexField
-              label="Common mistakes (one per line in storage)"
-              rows={4}
-              value={enrichmentDraft.commonMistakes.join("\n")}
-              onChange={(raw) =>
-                setEnrichmentDraft((d) =>
-                  d ? { ...d, commonMistakes: raw.split("\n") } : d
-                )
-              }
-            />
-          </div>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={busy === "enrichment"}
-            onClick={saveEnrichment}
-          >
-            {busy === "enrichment" ? "Saving…" : "Save AI overrides"}
-          </button>
-        </div>
-      </section>
+      )}
 
       {activePrompt && (
         <div className="admin-prompt-modal" role="dialog" aria-modal="true">
@@ -804,13 +812,12 @@ export default function AdminQuestionEditorPage() {
                 Close
               </button>
             </div>
-            {activePrompt.notes && <p className="muted admin-prompt-modal__notes">{activePrompt.notes}</p>}
             <label className="admin-field">
               <span>System prompt</span>
               <textarea className="admin-page__textarea" rows={8} readOnly value={activePrompt.systemPrompt} />
             </label>
             <label className="admin-field">
-              <span>User prompt (resolved for this question)</span>
+              <span>User prompt</span>
               <textarea className="admin-page__textarea" rows={12} readOnly value={activePrompt.userPrompt} />
             </label>
             <button
@@ -819,10 +826,10 @@ export default function AdminQuestionEditorPage() {
               onClick={() => {
                 const blob = `SYSTEM:\n${activePrompt.systemPrompt}\n\nUSER:\n${activePrompt.userPrompt}`;
                 void navigator.clipboard.writeText(blob);
-                setSavedMsg("Prompt copied to clipboard.");
+                setSavedMsg("Prompt copied.");
               }}
             >
-              Copy full prompt
+              Copy prompt
             </button>
           </div>
         </div>

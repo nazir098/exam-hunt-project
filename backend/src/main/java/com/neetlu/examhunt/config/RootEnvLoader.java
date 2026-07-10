@@ -48,6 +48,9 @@ public final class RootEnvLoader {
                     if ("EXTRACTOR_ROOT".equals(key)) {
                         defaults.put("app.extractor-root", value);
                     }
+                    if ("EXTRACTOR_SOURCE_ROOT".equals(key)) {
+                        defaults.put("app.extractor-source-root", value);
+                    }
                     if ("ADMIN_IMPORT_KEY".equals(key)) {
                         defaults.put("app.admin-import-key", value);
                     }

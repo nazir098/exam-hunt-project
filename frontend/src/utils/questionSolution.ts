@@ -1,16 +1,33 @@
 /** Question fields needed to decide if solution adds more than revealing the answer. */
-type SolutionFields = {
+export type SolutionFields = {
   solutionImageUrl?: string;
   solutionDiagramSvg?: string;
   solutionTextPreview?: string;
 };
 
+export type SolutionDisplay =
+  | { kind: "text"; text: string }
+  | { kind: "svg"; svg: string }
+  | { kind: "image"; url: string }
+  | { kind: "empty" };
+
+/** Prefer extracted LaTeX/markdown solution text over PDF crop images. */
+export function pickSolutionDisplay(q: SolutionFields): SolutionDisplay {
+  const text = q.solutionTextPreview?.trim() ?? "";
+  const svg = q.solutionDiagramSvg?.trim() ?? "";
+  const imageUrl = q.solutionImageUrl?.trim() ?? "";
+  if (text) return { kind: "text", text };
+  if (svg) return { kind: "svg", svg };
+  if (imageUrl) return { kind: "image", url: imageUrl };
+  return { kind: "empty" };
+}
+
 /** True when official solution has substance beyond naming the correct option. */
 export function hasDistinctSolution(q: SolutionFields): boolean {
-  if (q.solutionImageUrl?.trim()) return true;
-  if (q.solutionDiagramSvg?.trim()) return true;
-  const text = q.solutionTextPreview?.trim() ?? "";
-  if (!text) return false;
+  const display = pickSolutionDisplay(q);
+  if (display.kind === "image" || display.kind === "svg") return true;
+  if (display.kind !== "text") return false;
+  const text = display.text;
   const stepMarkers = text.match(/\*\*Step\s*\d+/gi);
   if (stepMarkers && stepMarkers.length >= 2) return true;
   if (text.length > 140) return true;

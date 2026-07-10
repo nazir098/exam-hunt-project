@@ -213,6 +213,7 @@ public class PracticeController {
             String questionImageUrl,
             String questionTextPreview,
             String solutionTextPreview,
+            String solutionImageUrl,
             java.util.List<McqOptionView> options,
             String sourceType,
             String parentQuestionId,
@@ -228,7 +229,9 @@ public class PracticeController {
             String questionDiagramSvg,
             String solutionDiagramSvg,
             String renderMode,
-            java.util.List<AssetPlacementView> assetPlacements) {
+            java.util.List<AssetPlacementView> assetPlacements,
+            java.util.List<AssetPlacementView> solutionAssetPlacements,
+            boolean contentTextNormalized) {
         static QuestionPracticeView from(Question q) {
             return new QuestionPracticeView(
                     q.getQuestionId(),
@@ -245,6 +248,7 @@ public class PracticeController {
                     q.getQuestionImageUrl(),
                     q.getQuestionTextPreview(),
                     q.getSolutionTextPreview(),
+                    QuestionVariantMapper.nullToEmpty(q.getSolutionImageUrl()),
                     mapOptions(q),
                     q.getSourceType() != null ? q.getSourceType() : "pyq",
                     q.getParentQuestionId(),
@@ -259,8 +263,10 @@ public class PracticeController {
                     q.isHasDiagram(),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
                     QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()),
-                    QuestionVariantMapper.nullToEmpty(q.getRenderMode()),
-                    QuestionVariantMapper.mapAssetPlacementsForPractice(q));
+                    QuestionVariantMapper.normalizeRenderMode(q.getRenderMode()),
+                    QuestionVariantMapper.mapAssetPlacementsForPractice(q),
+                    QuestionVariantMapper.mapSolutionAssetPlacementsForPractice(q),
+                    q.isContentTextNormalized());
         }
 
         private static java.util.List<McqOptionView> mapOptions(Question q) {

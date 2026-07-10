@@ -3,6 +3,7 @@ import { QuestionPublic } from "../api";
 import { MODES } from "../navigation/modes";
 import { difficultyLabel, examDisplayName, marksLabel } from "../utils/labels";
 import BookmarkButton from "./BookmarkButton";
+import QuestionStemPreview from "./QuestionStemPreview";
 
 type Props = {
   question: QuestionPublic;
@@ -37,13 +38,13 @@ export default function QuestionCard({
   const outlet = useOutletContext<OutletCtx | undefined>();
   const diff = difficultyLabel(q.difficulty);
   const solveHref = `/solve/${q.questionId}?${new URLSearchParams(searchParams).toString()}`;
-  const title =
-    q.questionTextPreview?.slice(0, 180) ||
-    `Question ${q.questionNo} — ${q.chapter || q.subject}`;
+  const fallbackTitle = `Question ${q.questionNo} — ${q.chapter || q.subject}`;
 
   return (
     <article className="glass-card glass-card--bank question-card--compact p-md rounded-xl relative group overflow-hidden">
-      <h2 className="question-card__title">{title}</h2>
+      <h2 className="question-card__title">
+        <QuestionStemPreview text={q.questionTextPreview} fallback={fallbackTitle} />
+      </h2>
       <p className="question-card__meta muted">
         {q.subject} · {q.chapter || q.topic || "General"} · {diff} · {marksLabel(q.difficulty, q.questionNo)} ·{" "}
         {examDisplayName(q.exam, q.year)} {q.year}

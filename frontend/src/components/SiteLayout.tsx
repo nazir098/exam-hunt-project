@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
   createPracticeSession,
+  fetchAllPackQuestions,
   fetchPacks,
-  fetchQuestions,
 } from "../api";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { clampPracticeQuestionCount } from "../utils/practiceHub";
@@ -46,11 +46,9 @@ export default function SiteLayout() {
         navigate("/practice?exam=NEET");
         return;
       }
-      const res = await fetchQuestions(packId, {
+      const res = await fetchAllPackQuestions(packId, {
         subject: searchParams.get("subject") || undefined,
         chapter: searchParams.get("chapter") || undefined,
-        page: 0,
-        size: 300,
       });
       const filtered = filterQuestionsForPractice(res.content, {
         topic: searchParams.get("topic") || undefined,

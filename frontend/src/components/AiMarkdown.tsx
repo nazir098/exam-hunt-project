@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import { repairMathBody } from "../utils/mathRepairCore";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -95,53 +96,8 @@ function normalizeAiSectionHeaders(text: string): string {
 
 /** Repair common enrichment LaTeX typos before KaTeX. */
 function normalizeMathContent(text: string): string {
-  let t = text.trim();
-  while (t.startsWith("$")) t = t.slice(1).trim();
-  while (t.endsWith("$")) t = t.slice(0, -1).trim();
-  t = collapseOverEscapedBackslashes(t);
-  t = repairJsonEscapedLatex(t);
-  t = t.replace(/\\{/g, "{");
-  t = t.replace(/\\}/g, "}");
-  // LLM/export typo: \left$$ or \right)$$ used instead of parentheses
-  t = t.replace(/\\left\$\$/g, "\\left(");
-  t = t.replace(/\\left\$/g, "\\left(");
-  t = t.replace(/\\right\)\$\$/g, "\\right)");
-  t = t.replace(/\\right\$\$/g, "\\right)");
-  t = t.replace(/\\left\s*\\frac/g, "\\left(\\frac");
-  t = t.replace(/\\right(?![)\]|.|])/g, "\\right)");
+  let t = repairMathBody(text);
   t = t.replace(/\\(cos|sin|tan)(\d)/g, "\\$1 $2");
-  return t.trim();
-}
-
-/** Manifest / JSON double-escaping: \\frac → \frac */
-function collapseOverEscapedBackslashes(text: string): string {
-  let t = text;
-  let prev = "";
-  while (t !== prev) {
-    prev = t;
-    t = t.replace(/\\\\([a-zA-Z])/g, "\\$1");
-  }
-  return t;
-}
-
-/** JSON control-char escapes break LaTeX commands (\\frac → form-feed + rac). */
-function repairJsonEscapedLatex(text: string): string {
-  let t = text.replace(/\u000C/g, "");
-  t = t.replace(/-rac\{/g, "-\\frac{");
-  t = t.replace(/-rac(?=\{)/g, "-\\frac");
-  t = t.replace(/(?<![\\a-zA-Z])rac\{/g, "\\frac{");
-  t = t.replace(/\u0009imes/g, "\\times");
-  t = t.replace(/\u0009ext\{/g, "\\text{");
-  t = t.replace(/\u0009heta/g, "\\theta");
-  t = t.replace(/\u0009au/g, "\\tau");
-  t = t.replace(/\u0009o/g, "\\to");
-  t = t.replace(/\u0008eta/g, "\\beta");
-  t = t.replace(/\u0008ar\{/g, "\\bar{");
-  t = t.replace(/\u0008inom/g, "\\binom");
-  t = t.replace(/\u0008egin\{/g, "\\begin{");
-  t = t.replace(/\nu/g, "\\nu");
-  t = t.replace(/\nabla/g, "\\nabla");
-  t = t.replace(/\rho/g, "\\rho");
   return t;
 }
 
@@ -194,10 +150,12 @@ function normalizeLatexDelimiters(text: string): string {
 type Props = {
   text: string;
   className?: string;
+  /** Stem text already passed through normalizeQuestionStem — skip LLM-oriented fixes. */
+  preformatted?: boolean;
 };
 
-export default function AiMarkdown({ text, className = "" }: Props) {
-  const normalized = normalizeAiText(text);
+export default function AiMarkdown({ text, className = "", preformatted = false }: Props) {
+  const normalized = preformatted ? text : normalizeAiText(text);
   return (
     <div className={`ai-markdown${className ? ` ${className}` : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>

@@ -75,8 +75,12 @@ public class Question {
     private String renderMode;
     /** Inline diagram placements for {{asset:N}} markers in structured stems. */
     private List<AssetPlacement> assetPlacements;
+    /** Inline diagram placements for {{asset:N}} markers in structured solutions. */
+    private List<AssetPlacement> solutionAssetPlacements;
     /** Field names admin edited — import/enrich/LLM must not overwrite these. */
     private Set<String> adminLockedFields;
+    /** Stem/options/solution in Mongo were sanitized at import — frontend can skip re-normalize. */
+    private boolean contentTextNormalized;
 
     public String getId() {
         return id;
@@ -422,11 +426,27 @@ public class Question {
         this.assetPlacements = assetPlacements;
     }
 
+    public List<AssetPlacement> getSolutionAssetPlacements() {
+        return solutionAssetPlacements;
+    }
+
+    public void setSolutionAssetPlacements(List<AssetPlacement> solutionAssetPlacements) {
+        this.solutionAssetPlacements = solutionAssetPlacements;
+    }
+
     public Set<String> getAdminLockedFields() {
         return adminLockedFields;
     }
 
     public void setAdminLockedFields(Set<String> adminLockedFields) {
         this.adminLockedFields = adminLockedFields;
+    }
+
+    public boolean isContentTextNormalized() {
+        return contentTextNormalized;
+    }
+
+    public void setContentTextNormalized(boolean contentTextNormalized) {
+        this.contentTextNormalized = contentTextNormalized;
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -56,6 +57,15 @@ public class AdminQuestionController {
             @RequestBody AdminQuestionService.UpdateContentRequest body) {
         adminAuthorization.requireAdminAccess(userId, adminKey);
         return adminQuestionService.updateContent(questionId, body);
+    }
+
+    @PostMapping("/{questionId}/reset-from-metadata")
+    public AdminQuestionService.AdminQuestionDetail resetFromMetadata(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey,
+            @PathVariable String questionId) {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        return adminQuestionService.resetContentFromMetadata(questionId);
     }
 
     @PutMapping("/{questionId}/enrichment")

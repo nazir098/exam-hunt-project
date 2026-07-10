@@ -26,6 +26,7 @@ class DeploymentModeTest {
                 "",
                 "",
                 "",
+                "",
                 "admin@example.com",
                 "",
                 "exam-hunt-dev-jwt-secret-change-in-prod-32b",

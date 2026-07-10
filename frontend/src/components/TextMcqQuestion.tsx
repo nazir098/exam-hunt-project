@@ -1,15 +1,26 @@
-import { useMemo, useCallback, type ReactNode } from "react";
+import { useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import AiMarkdown from "./AiMarkdown";
+import InlineAssetMarkdown from "./InlineAssetMarkdown";
 import BookmarkButton from "./BookmarkButton";
 import VariantDiagram from "./VariantDiagram";
 import type { AssetPlacementView } from "../api";
-import { resolveAssetUrl, stemHasInlineAssets } from "../utils/questionRender";
+import { displayPyqOption, displayPyqStem, type PyqTextDisplayOpts } from "../utils/pyqTextDisplay";
+import { stemHasInlineAssets } from "../utils/questionRender";
 import { formatVariantTypeLabel, needsQuestionPrefix, questionStemBody, capitalizeStemStart, resolveAssertionReasonOptions } from "../utils/variantLabels";
 import {
   listRomanLabel,
   resolveMatchingColumns,
+  stemLooksLikeMatchingTable,
   type ParsedMatching,
 } from "../utils/matchingVariant";
+import { parseAssertionReasonStem } from "../utils/assertionReasonStem";
+import {
+  parseLetterStatementsStem,
+  sortStatements,
+  statementDisplayLabel,
+  statementsLookValid,
+} from "../utils/letterStatementsStem";
 
 export type McqOptionView = {
   id: string;
@@ -38,9 +49,14 @@ type Props = {
   questionImageUrl?: string;
   questionDiagramSvg?: string;
   assetPlacements?: AssetPlacementView[];
-  /** Dark EduMaster-style card for AI variations. */
+  renderMode?: string;
+  sourceType?: string;
+  contentTextNormalized?: boolean;
+  /** Dark EduMaster-style card for structured PYQs and AI variations. */
   variantTheme?: boolean;
   variantLabel?: string;
+  /** Admin-only link to question editor (shown in card header). */
+  adminEditHref?: string;
 };
 
 const OPTION_LABELS = ["1", "2", "3", "4"];
@@ -51,20 +67,15 @@ function resolveFormat(
   assertion?: string,
   reason?: string,
   statements?: McqOptionView[],
-  matchListA?: McqOptionView[]
+  matchListA?: McqOptionView[],
+  questionText?: string
 ): string {
   const raw = (questionFormat || variantType || "mcq").toLowerCase();
   if (raw.includes("matching") || (matchListA && matchListA.length > 0)) return "matching";
+  if (stemLooksLikeMatchingTable(questionText)) return "matching";
   if (raw.includes("assertion") || (assertion && reason)) return "assertion_reason";
   if (raw.includes("statement") || (statements && statements.length > 0)) return "statement_based";
   return raw;
-}
-
-function statementLabel(index: number, total: number): string {
-  if (total <= 3) {
-    return ["I", "II", "III", "IV"][index] ?? String(index + 1);
-  }
-  return String(index + 1);
 }
 
 /** Strip LaTeX delimiters for length heuristics. */
@@ -109,42 +120,18 @@ function renderStemWithInlineAssets(
   stemText: (value: string) => string,
   markdownClass: string
 ) {
-  const pattern = /\{\{asset:(\d+)\}\}/g;
-  const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(
-        <AiMarkdown
-          key={`stem-${lastIndex}`}
-          text={stemText(text.slice(lastIndex, match.index))}
-          className={markdownClass}
-        />
-      );
-    }
-    const assetIndex = Number(match[1]);
-    nodes.push(
-      <VariantDiagram
-        key={`asset-${match.index}`}
-        imageUrl={resolveAssetUrl(assetIndex, placements, questionId)}
-        svg=""
-        alt="Question figure"
-        className="text-mcq-paper__diagram text-mcq-paper__diagram--inline"
-      />
-    );
-    lastIndex = pattern.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    nodes.push(
-      <AiMarkdown
-        key={`stem-${lastIndex}`}
-        text={stemText(text.slice(lastIndex))}
-        className={markdownClass}
-      />
-    );
-  }
-  return nodes;
+  return (
+    <InlineAssetMarkdown
+      text={text}
+      questionId={questionId}
+      assetPlacements={placements}
+      formatText={stemText}
+      markdownClass={markdownClass}
+      diagramAlt="Question figure"
+      tailClassName={(tail) => (/^\s*\(/.test(tail) ? "text-mcq-paper__stem-note" : undefined)}
+      preformatted
+    />
+  );
 }
 
 export default function TextMcqQuestion({
@@ -168,21 +155,73 @@ export default function TextMcqQuestion({
   questionImageUrl = "",
   questionDiagramSvg = "",
   assetPlacements = [],
+  renderMode,
+  sourceType,
+  contentTextNormalized,
   variantTheme = false,
   variantLabel,
+  adminEditHref = "",
 }: Props) {
+  const parsedLetterStatements = useMemo(
+    () => parseLetterStatementsStem(questionText),
+    [questionText]
+  );
+
+  const parsedAssertionReason = useMemo(() => {
+    if (assertion?.trim() || reason?.trim() || statements.length > 0) return null;
+    if (parsedLetterStatements) return null;
+    return parseAssertionReasonStem(questionText);
+  }, [assertion, reason, statements.length, questionText, parsedLetterStatements]);
+
+  const effectiveStatements = useMemo(() => {
+    if (statements.length > 0 && statementsLookValid(statements)) {
+      return sortStatements(statements);
+    }
+    return parsedLetterStatements?.statements ?? [];
+  }, [statements, parsedLetterStatements]);
+
   const sorted = useMemo(() => {
     const base = [...options].sort((a, b) => Number(a.id) - Number(b.id));
-    const formatKey = resolveFormat(questionFormat, variantType, assertion, reason, statements, matchListA);
-    if (formatKey === "assertion_reason") {
+    const formatKey = resolveFormat(
+      questionFormat,
+      variantType,
+      assertion,
+      reason,
+      statements,
+      matchListA,
+      questionText
+    );
+    const effectiveFormat =
+      formatKey === "mcq" && parsedAssertionReason ? "assertion_reason" : formatKey;
+    if (effectiveFormat === "assertion_reason") {
       return resolveAssertionReasonOptions(base);
     }
     return base;
-  }, [options, questionFormat, variantType, assertion, reason, statements, matchListA]);
-  const format = useMemo(
-    () => resolveFormat(questionFormat, variantType, assertion, reason, statements, matchListA),
-    [questionFormat, variantType, assertion, reason, statements, matchListA]
-  );
+  }, [options, questionFormat, variantType, assertion, reason, statements, matchListA, parsedAssertionReason]);
+
+  const format = useMemo(() => {
+    const base = resolveFormat(
+      questionFormat,
+      variantType,
+      assertion,
+      reason,
+      statements,
+      matchListA,
+      questionText
+    );
+    if (base === "mcq" && parsedAssertionReason) return "assertion_reason";
+    if (base === "mcq" && parsedLetterStatements) return "statement_based";
+    return base;
+  }, [
+    questionFormat,
+    variantType,
+    assertion,
+    reason,
+    statements,
+    matchListA,
+    parsedAssertionReason,
+    parsedLetterStatements,
+  ]);
 
   const matching = useMemo<ParsedMatching | null>(
     () =>
@@ -200,9 +239,19 @@ export default function TextMcqQuestion({
 
   const showMatching = format === "matching" && matching !== null;
 
-  const showAssertionReason = format === "assertion_reason" && (assertion || reason);
-  const showStatements = format === "statement_based" && statements.length > 0;
-  const sortedStatements = [...statements].sort((a, b) => Number(a.id) - Number(b.id));
+  const showAssertionReason =
+    (format === "assertion_reason" && (assertion || reason)) || Boolean(parsedAssertionReason);
+  const displayAssertion = assertion?.trim() || parsedAssertionReason?.first || "";
+  const displayReason = reason?.trim() || parsedAssertionReason?.second || "";
+  const assertionLabel = parsedAssertionReason?.firstLabel ?? "Assertion (A)";
+  const reasonLabel = parsedAssertionReason?.secondLabel ?? "Reason (R)";
+  const showStatements =
+    effectiveStatements.length >= 3 &&
+    (format === "statement_based" || Boolean(parsedLetterStatements));
+  const sortedStatements = effectiveStatements;
+  const statementIntro =
+    parsedLetterStatements?.intro?.trim() ||
+    (showStatements && format === "statement_based" ? "Consider the following statements:" : "");
   const optionsLayout = useMemo(
     () => resolveOptionsLayout(format, sorted),
     [format, sorted]
@@ -226,12 +275,21 @@ export default function TextMcqQuestion({
   );
   const questionBody = useMemo(() => questionStemBody(questionText), [questionText]);
   const variantCard = variantTheme;
+  const pyqDisplayOpts = useMemo<PyqTextDisplayOpts>(
+    () => ({ contentTextNormalized, renderMode, sourceType }),
+    [contentTextNormalized, renderMode, sourceType]
+  );
   const stemText = useCallback(
-    (text: string) => (variantCard ? capitalizeStemStart(text) : text),
-    [variantCard]
+    (text: string) => {
+      const normalized = displayPyqStem(text, pyqDisplayOpts);
+      return variantCard ? capitalizeStemStart(normalized) : normalized;
+    },
+    [variantCard, pyqDisplayOpts]
   );
   const markdownClass = variantCard ? "ai-markdown--variant" : "ai-markdown--paper";
+  const optionText = useCallback((text: string) => displayPyqOption(text, pyqDisplayOpts), [pyqDisplayOpts]);
   const displayVariantLabel = variantLabel ?? formatVariantTypeLabel(variantType);
+  const cardIcon = displayVariantLabel === "Original PYQ" ? "menu_book" : "auto_awesome";
   const effectiveLayout = variantCard ? "stacked" : optionsLayout;
   const effectivePillGrid = variantCard ? false : usePillGrid;
   const inlineStemAssets = stemHasInlineAssets(questionText);
@@ -257,45 +315,85 @@ export default function TextMcqQuestion({
         <header className="variant-question-card__head">
           <div className="variant-question-card__head-left">
             <span className="material-symbols-outlined variant-question-card__sparkle" aria-hidden>
-              auto_awesome
+              {cardIcon}
             </span>
             <span className="variant-question-card__type">{displayVariantLabel}</span>
           </div>
-          {questionId ? (
-            <BookmarkButton
-              questionId={questionId}
-              variant="icon"
-              className="variant-question-card__bookmark"
-            />
-          ) : null}
+          <div className="variant-question-card__head-actions">
+            {adminEditHref ? (
+              <Link
+                to={adminEditHref}
+                className="variant-question-card__edit"
+                title="Edit question (admin)"
+              >
+                <span className="material-symbols-outlined" aria-hidden>
+                  edit_square
+                </span>
+                <span className="variant-question-card__edit-label">Edit</span>
+              </Link>
+            ) : null}
+            {questionId ? (
+              <BookmarkButton
+                questionId={questionId}
+                variant="icon"
+                className="variant-question-card__bookmark"
+              />
+            ) : null}
+          </div>
         </header>
       )}
       <div className="text-mcq-paper__stem">
         {showAssertionReason ? (
           <div className="variant-stem variant-stem--assertion-reason">
-            {assertion && (
+            {parsedAssertionReason?.intro ? (
+              <p className="variant-stem__intro muted">
+                <AiMarkdown
+                  text={stemText(parsedAssertionReason.intro)}
+                  className={markdownClass}
+                  preformatted
+                />
+              </p>
+            ) : null}
+            {displayAssertion && (
               <section className="variant-stem__block">
-                <p className="variant-stem__label">Assertion (A)</p>
-                <AiMarkdown text={stemText(assertion)} className={markdownClass} />
+                <p className="variant-stem__label">{assertionLabel}</p>
+                <AiMarkdown text={stemText(displayAssertion)} className={markdownClass} preformatted />
               </section>
             )}
-            {reason && (
+            {displayReason && (
               <section className="variant-stem__block">
-                <p className="variant-stem__label">Reason (R)</p>
-                <AiMarkdown text={stemText(reason)} className={markdownClass} />
+                <p className="variant-stem__label">{reasonLabel}</p>
+                <AiMarkdown text={stemText(displayReason)} className={markdownClass} preformatted />
               </section>
             )}
+            {parsedAssertionReason?.outro ? (
+              <p className="variant-stem__outro muted">
+                <AiMarkdown
+                  text={stemText(parsedAssertionReason.outro)}
+                  className={markdownClass}
+                  preformatted
+                />
+              </p>
+            ) : null}
           </div>
         ) : showStatements ? (
           <div className="variant-stem variant-stem--statements">
-            <p className="variant-stem__intro muted">Consider the following statements:</p>
+            {statementIntro ? (
+              <p className="variant-stem__intro muted">
+                <AiMarkdown
+                  text={stemText(statementIntro)}
+                  className={markdownClass}
+                  preformatted
+                />
+              </p>
+            ) : null}
             <ol className="variant-stem__statement-list">
               {sortedStatements.map((stmt, idx) => (
                 <li key={stmt.id} className="variant-stem__block">
                   <span className="variant-stem__label">
-                    {statementLabel(idx, sortedStatements.length)}.
+                    {statementDisplayLabel(stmt, idx, sortedStatements.length)}.
                   </span>
-                  <AiMarkdown text={stemText(stmt.text)} className={markdownClass} />
+                  <AiMarkdown text={stemText(stmt.text)} className={markdownClass} preformatted />
                 </li>
               ))}
             </ol>
@@ -304,7 +402,7 @@ export default function TextMcqQuestion({
           <div className="variant-stem variant-stem--matching">
             {matching.intro && (
               <p className="variant-stem__intro">
-                <AiMarkdown text={stemText(matching.intro)} className={markdownClass} />
+                <AiMarkdown text={stemText(matching.intro)} className={markdownClass} preformatted />
               </p>
             )}
             <div className="variant-matching-grid">
@@ -314,7 +412,7 @@ export default function TextMcqQuestion({
                   {matching.listA.map((item) => (
                     <li key={item.id} className="variant-matching-col__item">
                       <span className="variant-matching-col__label">{item.id}.</span>
-                      <AiMarkdown text={stemText(item.text)} className={markdownClass} />
+                      <AiMarkdown text={stemText(item.text)} className={markdownClass} preformatted />
                     </li>
                   ))}
                 </ol>
@@ -328,7 +426,7 @@ export default function TextMcqQuestion({
                         <span className="variant-matching-col__label">
                           ({listRomanLabel(idx)}).
                         </span>
-                        <AiMarkdown text={stemText(item.text)} className={markdownClass} />
+                        <AiMarkdown text={stemText(item.text)} className={markdownClass} preformatted />
                       </li>
                     ))}
                   </ol>
@@ -341,7 +439,7 @@ export default function TextMcqQuestion({
             inlineStemAssets ? (
               <div className="variant-stem variant-stem--inline-assets">{plainStemContent}</div>
             ) : (
-              <AiMarkdown text={stemText(questionBody)} className={markdownClass} />
+              <AiMarkdown text={stemText(questionBody)} className={markdownClass} preformatted />
             )
           ) : (
             <div className="variant-stem variant-stem--plain-question">
@@ -358,7 +456,7 @@ export default function TextMcqQuestion({
         ) : inlineStemAssets ? (
           <div className="variant-stem variant-stem--inline-assets">{plainStemContent}</div>
         ) : (
-          <AiMarkdown text={stemText(questionText)} className={markdownClass} />
+          <AiMarkdown text={stemText(questionText)} className={markdownClass} preformatted />
         )}
       </div>
 
@@ -378,6 +476,7 @@ export default function TextMcqQuestion({
         >
           {sorted.map((opt, idx) => {
             const label = OPTION_LABELS[idx] ?? opt.id;
+            const displayLabel = label;
             const active = selected === opt.id;
             const isCorrect = showCorrect && correctAnswer === opt.id;
             const isWrong = showWrong && active && correctAnswer !== opt.id;
@@ -403,9 +502,13 @@ export default function TextMcqQuestion({
                   aria-pressed={active}
                   onClick={() => onSelect?.(opt.id)}
                 >
-                  <span className="text-mcq-paper__option-badge">{label}</span>
+                  <span className="text-mcq-paper__option-badge">{displayLabel}</span>
                   <span className="text-mcq-paper__option-text">
-                    <AiMarkdown text={opt.text} className={markdownClass} />
+                    <AiMarkdown
+                      text={optionText(opt.text)}
+                      className={markdownClass}
+                      preformatted
+                    />
                   </span>
                   {variantCard && isCorrect && (
                     <span

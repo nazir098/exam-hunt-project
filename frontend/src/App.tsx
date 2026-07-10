@@ -14,6 +14,7 @@ import RegisterPage from "./pages/RegisterPage";
 import AdminPage from "./pages/AdminPage";
 import AdminFeedbackPage from "./pages/AdminFeedbackPage";
 import AdminQuestionEditorPage from "./pages/AdminQuestionEditorPage";
+import AdminRoute from "./components/AdminRoute";
 import RevisionPage from "./pages/RevisionPage";
 import TestCreatePage from "./pages/TestCreatePage";
 import WrongAttemptsPage from "./pages/WrongAttemptsPage";
@@ -47,10 +48,38 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
-        <Route path="/admin/questions" element={<AdminQuestionEditorPage />} />
-        <Route path="/admin/questions/:questionId" element={<AdminQuestionEditorPage />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/feedback"
+          element={
+            <AdminRoute>
+              <AdminFeedbackPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/questions"
+          element={
+            <AdminRoute>
+              <AdminQuestionEditorPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/questions/:questionId"
+          element={
+            <AdminRoute>
+              <AdminQuestionEditorPage />
+            </AdminRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -1,27 +1,46 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Props = {
   imageUrl?: string;
+  fallbackImageUrl?: string;
   svg?: string;
   alt: string;
   className?: string;
 };
 
-export default function VariantDiagram({ imageUrl, svg, alt, className = "" }: Props) {
-  const url = imageUrl?.trim();
+export default function VariantDiagram({
+  imageUrl,
+  fallbackImageUrl = "",
+  svg,
+  alt,
+  className = "",
+}: Props) {
+  const primary = imageUrl?.trim() ?? "";
+  const fallback = fallbackImageUrl?.trim() ?? "";
+  const [src, setSrc] = useState(primary || fallback);
   const markup = svg?.trim();
   const [zoomed, setZoomed] = useState(false);
 
-  const openZoom = useCallback(() => {
-    if (url) setZoomed(true);
-  }, [url]);
+  useEffect(() => {
+    setSrc(primary || fallback);
+  }, [primary, fallback]);
 
-  if (!url && !markup) return null;
+  const openZoom = useCallback(() => {
+    if (src) setZoomed(true);
+  }, [src]);
+
+  const handleError = useCallback(() => {
+    if (fallback && src !== fallback) {
+      setSrc(fallback);
+    }
+  }, [fallback, src]);
+
+  if (!src && !markup) return null;
 
   return (
     <>
       <figure
-        className={`variant-diagram${className ? ` ${className}` : ""}${url ? " variant-diagram--zoomable" : ""}`}
+        className={`variant-diagram${className ? ` ${className}` : ""}${src ? " variant-diagram--zoomable" : ""}`}
         onClick={openZoom}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -29,13 +48,21 @@ export default function VariantDiagram({ imageUrl, svg, alt, className = "" }: P
             openZoom();
           }
         }}
-        tabIndex={url ? 0 : undefined}
-        role={url ? "button" : undefined}
-        aria-label={url ? `${alt} — tap to zoom` : undefined}
+        tabIndex={src ? 0 : undefined}
+        role={src ? "button" : undefined}
+        aria-label={src ? `${alt} — tap to zoom` : undefined}
       >
-        {url ? (
+        {src ? (
           <>
-            <img className="variant-diagram__img" src={url} alt={alt} draggable={false} />
+            <img
+              className="variant-diagram__img"
+              src={src}
+              alt={alt}
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              onError={handleError}
+            />
             <span className="variant-diagram__zoom-hint">
               <span className="material-symbols-outlined" aria-hidden>zoom_in</span>
               Tap to zoom
@@ -51,7 +78,7 @@ export default function VariantDiagram({ imageUrl, svg, alt, className = "" }: P
         )}
       </figure>
 
-      {zoomed && url && (
+      {zoomed && src && (
         <div
           className="variant-diagram-modal"
           role="dialog"
@@ -73,7 +100,7 @@ export default function VariantDiagram({ imageUrl, svg, alt, className = "" }: P
             </button>
             <img
               className="variant-diagram-modal__img"
-              src={url}
+              src={src}
               alt={alt}
               draggable={false}
             />

@@ -772,13 +772,15 @@ public class ManifestImportService {
         boolean structured = structuredContentService.applyStructuredContent(doc, q, sourceFolder);
         if (!structured) {
             try {
-                structured =
-                        loadQuestionMetadataNode(doc.getQuestionId(), sourceFolder)
-                                .map(
-                                        meta ->
-                                                structuredContentService.applyStructuredContent(
-                                                        doc, meta, sourceFolder))
-                                .orElse(false);
+                java.util.Optional<JsonNode> metadataNode =
+                        loadQuestionMetadataNode(doc.getQuestionId(), sourceFolder);
+                if (metadataNode.isPresent()) {
+                    JsonNode meta = metadataNode.get();
+                    structured = structuredContentService.applyStructuredContent(doc, meta, sourceFolder);
+                    if (structured) {
+                        applyVariantEnrichment(doc, meta, sourceFolder);
+                    }
+                }
             } catch (IOException ignored) {
                 structured = false;
             }
@@ -796,10 +798,7 @@ public class ManifestImportService {
         }
         doc.setSolutionImageUrl(rewriteAssetUrl(solutionUrl, sourceFolder));
         boolean hasSolutionFlag = q.path("has_solution").asBoolean(false);
-        String solutionText = text(q, "solution_text_preview");
-        if (solutionText.isBlank()) {
-            solutionText = buildSolutionTextPreview(q);
-        }
+        String solutionText = buildSolutionTextPreview(q);
         doc.setHasSolution(hasSolutionFlag || !solutionUrl.isBlank() || !solutionText.isBlank());
         if (!structured) {
             String preview = text(q, "question_text_preview");
@@ -810,6 +809,9 @@ public class ManifestImportService {
             doc.setOptions(readMcqOptions(q.path("options")));
         }
         doc.setSolutionTextPreview(solutionText);
+        if (StructuredContentService.isStructuredExportApproved(q) && !solutionText.isBlank()) {
+            doc.setContentTextNormalized(true);
+        }
         doc.setHints(readHintsList(q.path("hints")));
         doc.setFormulaCards(readFormulaCards(q.path("formula_cards")));
         doc.setConceptExplanation(sanitize(text(q, "concept_explanation")));
@@ -919,6 +921,9 @@ public class ManifestImportService {
         doc.setQuestionTextPreview(sanitize(preview));
         String solutionText = buildSolutionTextPreview(v);
         doc.setSolutionTextPreview(solutionText);
+        if (StructuredContentService.isStructuredExportApproved(v) && !solutionText.isBlank()) {
+            doc.setContentTextNormalized(true);
+        }
         boolean hasSolutionFlag = v.path("has_solution").asBoolean(false);
         doc.setHasSolution(hasSolutionFlag && (!solutionUrl.isBlank() || !solutionText.isBlank()));
         List<String> hints = new ArrayList<>(readHintsList(v.path("hints")));
@@ -936,6 +941,9 @@ public class ManifestImportService {
         doc.setParentQuestionId(parentQuestionId);
         doc.setVariantNo(v.path("variant_no").asInt(0));
         doc.setVariantType(text(v, "variant_type"));
+        if (!structuredContentService.applyStructuredContent(doc, v, sourceFolder)) {
+            doc.setRenderMode("image");
+        }
         applyVariantFormatFields(doc, v, sourceFolder);
         attachDiagramSvgs(doc, sourceFolder);
         return doc;
@@ -1125,16 +1133,23 @@ public class ManifestImportService {
             }
             McqOption option = new McqOption();
             option.setId(id.strip());
-            option.setText(sanitize(optionText));
+            option.setText(AiTextNormalizer.sanitizeMcqOptionText(optionText));
             out.add(option);
         }
         return out;
     }
 
     private static String buildSolutionTextPreview(JsonNode node) {
+        String resolved = QuestionMetadataStore.resolveSolutionText(node);
+        if (!resolved.isBlank()) {
+            if (StructuredContentService.isStructuredExportApproved(node)) {
+                return AiTextNormalizer.sanitizeSolutionText(resolved).strip();
+            }
+            return resolved.strip();
+        }
         String preview = text(node, "solution_text_preview");
         if (!preview.isBlank()) {
-            return sanitize(preview);
+            return AiTextNormalizer.sanitizeSolutionText(preview);
         }
         JsonNode steps = node.path("solution_steps");
         if (steps == null || !steps.isArray() || steps.isEmpty()) {
@@ -1152,7 +1167,7 @@ public class ManifestImportService {
             }
             sb.append(content).append("\n\n");
         }
-        return sanitize(sb.toString().strip());
+        return AiTextNormalizer.sanitizeSolutionText(sb.toString().strip());
     }
 
     private static List<FormulaCard> readFormulaCards(JsonNode arr) {
@@ -1243,23 +1258,65 @@ public class ManifestImportService {
     }
 
     private Question enrichPyqFromDisk(Question doc) {
-        if (!structuredContentService.needsPyqDiskEnrichment(doc)) {
-            return doc;
-        }
         try {
             String folder = resolveSourceFolder(doc.getPackId());
             java.util.Optional<JsonNode> metadata =
                     loadQuestionMetadataNode(doc.getQuestionId(), folder);
             if (metadata.isEmpty()) {
-                doc.setRenderMode("image");
-                return questionRepository.save(doc);
+                if (structuredContentService.needsPyqDiskEnrichment(doc)) {
+                    doc.setRenderMode("image");
+                    return questionRepository.save(doc);
+                }
+                return doc;
             }
             JsonNode meta = metadata.get();
-            boolean applied = structuredContentService.applyStructuredContent(doc, meta, folder);
-            if (!applied) {
+            if (!structuredContentService.structuredExportAllowed(meta)
+                    && structuredContentService.alreadyStructured(doc)) {
                 doc.setRenderMode("image");
+                String compositeUrl = text(meta, "question_image_url");
+                if (compositeUrl.isBlank()) {
+                    compositeUrl = text(meta, "question_image");
+                }
+                if (!compositeUrl.isBlank()) {
+                    doc.setQuestionImageUrl(rewriteAssetUrl(compositeUrl, folder));
+                }
+                return questionRepository.save(doc);
             }
-            return questionRepository.save(doc);
+            boolean shouldRefreshMatchLists =
+                    structuredContentService.needsMatchListsMetadataRefresh(doc, meta);
+            boolean shouldRefreshStem =
+                    structuredContentService.needsPyqDiskEnrichment(doc)
+                            || structuredContentService.needsPyqStemMetadataRefresh(doc, meta)
+                            || shouldRefreshMatchLists;
+            boolean shouldRefreshSolution =
+                    structuredContentService.needsSolutionMetadataRefresh(doc, meta);
+            boolean shouldRefreshSolutionAssets =
+                    structuredContentService.needsSolutionAssetRefresh(doc, meta);
+            if (!shouldRefreshStem && !shouldRefreshSolution && !shouldRefreshSolutionAssets) {
+                return doc;
+            }
+            String before = nullToEmpty(doc.getQuestionTextPreview());
+            String beforeSolution = nullToEmpty(doc.getSolutionTextPreview());
+            boolean structuredApplied = false;
+            if (shouldRefreshStem) {
+                structuredApplied = structuredContentService.applyStructuredContent(doc, meta, folder);
+                if (!structuredApplied && structuredContentService.needsPyqDiskEnrichment(doc)) {
+                    doc.setRenderMode("image");
+                }
+            }
+            applyVariantEnrichment(doc, meta, folder);
+            structuredContentService.applySolutionAssets(doc, meta, folder);
+            String afterStem = nullToEmpty(doc.getQuestionTextPreview());
+            String afterSolution = nullToEmpty(doc.getSolutionTextPreview());
+            if (structuredApplied
+                    || shouldRefreshSolution
+                    || shouldRefreshSolutionAssets
+                    || shouldRefreshMatchLists
+                    || !before.equals(afterStem)
+                    || !beforeSolution.equals(afterSolution)) {
+                return questionRepository.save(doc);
+            }
+            return doc;
         } catch (Exception ex) {
             return doc;
         }
@@ -1304,27 +1361,34 @@ public class ManifestImportService {
     }
 
     private void applyVariantEnrichment(Question doc, JsonNode v, String sourceFolder) {
-        String preview = text(v, "question_text_preview");
-        if (preview.isBlank()) {
-            preview = text(v, "question_text");
-        }
-        if (!preview.isBlank()
-                && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)) {
-            doc.setQuestionTextPreview(sanitize(preview));
-        }
-        if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.OPTIONS)) {
-            doc.setOptions(readMcqOptions(v.path("options")));
+        boolean structuredStem = structuredContentService.hasStructuredStemMetadata(v);
+        if (!structuredStem) {
+            String preview = text(v, "question_text_preview");
+            if (preview.isBlank()) {
+                preview = text(v, "question_text");
+            }
+            if (!preview.isBlank()
+                    && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)) {
+                doc.setQuestionTextPreview(sanitize(preview));
+            }
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.OPTIONS)) {
+                doc.setOptions(readMcqOptions(v.path("options")));
+            }
         }
         String solutionText = buildSolutionTextPreview(v);
         if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.SOLUTION_TEXT)) {
             doc.setSolutionTextPreview(solutionText);
+            if (StructuredContentService.isStructuredExportApproved(v) && !solutionText.isBlank()) {
+                doc.setContentTextNormalized(true);
+            }
         }
+        structuredContentService.applySolutionAssets(doc, v, sourceFolder);
         String solutionUrl = text(v, "solution_image_url");
         if (solutionUrl.isBlank()) {
             solutionUrl = text(v, "solution_image");
         }
         if (!solutionUrl.isBlank()) {
-            doc.setSolutionImageUrl(solutionUrl);
+            doc.setSolutionImageUrl(rewriteAssetUrl(solutionUrl, sourceFolder));
         }
         boolean hasSolutionFlag = v.path("has_solution").asBoolean(false);
         doc.setHasSolution(

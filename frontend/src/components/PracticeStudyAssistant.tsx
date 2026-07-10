@@ -9,6 +9,8 @@ import {
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { usePlatformSettings } from "../settings/PlatformSettingsContext";
+import { displayPyqSolution } from "../utils/pyqTextDisplay";
+import { pickSolutionDisplay } from "../utils/questionSolution";
 import AiMarkdown from "./AiMarkdown";
 import AiStreamingMarkdown from "./AiStreamingMarkdown";
 import ZoomableImage from "./ZoomableImage";
@@ -44,6 +46,8 @@ type Props = {
   /** Preloaded from question detail (avoids extra API round-trip). */
   prefetchedSolutionImage?: string;
   prefetchedSolutionText?: string;
+  contentTextNormalized?: boolean;
+  renderMode?: string;
 };
 
 export type PracticeStudyAssistantProps = Props;
@@ -143,6 +147,8 @@ export default function PracticeStudyAssistant({
   directSolutionReveal = false,
   prefetchedSolutionImage = "",
   prefetchedSolutionText = "",
+  contentTextNormalized,
+  renderMode,
 }: Props) {
   const { user } = useAuth();
   const { settings, loading: settingsLoading } = usePlatformSettings();
@@ -224,11 +230,6 @@ export default function PracticeStudyAssistant({
       setActiveTab(feature);
       setCollapsed(false);
       setPanelOpen(true);
-      if (!available) {
-        setError(unavailableMessage);
-        setStreamComplete(true);
-        return;
-      }
       if (feature !== "hint") {
         setHintStep(1);
         setSolutionRevealed(false);
@@ -265,7 +266,7 @@ export default function PracticeStudyAssistant({
         setBusy(null);
       }
     },
-    [user, results, statusOk, checkStatus, questionId, submitted, selectedAnswer, available, unavailableMessage]
+    [user, results, statusOk, checkStatus, questionId, submitted, selectedAnswer]
   );
 
   const revealNextHint = useCallback(() => {
@@ -289,15 +290,15 @@ export default function PracticeStudyAssistant({
     if (!submitted && !directSolutionReveal) return;
     const prefetchedImage = prefetchedSolutionImage?.trim() ?? "";
     const prefetchedText = prefetchedSolutionText?.trim() ?? "";
-    if (prefetchedImage) {
-      setSolutionImageUrl(prefetchedImage);
-      setSolutionText("");
-      setSolutionRevealed(true);
-      return;
-    }
     if (prefetchedText) {
       setSolutionText(prefetchedText);
       setSolutionImageUrl("");
+      setSolutionRevealed(true);
+      return;
+    }
+    if (prefetchedImage) {
+      setSolutionImageUrl(prefetchedImage);
+      setSolutionText("");
       setSolutionRevealed(true);
       return;
     }
@@ -309,15 +310,15 @@ export default function PracticeStudyAssistant({
         setSolutionError("No official solution is available for this question.");
         return;
       }
-      if (res.solutionImageUrl?.trim()) {
-        setSolutionImageUrl(res.solutionImageUrl);
-        setSolutionText("");
-        setSolutionRevealed(true);
-        return;
-      }
       if (res.solutionTextPreview?.trim()) {
         setSolutionText(res.solutionTextPreview);
         setSolutionImageUrl("");
+        setSolutionRevealed(true);
+        return;
+      }
+      if (res.solutionImageUrl?.trim()) {
+        setSolutionImageUrl(res.solutionImageUrl);
+        setSolutionText("");
         setSolutionRevealed(true);
         return;
       }
@@ -395,55 +396,64 @@ export default function PracticeStudyAssistant({
     streamComplete &&
     hintStep < effectiveHintCount;
 
-  const renderOfficialSolution = (compact?: boolean) => (
-    <>
-      {solutionError && <p className="study-assistant__error">{solutionError}</p>}
-      {solutionRevealed && solutionText && !solutionImageUrl && (
-        <div className="study-assistant__solution study-assistant__solution--text">
-          <div className="study-assistant__solution-head">
-            <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
-              Official solution
-            </span>
-          </div>
-          <div className="study-assistant__solution-text">
-            <AiMarkdown text={solutionText} />
-          </div>
-        </div>
-      )}
-      {solutionRevealed && solutionImageUrl && (
-        <div className="study-assistant__solution">
-          <div className="study-assistant__solution-head">
-            <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
-              Official solution
-            </span>
-            <div className="study-assistant__solution-actions">
-              <a
-                href={imageSrc(solutionImageUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="study-assistant__solution-action"
-              >
-                <span className="material-symbols-outlined">open_in_new</span>
-                Open
-              </a>
+  const renderOfficialSolution = (compact?: boolean) => {
+    const display = pickSolutionDisplay({
+      solutionTextPreview: solutionText,
+      solutionImageUrl,
+    });
+    return (
+      <>
+        {solutionError && <p className="study-assistant__error">{solutionError}</p>}
+        {solutionRevealed && display.kind === "text" && (
+          <div className="study-assistant__solution study-assistant__solution--text">
+            <div className="study-assistant__solution-head">
+              <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
+                Official solution
+              </span>
+            </div>
+            <div className="study-assistant__solution-text">
+              <AiMarkdown
+                text={displayPyqSolution(display.text, { contentTextNormalized, renderMode })}
+                preformatted
+              />
             </div>
           </div>
-          <div className="study-assistant__solution-viewport">
-            <ZoomableImage
-              className="study-assistant__solution-zoom"
-              src={imageSrc(solutionImageUrl)}
-              alt="Official solution"
-            />
+        )}
+        {solutionRevealed && display.kind === "image" && (
+          <div className="study-assistant__solution">
+            <div className="study-assistant__solution-head">
+              <span className="study-assistant__hint-step-label study-assistant__hint-step-label--solution">
+                Official solution
+              </span>
+              <div className="study-assistant__solution-actions">
+                <a
+                  href={imageSrc(display.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="study-assistant__solution-action"
+                >
+                  <span className="material-symbols-outlined">open_in_new</span>
+                  Open
+                </a>
+              </div>
+            </div>
+            <div className="study-assistant__solution-viewport">
+              <ZoomableImage
+                className="study-assistant__solution-zoom"
+                src={imageSrc(display.url)}
+                alt="Official solution"
+              />
+            </div>
+            {!compact && (
+              <p className="study-assistant__hint-done">
+                Official published solution — tap image to enlarge.
+              </p>
+            )}
           </div>
-          {!compact && (
-            <p className="study-assistant__hint-done">
-              Official published solution — tap image to enlarge.
-            </p>
-          )}
-        </div>
-      )}
-    </>
-  );
+        )}
+      </>
+    );
+  };
 
   if (settingsLoading || !available) {
     return null;

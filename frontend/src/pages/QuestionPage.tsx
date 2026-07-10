@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchQuestion, fetchQuestionFamily, fetchQuestions, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
+import { fetchAllPackQuestions, fetchPack, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
-import AiMarkdown from "../components/AiMarkdown";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
@@ -15,6 +14,8 @@ import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
+import OfficialSolutionBody from "../components/OfficialSolutionBody";
+import AdminSolutionEditLink from "../components/AdminSolutionEditLink";
 import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 import {
   beginVariantSwitch,
@@ -27,6 +28,8 @@ import {
   cacheBustImageUrl,
   hybridDiagramUrl,
   isImageQuestion,
+  textMcqDisplayProps,
+  usesQuestionCardLayout,
 } from "../utils/questionRender";
 
 const OPTIONS = [
@@ -57,6 +60,7 @@ export default function QuestionPage() {
   const [q, setQ] = useState<QuestionDetail | null>(null);
   const [siblings, setSiblings] = useState<QuestionPublic[] | null>(null);
   const [siblingsLoading, setSiblingsLoading] = useState(false);
+  const [packQuestionCount, setPackQuestionCount] = useState(0);
   const lastNavTotalRef = useRef(0);
   const siblingsLoadRef = useRef<Promise<QuestionPublic[]> | null>(null);
   const [error, setError] = useState("");
@@ -157,29 +161,56 @@ export default function QuestionPage() {
   }, [checked, questionId]);
 
   useEffect(() => {
+    if (!solutionOpen || !checked || !questionId) return;
+    let cancelled = false;
+    void fetchQuestionFresh(questionId)
+      .then((data) => {
+        if (cancelled) return;
+        questionCacheRef.current.set(questionId, data);
+        setQ(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [solutionOpen, checked, questionId]);
+
+  useEffect(() => {
     setFeedbackOpen(false);
   }, [questionId]);
 
   useEffect(() => {
     setSiblings(null);
     siblingsLoadRef.current = null;
+    setPackQuestionCount(0);
   }, [q?.packId, returnQs]);
+
+  useEffect(() => {
+    if (!q?.packId) return;
+    let cancelled = false;
+    fetchPack(q.packId)
+      .then((pack) => {
+        if (!cancelled && pack.questionCount > 0) setPackQuestionCount(pack.questionCount);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [q?.packId]);
 
   const loadSiblings = useCallback(async (): Promise<QuestionPublic[]> => {
     if (!q?.packId) return [];
     if (siblings !== null) return siblings;
     if (siblingsLoadRef.current) return siblingsLoadRef.current;
     setSiblingsLoading(true);
-    const promise = fetchQuestions(q.packId, {
+    const promise = fetchAllPackQuestions(q.packId, {
       subject: searchParams.get("subject") || undefined,
       chapter: searchParams.get("chapter") || undefined,
-      size: 300,
     })
       .then((res) =>
         filterQuestionsForPractice(res.content, {
           topic: searchParams.get("topic") || undefined,
           difficulty: searchParams.get("difficulty") || undefined,
-          q: searchParams.get("q") || undefined,
         })
       )
       .then((filtered) => {
@@ -202,7 +233,7 @@ export default function QuestionPage() {
     if (!q) return;
     const exam = examDisplayName(q.exam, q.year);
     const topic = q.topic || q.chapter || q.subject || "NEET";
-    const variantLabel = isVariant
+    const variantLabel = isAiVariantQuestion(q)
       ? `${formatVariantTypeLabel(q.variantType, q.variantNo)}`
       : `Question ${q.questionNo}`;
     const preview = seoExcerpt(q.questionTextPreview);
@@ -279,15 +310,22 @@ export default function QuestionPage() {
   const navPositionLabel = useMemo(() => {
     if (!bankSiblingNav || !q) return String(q?.questionNo ?? "");
     const anchorId = familyParentId(questionId, q.parentQuestionId);
-    const idx =
-      nav.loaded && nav.idx >= 0
-        ? nav.idx + 1
+    const siblingIdx =
+      nav.idx >= 0
+        ? nav.idx
         : siblings?.findIndex((p) => p.questionId === anchorId) ?? -1;
-    const current = idx >= 0 ? idx + 1 : q.questionNo;
-    const total = nav.loaded ? nav.total : lastNavTotalRef.current;
-    if (total > 0) return `${current} / ${total}`;
-    return `${current} / …`;
-  }, [bankSiblingNav, nav, q, questionId, siblings]);
+    const current =
+      q.questionNo > 0
+        ? q.questionNo
+        : siblingIdx >= 0
+          ? siblingIdx + 1
+          : 1;
+    const filteredTotal = nav.total > 0 ? nav.total : lastNavTotalRef.current;
+    const total = packQuestionCount > 0 ? packQuestionCount : filteredTotal;
+    if (total > 0) return `${current}/${total}`;
+    if (siblingsLoading) return `${current}/…`;
+    return String(current);
+  }, [bankSiblingNav, nav, packQuestionCount, q, questionId, siblings, siblingsLoading]);
 
   const goToSibling = useCallback(
     async (direction: "prev" | "next") => {
@@ -342,7 +380,7 @@ export default function QuestionPage() {
 
   const showLastInSetHint = bankSiblingNav && nav.loaded && !nav.next && nav.idx >= 0;
 
-  function renderFooterNav(extraClass: string) {
+  function renderFooterNav(extraClass: string, variantChrome: boolean) {
     return (
       <>
         {showLastInSetHint && (
@@ -350,7 +388,7 @@ export default function QuestionPage() {
         )}
         <footer
           className={`solve-page__footer-nav ${extraClass}${
-            isVariant ? " solve-page__footer-nav--variant" : ""
+            variantChrome ? " solve-page__footer-nav--variant" : ""
           }`}
           aria-label="Question navigation"
         >
@@ -363,13 +401,19 @@ export default function QuestionPage() {
             <span className="material-symbols-outlined">arrow_back</span>
             <span className="solve-page__nav-label">Prev</span>
           </button>
-          <span className={`solve-page__nav-pos${isVariant ? " solve-page__nav-pos--disc" : ""}`}>
+          <span
+            className={`solve-page__nav-pos${
+              variantChrome && !navPositionLabel.includes("/")
+                ? " solve-page__nav-pos--disc"
+                : ""
+            }`}
+          >
             {navPositionLabel}
           </span>
           <button
             type="button"
             className={`practice-run-nav-btn solve-page__nav-btn${
-              isVariant ? " solve-page__nav-btn--next" : ""
+              variantChrome ? " solve-page__nav-btn--next" : ""
             }`}
             disabled={!bankSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
             onClick={() => void goToSibling("next")}
@@ -444,12 +488,17 @@ export default function QuestionPage() {
   }
 
   const diff = difficultyLabel(q.difficulty);
-  const isVariant = isAiVariantQuestion(q) || variantLoader?.mode === "ai";
+  const isAiVariant = isAiVariantQuestion(q) || variantLoader?.mode === "ai";
   const imageMode = isImageQuestion(q);
+  const questionCardChrome = isAiVariant || usesQuestionCardLayout(q);
+  const mcqCard = textMcqDisplayProps(q);
+  const adminEditHref = user?.admin
+    ? `/admin/questions/${encodeURIComponent(questionId)}`
+    : "";
 
   return (
-    <main className={`solve-page lg:pt-4${isVariant ? " solve-page--variant" : ""}`}>
-      <ProductModeBanner mode="solve" compact split={isVariant} />
+    <main className={`solve-page lg:pt-4${questionCardChrome ? " solve-page--variant" : ""}`}>
+      <ProductModeBanner mode="solve" compact split={questionCardChrome} />
 
       <div className="solve-page__meta">
         <Link to={backHref()} className="practice-run-header__back solve-page__back">
@@ -471,7 +520,7 @@ export default function QuestionPage() {
             </>
           )}
         </div>
-        <div className={`solve-page__meta-chips${isVariant ? " solve-page__meta-chips--variant" : ""}`}>
+        <div className={`solve-page__meta-chips${questionCardChrome ? " solve-page__meta-chips--variant" : ""}`}>
           <span className="practice-run-chip practice-run-chip--meta practice-run-chip--exam">
             {examDisplayName(q.exam, q.year)} {q.year}
           </span>
@@ -490,9 +539,9 @@ export default function QuestionPage() {
         <div className="practice-run-main">
           <section
             key={questionId}
-            className={`practice-run-question glass-card${isVariant ? " practice-run-question--variant" : ""}`}
+            className={`practice-run-question glass-card${questionCardChrome ? " practice-run-question--variant" : ""}`}
           >
-            {!isVariant && (
+            {!questionCardChrome && (
             <div className="practice-run-question__head">
               <div className="practice-run-question__titles">
                 <h1 className="practice-run-question__title">
@@ -558,10 +607,11 @@ export default function QuestionPage() {
                   questionImageUrl={hybridDiagramUrl(q)}
                   questionDiagramSvg={q.questionDiagramSvg}
                   assetPlacements={q.assetPlacements}
-                  variantTheme={isVariant}
-                  variantLabel={
-                    isVariant ? formatVariantTypeLabel(q.variantType, q.variantNo) : undefined
-                  }
+                  renderMode={q.renderMode}
+                  sourceType={q.sourceType}
+                  contentTextNormalized={q.contentTextNormalized}
+                  adminEditHref={adminEditHref}
+                  {...mcqCard}
                 />
               )}
             </div>
@@ -625,28 +675,20 @@ export default function QuestionPage() {
               <div className="solve-page__solution-head">
                 <span className="material-symbols-outlined">menu_book</span>
                 <h2 className="solve-page__solution-title">Official solution</h2>
+                {user?.admin ? <AdminSolutionEditLink questionId={questionId} /> : null}
               </div>
-              {q.solutionImageUrl?.trim() ? (
-                <div className="practice-run-question__media solve-page__solution-media">
-                  <ZoomableImage
-                    src={cacheBustImageUrl(q.solutionImageUrl, questionId)}
-                    alt={`Solution for question ${q.questionNo}`}
-                  />
-                </div>
-              ) : q.solutionDiagramSvg?.trim() ? (
-                <div className="solve-page__solution-text text-mcq-paper">
-                  <div
-                    className="variant-diagram__svg"
-                    dangerouslySetInnerHTML={{ __html: q.solutionDiagramSvg }}
-                  />
-                </div>
-              ) : q.solutionTextPreview?.trim() ? (
-                <div className="solve-page__solution-text text-mcq-paper">
-                  <AiMarkdown text={q.solutionTextPreview} className="ai-markdown--paper" />
-                </div>
-              ) : (
-                <p className="muted">Solution is marked available but not loaded — try re-syncing the pack.</p>
-              )}
+              <OfficialSolutionBody
+                questionId={questionId}
+                questionNo={q.questionNo}
+                assetPlacements={q.assetPlacements}
+                solutionAssetPlacements={q.solutionAssetPlacements}
+                solutionTextPreview={q.solutionTextPreview}
+                solutionImageUrl={q.solutionImageUrl}
+                solutionDiagramSvg={q.solutionDiagramSvg}
+                contentTextNormalized={q.contentTextNormalized}
+                renderMode={q.renderMode}
+                sourceType={q.sourceType}
+              />
             </section>
           )}
 
@@ -689,7 +731,7 @@ export default function QuestionPage() {
             </section>
           )}
 
-          {renderFooterNav("solve-page__footer-nav--desktop")}
+          {renderFooterNav("solve-page__footer-nav--desktop", questionCardChrome)}
           </>
           )}
         </div>
@@ -725,7 +767,7 @@ export default function QuestionPage() {
         )}
       </div>
 
-      {renderFooterNav("solve-page__footer-nav--fixed")}
+      {renderFooterNav("solve-page__footer-nav--fixed", questionCardChrome)}
     </main>
   );
 }

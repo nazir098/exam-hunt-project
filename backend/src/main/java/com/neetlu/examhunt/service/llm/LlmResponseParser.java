@@ -2,6 +2,7 @@ package com.neetlu.examhunt.service.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.neetlu.examhunt.service.JsonLatexEscapeRepair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,6 +91,74 @@ public final class LlmResponseParser {
             return false;
         }
     }
+
+    /** Prefer strict JSON; fall back to LaTeX-safe escape repair (Llama / MinerU output). */
+    public static String bestParseableJson(String json, ObjectMapper mapper) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        if (isValidJson(json, mapper)) {
+            return json;
+        }
+        String relaxed = JsonLatexEscapeRepair.relaxJsonLatexEscapes(json);
+        if (!relaxed.equals(json) && isValidJson(relaxed, mapper)) {
+            return relaxed;
+        }
+        return null;
+    }
+
+    /**
+     * Extract {@code fixed_text} from LLM JSON, tolerating invalid LaTeX backslash escapes.
+     */
+    public static java.util.Optional<String> extractFixedText(String raw, ObjectMapper mapper) {
+        if (raw == null || raw.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String cleaned = cleanJsonPayload(raw);
+        String json = bestParseableJson(cleaned, mapper);
+        if (json == null) {
+            String extracted = extractJsonObject(cleaned);
+            if (extracted != null) {
+                json = bestParseableJson(extracted, mapper);
+            }
+        }
+        if (json != null) {
+            try {
+                String fixed = mapper.readTree(json).path("fixed_text").asText("").strip();
+                if (!fixed.isBlank()) {
+                    return java.util.Optional.of(JsonLatexEscapeRepair.repairAfterJsonUnescape(fixed));
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        return extractFixedTextRegex(cleaned);
+    }
+
+    /** @deprecated Use {@link JsonLatexEscapeRepair#relaxJsonLatexEscapes(String)}. */
+    public static String relaxJsonLatexEscapes(String text) {
+        return JsonLatexEscapeRepair.relaxJsonLatexEscapes(text);
+    }
+
+    /** @deprecated Use {@link JsonLatexEscapeRepair#repairAfterJsonUnescape(String)}. */
+    public static String repairLatexAfterJsonParse(String text) {
+        return JsonLatexEscapeRepair.repairAfterJsonUnescape(text);
+    }
+
+    private static java.util.Optional<String> extractFixedTextRegex(String raw) {
+        Matcher m = FIXED_TEXT_FIELD.matcher(raw);
+        if (!m.find()) {
+            return java.util.Optional.empty();
+        }
+        String value = m.group(1)
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\");
+        value = JsonLatexEscapeRepair.repairAfterJsonUnescape(value).strip();
+        return value.isBlank() ? java.util.Optional.empty() : java.util.Optional.of(value);
+    }
+
+    private static final Pattern FIXED_TEXT_FIELD =
+            Pattern.compile("\"fixed_text\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", Pattern.DOTALL);
 
     /** Strip reasoning preambles and cut to first Hint 1 / JSON block when present. */
     public static String stripAnalysisPreamble(String raw) {

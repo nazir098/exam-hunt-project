@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,9 +23,42 @@ final class MatchingVariantParser {
     private static final Pattern ANSWER_MAPPING =
             Pattern.compile("\\b([A-D])\\s*[-–:]\\s*(.+?)(?=\\s*,\\s*[A-D]\\s*[-–:]|$)", Pattern.DOTALL);
 
+    private static final Pattern MATCHING_TABLE_ROW =
+            Pattern.compile(
+                    "^\\|\\s*([A-D])\\.?\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(?:\\(?([IVX]+)\\)?\\.?)\\s*\\|\\s*([^|]+?)\\s*\\|",
+                    Pattern.CASE_INSENSITIVE);
+
     private MatchingVariantParser() {}
 
     record ParsedMatching(String intro, List<McqOption> listA, List<McqOption> listB) {}
+
+    static boolean listsLookCorrupt(List<McqOption> listA, List<McqOption> listB) {
+        if (listA == null || listA.size() < 3) {
+            return true;
+        }
+        for (McqOption row : listA) {
+            String body = Optional.ofNullable(row.getText()).orElse("").trim();
+            if (body.isBlank()) {
+                return true;
+            }
+            if (body.matches("(?s).*\\s+[IVX]{1,4}\\.\\s+.*")) {
+                return true;
+            }
+            if (body.toLowerCase(Locale.ROOT).contains("choose the correct")) {
+                return true;
+            }
+        }
+        if (listB == null || listB.isEmpty()) {
+            return false;
+        }
+        for (McqOption row : listB) {
+            String body = Optional.ofNullable(row.getText()).orElse("").trim();
+            if (body.matches("^[IVX]+$")) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     static boolean isMatchingVariant(JsonNode variant) {
         if (variant == null || variant.isMissingNode()) {
@@ -39,6 +73,12 @@ final class MatchingVariantParser {
     }
 
     static ParsedMatching parse(JsonNode variant) {
+        String parseText = resolveParseText(variant);
+        ParsedMatching table = parseMatchingTable(parseText);
+        if (table != null) {
+            return table;
+        }
+
         List<McqOption> explicitA = readOptionList(variant.path("list_a"));
         if (explicitA.isEmpty()) {
             explicitA = readOptionList(variant.path("match_list_a"));
@@ -48,10 +88,7 @@ final class MatchingVariantParser {
             explicitB = readOptionList(variant.path("match_list_b"));
         }
 
-        String questionText = text(variant, "question_text_preview");
-        if (questionText.isBlank()) {
-            questionText = text(variant, "question_text");
-        }
+        String questionText = parseText;
 
         List<McqOption> listA = explicitA.isEmpty() ? parseListA(questionText) : explicitA;
         List<McqOption> listB = explicitB;
@@ -70,6 +107,87 @@ final class MatchingVariantParser {
             intro = defaultIntro(questionText);
         }
         return new ParsedMatching(intro, listA, listB);
+    }
+
+    private static String resolveParseText(JsonNode variant) {
+        String stem = text(variant, "question_stem");
+        if (!stem.isBlank() && stem.contains("|")) {
+            return stem;
+        }
+        String mineru = text(variant, "question_text_mineru");
+        if (!mineru.isBlank() && mineru.contains("|")) {
+            return mineru;
+        }
+        String preview = text(variant, "question_text_preview");
+        if (!preview.isBlank()) {
+            return preview;
+        }
+        return text(variant, "question_text");
+    }
+
+    private static ParsedMatching parseMatchingTable(String text) {
+        if (text == null || text.isBlank() || !text.contains("|")) {
+            return null;
+        }
+        List<McqOption> listA = new ArrayList<>();
+        List<McqOption> listB = new ArrayList<>();
+        for (String line : text.split("\\R")) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("|")) {
+                continue;
+            }
+            Matcher matcher = MATCHING_TABLE_ROW.matcher(trimmed);
+            if (!matcher.find()) {
+                continue;
+            }
+            String idA = matcher.group(1).toUpperCase(Locale.ROOT);
+            String bodyA = matcher.group(2).trim().replaceAll("\\s+", " ");
+            String idB = matcher.group(3).toUpperCase(Locale.ROOT);
+            String bodyB = matcher.group(4).trim().replaceAll("\\s+", " ");
+            if (!bodyA.isBlank()) {
+                McqOption rowA = new McqOption();
+                rowA.setId(idA);
+                rowA.setText(bodyA);
+                listA.add(rowA);
+            }
+            if (!bodyB.isBlank()) {
+                McqOption rowB = new McqOption();
+                rowB.setId(idB);
+                rowB.setText(bodyB);
+                listB.add(rowB);
+            }
+        }
+        if (listA.size() < 3 || listB.size() < 3) {
+            return null;
+        }
+        listB.sort(
+                (a, b) ->
+                        Integer.compare(
+                                romanOrder(a.getId()), romanOrder(b.getId())));
+        int tableStart = text.indexOf('|');
+        String intro =
+                tableStart > 0
+                        ? text.substring(0, tableStart).trim().replaceAll("[:\\s.]+$", "")
+                        : "Match List-I with List-II";
+        if (intro.isBlank()) {
+            intro = "Match List-I with List-II";
+        }
+        return new ParsedMatching(intro, listA, listB);
+    }
+
+    private static int romanOrder(String id) {
+        if (id == null) {
+            return 99;
+        }
+        return switch (id.toUpperCase(Locale.ROOT)) {
+            case "I" -> 1;
+            case "II" -> 2;
+            case "III" -> 3;
+            case "IV" -> 4;
+            case "V" -> 5;
+            case "VI" -> 6;
+            default -> 99;
+        };
     }
 
     private static String parseIntro(String questionText, List<McqOption> listA) {

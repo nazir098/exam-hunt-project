@@ -1,3 +1,5 @@
+import { formatVariantTypeLabel, isAiVariantQuestion } from "./variantLabels";
+
 export type AssetPlacementView = {
   index: number;
   marker: string;
@@ -32,41 +34,109 @@ export function isStructuredRenderMode(renderMode?: string | null) {
   return mode === "structured" || mode === "hybrid";
 }
 
+/** Blank or unknown modes default to composite image layout. */
+export function isImageRenderMode(renderMode?: string | null) {
+  return !isStructuredRenderMode(renderMode);
+}
+
 export function stemHasInlineAssets(text?: string | null) {
   return Boolean(text?.includes("{{asset:"));
 }
 
-export function usesTextQuestionLayout(q: QuestionRenderFields) {
-  if (isStructuredRenderMode(q.renderMode)) {
-    if (q.options && q.options.length > 0) return true;
-    if (stemHasInlineAssets(q.questionTextPreview)) return true;
-  }
+function hasStructuredDisplayContent(q: QuestionRenderFields) {
+  if (stemHasInlineAssets(q.questionTextPreview)) return true;
+  if (q.questionTextPreview?.trim()) return true;
   if (q.options && q.options.length > 0) return true;
   if (q.questionDiagramSvg?.trim()) return true;
   if (q.assertion?.trim() || q.reason?.trim()) return true;
   if (q.statements && q.statements.length > 0) return true;
   if (q.matchListA && q.matchListA.length > 0) return true;
-  if (q.sourceType === "ai_variant" && q.questionTextPreview?.trim()) return true;
   return false;
 }
 
-export function isImageQuestion(q: QuestionRenderFields) {
-  return Boolean(q.questionImageUrl?.trim()) && !usesTextQuestionLayout(q);
+/** Text MCQ layout when extractor marked structured/hybrid, or AI variation with stem/options. */
+export function usesTextQuestionLayout(
+  q: QuestionRenderFields & { sourceType?: string | null; variantNo?: number | null }
+) {
+  if (!hasStructuredDisplayContent(q)) return false;
+  if (isStructuredRenderMode(q.renderMode)) return true;
+  // Variations store stem/options in Mongo but often keep render_mode=image from import.
+  if (isAiVariantQuestion(q)) return true;
+  return false;
 }
 
-/** Diagram below stem for hybrid/AI text layouts (not inline {{asset:N}} markers). */
+/** Dark question card — structured/hybrid PYQs and AI variants (shared UI). */
+export function usesQuestionCardLayout(q: QuestionRenderFields) {
+  return usesTextQuestionLayout(q);
+}
+
+/** @deprecated Exam-paper layout replaced by question card layout. */
+export function usesExamPaperLayout(
+  _q: QuestionRenderFields & { sourceType?: string },
+  _variantTheme = false
+) {
+  return false;
+}
+
+/** Composite image layout — default when render_mode is image or unset. */
+export function isImageQuestion(q: QuestionRenderFields) {
+  if (usesTextQuestionLayout(q)) return false;
+  if (!isImageRenderMode(q.renderMode)) return false;
+  return Boolean(q.questionImageUrl?.trim());
+}
+
+export function isCompositeQuestionImage(url?: string | null) {
+  if (!url?.trim()) return false;
+  return /\/questions\/[^/?#]+\.(webp|png|jpe?g)(\?|$)/i.test(url.trim());
+}
+
+function diagramUrlFromPlacements(
+  placements: AssetPlacementView[] | undefined,
+  questionId: string
+) {
+  const row = placements?.find((p) => p.url?.trim());
+  if (!row?.url) return "";
+  return cacheBustImageUrl(row.url, questionId);
+}
+
+/** Diagram below stem for hybrid structured layouts (not inline {{asset:N}} markers). */
 export function hybridDiagramUrl(q: QuestionRenderFields) {
+  if (!isStructuredRenderMode(q.renderMode)) return "";
   if (stemHasInlineAssets(q.questionTextPreview)) return "";
-  if (!q.questionImageUrl?.trim()) return "";
-  if (q.sourceType === "ai_variant") {
-    return cacheBustImageUrl(q.questionImageUrl, q.questionId);
-  }
-  if (isStructuredRenderMode(q.renderMode)) {
-    if (!q.hasDiagram) return "";
-    return cacheBustImageUrl(q.questionImageUrl, q.questionId);
-  }
   if (!q.hasDiagram) return "";
-  return cacheBustImageUrl(q.questionImageUrl, q.questionId);
+
+  const placementUrl = diagramUrlFromPlacements(q.assetPlacements, q.questionId);
+  if (placementUrl) return placementUrl;
+
+  const url = q.questionImageUrl?.trim() ?? "";
+  if (!url || isCompositeQuestionImage(url)) return "";
+  return cacheBustImageUrl(url, q.questionId);
+}
+
+export type TextMcqDisplayProps = {
+  variantTheme: boolean;
+  variantLabel?: string;
+};
+
+/** Shared dark-card props for structured PYQs and AI variants. */
+export function textMcqDisplayProps(
+  q: QuestionRenderFields & {
+    sourceType?: string | null;
+    variantType?: string | null;
+    variantNo?: number | null;
+  }
+): TextMcqDisplayProps {
+  const card = usesQuestionCardLayout(q);
+  if (!card) {
+    return { variantTheme: false };
+  }
+  if (isAiVariantQuestion(q)) {
+    return {
+      variantTheme: true,
+      variantLabel: formatVariantTypeLabel(q.variantType, q.variantNo ?? undefined),
+    };
+  }
+  return { variantTheme: true, variantLabel: "Original PYQ" };
 }
 
 export function resolveAssetUrl(
@@ -77,4 +147,25 @@ export function resolveAssetUrl(
   const row = placements?.find((p) => p.index === index);
   if (!row?.url) return "";
   return cacheBustImageUrl(row.url, questionId);
+}
+
+/** SVG sibling for inline diagram assets when WebP is missing on CDN. */
+export function resolveAssetSvgUrl(
+  index: number,
+  placements: AssetPlacementView[] | undefined,
+  questionId: string
+) {
+  const row = placements?.find((p) => p.index === index);
+  if (!row) return "";
+  const fromUrl = row.url?.trim().replace(/\.webp(\?|$)/i, ".svg$1");
+  if (fromUrl && fromUrl !== row.url) {
+    return cacheBustImageUrl(fromUrl, questionId);
+  }
+  const fromPath = row.path?.trim().replace(/\.webp$/i, ".svg");
+  if (!fromPath) return "";
+  if (row.url?.trim()) {
+    const base = row.url.trim().replace(/\/[^/]+$/, "");
+    return cacheBustImageUrl(`${base}/${fromPath.split("/").pop()}`, questionId);
+  }
+  return "";
 }

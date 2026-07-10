@@ -1,0 +1,110 @@
+/* Exam Hunt typography — Inter (UI) + Source Sans 3 (educational reading) */
+
+:root {
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-reading: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-ui);
+  --font-body: var(--font-ui);
+  --line-reading: 1.65;
+  --line-ui: 1.5;
+}
+
+/* UI shell — navigation, buttons, page headings, badges */
+html body {
+  font-family: var(--font-ui);
+  line-height: var(--line-ui);
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-ui);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+
+.lumina-nav-link,
+.lumina-tab,
+.lumina-logo,
+.lumina-ai-chip,
+.lumina-ai-chip-label {
+  font-family: var(--font-ui);
+}
+
+/* Question bank previews are question text, not UI labels */
+.question-card--compact .question-card__title {
+  font-family: var(--font-reading);
+  line-height: var(--line-reading);
+  letter-spacing: 0.01em;
+}
+
+/* Educational reading surfaces */
+.text-mcq-paper,
+.text-mcq-paper__stem,
+.text-mcq-paper__option-text,
+.text-mcq-paper__stem-note,
+.variant-stem,
+.variant-stem__intro,
+.variant-stem__question-body,
+.variant-stem__block,
+.variant-matching-col__item,
+.ai-markdown,
+.ai-markdown--paper,
+.ai-markdown--variant,
+.ai-markdown--stem-preview,
+.study-assistant__text,
+.study-assistant__solution-text,
+.solve-page__solution-text,
+.practice-run-solution__panel,
+.practice-ai-panel__result-text,
+.admin-latex-field__preview,
+.admin-content-qc__markdown {
+  font-family: var(--font-reading);
+  font-feature-settings: "kern" 1, "liga" 1;
+  letter-spacing: 0.01em;
+}
+
+/* Reading rhythm */
+.ai-markdown--paper,
+.ai-markdown--variant,
+.ai-markdown--stem-preview,
+.text-mcq-paper__stem,
+.text-mcq-paper--variant .text-mcq-paper__stem,
+.study-assistant__text,
+.study-assistant__content .ai-markdown,
+.solve-page__solution-text .ai-markdown,
+.practice-ai-panel__result-text {
+  line-height: var(--line-reading);
+}
+
+.ai-markdown--paper p,
+.ai-markdown--variant p,
+.ai-markdown--stem-preview p,
+.text-mcq-paper__option-text,
+.text-mcq-paper--variant .text-mcq-paper__option-text,
+.study-assistant__content .ai-markdown p,
+.solve-page__solution-text .ai-markdown p {
+  line-height: var(--line-reading);
+}
+
+.ai-markdown p + p,
+.ai-markdown--paper p + p,
+.ai-markdown--variant p + p {
+  margin-top: 0.55rem;
+}
+
+.ai-markdown h3,
+.ai-markdown--paper h3,
+.ai-markdown--variant h3 {
+  font-family: var(--font-reading);
+  line-height: 1.45;
+}
