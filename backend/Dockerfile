@@ -29,10 +29,11 @@ LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.version="${IMAGE_TAG}"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /workspace/target/*.jar /app/app.jar
+COPY scripts ./scripts
 
 EXPOSE 8081
 

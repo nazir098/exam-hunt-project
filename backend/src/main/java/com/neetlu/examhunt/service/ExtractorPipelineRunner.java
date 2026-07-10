@@ -113,6 +113,10 @@ public class ExtractorPipelineRunner {
     }
 
     private Path resolveScriptPath() {
+        Path bundled = Path.of("/app/scripts/extractor_metadata.py");
+        if (Files.isRegularFile(bundled)) {
+            return bundled.toAbsolutePath();
+        }
         String cwd = System.getProperty("user.dir", ".");
         Path fromBackend = Path.of(cwd, "scripts", "extractor_metadata.py");
         if (Files.isRegularFile(fromBackend)) {
@@ -122,7 +126,7 @@ public class ExtractorPipelineRunner {
         if (Files.isRegularFile(fromRoot)) {
             return fromRoot.toAbsolutePath();
         }
-        return fromRoot.toAbsolutePath();
+        return bundled.toAbsolutePath();
     }
 
     private String resolveExtractorSourceRoot() {

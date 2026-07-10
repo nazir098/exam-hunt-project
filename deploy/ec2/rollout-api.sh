@@ -27,7 +27,11 @@ if ! grep -q '^GOOGLE_AUTH_ENABLED=true' .env; then
 fi
 
 echo "Pulling latest API image from GHCR..."
-"${COMPOSE[@]}" pull api
+if ! "${COMPOSE[@]}" pull api; then
+  echo "ERROR: docker pull failed — GHCR package is private; re-login on EC2:" >&2
+  echo "  echo YOUR_GITHUB_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin" >&2
+  exit 1
+fi
 
 echo "Restarting API (recreate to pick up .env changes)..."
 "${COMPOSE[@]}" up -d api --force-recreate
