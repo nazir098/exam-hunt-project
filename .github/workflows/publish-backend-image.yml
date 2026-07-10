@@ -90,5 +90,5 @@ jobs:
 
       - name: Verify image published to GHCR
         run: |
-          docker manifest inspect "${IMAGE_NAME}:latest"
-          docker manifest inspect "${IMAGE_NAME}:sha-${{ github.sha }}"
+          docker buildx imagetools inspect "${IMAGE_NAME}:latest"
+          docker buildx imagetools inspect "${IMAGE_NAME}:sha-${{ github.sha }}"
