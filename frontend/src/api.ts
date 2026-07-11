@@ -508,15 +508,17 @@ async function getJson<T>(path: string): Promise<T> {
   return request<T>(path);
 }
 
-/** Coalesce duplicate GETs (e.g. React StrictMode double-mount). */
+/** Coalesce duplicate GETs (e.g. React StrictMode double-mount, tab remounts). */
 const shortLivedGetCache = new Map<string, { at: number; promise: Promise<unknown> }>();
 const GET_CACHE_MS = 8_000;
+const CATALOG_CACHE_MS = 5 * 60_000;
+const LEADERBOARD_CACHE_MS = 60_000;
 
-function getJsonCached<T>(path: string, cacheKey?: string): Promise<T> {
+function getJsonCached<T>(path: string, cacheKey?: string, ttlMs = GET_CACHE_MS): Promise<T> {
   const now = Date.now();
   const key = cacheKey ?? path;
   const hit = shortLivedGetCache.get(key);
-  if (hit && now - hit.at < GET_CACHE_MS) {
+  if (hit && now - hit.at < ttlMs) {
     return hit.promise as Promise<T>;
   }
   const promise = request<T>(path).catch((err) => {
@@ -528,15 +530,18 @@ function getJsonCached<T>(path: string, cacheKey?: string): Promise<T> {
 }
 
 export function fetchPacks() {
-  return getJson<PackSummary[]>("/api/packs");
+  return getJsonCached<PackSummary[]>("/api/packs", "/api/packs", CATALOG_CACHE_MS);
 }
 
 export function fetchExams() {
-  return getJson<ExamCatalogEntry[]>("/api/exams");
+  return getJsonCached<ExamCatalogEntry[]>("/api/exams", "/api/exams", CATALOG_CACHE_MS);
 }
 
 export function fetchPack(packId: string) {
-  return getJson<PackSummary & { stats?: Record<string, unknown> }>(`/api/packs/${packId}`);
+  return getJsonCached<PackSummary & { stats?: Record<string, unknown> }>(
+    `/api/packs/${packId}`,
+    `/api/packs/${packId}`
+  );
 }
 
 export function fetchQuestions(
@@ -1048,7 +1053,8 @@ export function fetchProgress() {
 }
 
 export function fetchLeaderboard(limit = 50, period: LeaderboardPeriod = "monthly") {
-  return getJson<LeaderboardResponse>(`/api/leaderboard?limit=${limit}&period=${period}`);
+  const path = `/api/leaderboard?limit=${limit}&period=${period}`;
+  return getJsonCached<LeaderboardResponse>(path, path, LEADERBOARD_CACHE_MS);
 }
 
 export function rateQuestion(questionId: string, score: number, comment?: string) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchAllPackQuestions, fetchPack, fetchPackSiblingByQuestionNo, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, fetchSeoQuestionMeta, QuestionDetail, QuestionFamily, QuestionPublic, SeoQuestionMeta } from "../api";
+import { fetchAllPackQuestions, fetchPack, fetchPackSiblingByQuestionNo, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
@@ -64,7 +64,6 @@ export default function QuestionPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
-  const [seoMeta, setSeoMeta] = useState<SeoQuestionMeta | null>(null);
   const questionCacheRef = useRef(new Map<string, QuestionDetail>());
   const variantSwitchGateRef = useRef<VariantSwitchGate | null>(null);
   const returnQs = searchParams.toString();
@@ -97,6 +96,9 @@ export default function QuestionPage() {
     }
 
     let cancelled = false;
+    if (packSibling) {
+      clearVariantSwitchGate(variantSwitchGateRef);
+    }
     fetchQuestion(questionId)
       .then((data) => {
         questionCacheRef.current.set(questionId, data);
@@ -106,14 +108,28 @@ export default function QuestionPage() {
         if (!cancelled) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) {
-          resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
+        if (cancelled) {
+          if (questionCacheRef.current.has(questionId)) {
+            setContentLoading(false);
+          }
+          return;
         }
+        resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
       });
     return () => {
       cancelled = true;
     };
   }, [questionId, user?.id]);
+
+  useEffect(() => {
+    if (q?.questionId !== questionId || !contentLoading) return;
+    const gate = variantSwitchGateRef.current;
+    if (gate?.targetId === questionId) {
+      resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
+      return;
+    }
+    setContentLoading(false);
+  }, [q?.questionId, questionId, contentLoading]);
 
   useEffect(() => () => clearVariantSwitchGate(variantSwitchGateRef), []);
 
@@ -134,22 +150,6 @@ export default function QuestionPage() {
       cancelled = true;
     };
   }, [familyParent]);
-
-  useEffect(() => {
-    setSeoMeta(null);
-    if (!questionId) return;
-    let cancelled = false;
-    fetchSeoQuestionMeta(questionId)
-      .then((meta) => {
-        if (!cancelled) setSeoMeta(meta);
-      })
-      .catch(() => {
-        if (!cancelled) setSeoMeta(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [questionId]);
 
   const prefetchFamilyVariants = useCallback(() => {
     if (!family) return;
@@ -246,11 +246,11 @@ export default function QuestionPage() {
     const schemaBase = (stem: string, options?: { label: string; text: string }[]) => ({
       questionText: stem,
       options,
-      exam: seoMeta?.exam ?? examDisplayName(q.exam, q.year),
-      year: seoMeta?.year ?? q.year,
-      subject: seoMeta?.subject ?? q.subject,
-      chapter: seoMeta?.chapter ?? q.chapter,
-      questionNo: seoMeta?.questionNo ?? q.questionNo,
+      exam: examDisplayName(q.exam, q.year),
+      year: q.year,
+      subject: q.subject,
+      chapter: q.chapter,
+      questionNo: q.questionNo,
       ...(user && q.answer?.trim()
         ? {
             correctAnswer: q.answer,
@@ -259,20 +259,6 @@ export default function QuestionPage() {
           }
         : {}),
     });
-
-    if (seoMeta) {
-      applySeoConfig({
-        title: `${seoMeta.title} | EduMaster AI`,
-        description: seoMeta.description,
-        path: `/solve/${questionId}`,
-        type: "article",
-        questionSchema: schemaBase(
-          seoMeta.questionTextPlain,
-          seoMeta.options.map((opt) => ({ label: opt.label, text: opt.textPlain }))
-        ),
-      });
-      return;
-    }
 
     const exam = examDisplayName(q.exam, q.year);
     const topic = q.topic || q.chapter || q.subject || "NEET";
@@ -299,11 +285,11 @@ export default function QuestionPage() {
         seoPlainText(q.questionTextPreview) || q.questionTextPreview || `${exam} ${q.year} ${q.subject} ${variantLabel}`,
         q.options?.map((opt, i) => ({
           label: String.fromCharCode(65 + i),
-          text: opt.text,
+          text: seoPlainText(opt.text) || opt.text,
         }))
       ),
     });
-  }, [q, questionId, seoMeta, user]);
+  }, [q, questionId, user]);
 
   const goToQuestion = useCallback(
     (id: string) => {
@@ -311,10 +297,10 @@ export default function QuestionPage() {
       if (isSamePaperQuestion(id, q)) {
         beginVariantSwitch(variantSwitchGateRef, id, setContentLoading);
       } else if (isPackSiblingNavigation(id, q)) {
+        clearVariantSwitchGate(variantSwitchGateRef);
         setContentLoading(true);
       }
       navigate(`/solve/${id}?${new URLSearchParams(searchParams).toString()}`);
-      void fetchQuestion(id).then((data) => questionCacheRef.current.set(id, data));
     },
     [navigate, searchParams, questionId, q]
   );
@@ -472,9 +458,9 @@ export default function QuestionPage() {
   const loginHref = `/login?next=${encodeURIComponent(loginNext)}`;
 
   const variantLoader = useMemo(() => {
-    if (!contentLoading) return null;
+    if (!contentLoading || q?.questionId === questionId) return null;
     return variantSwitchLoaderForTarget(questionId, family);
-  }, [contentLoading, questionId, family]);
+  }, [contentLoading, questionId, family, q?.questionId]);
 
   const questionPending = Boolean(
     q &&

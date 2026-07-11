@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const progressInflightRef = useRef<Promise<void> | null>(null);
+  const refreshInflightRef = useRef<Promise<void> | null>(null);
 
   const logout = useCallback(() => {
     trackEvent("logout");
@@ -77,24 +78,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    const token = getToken();
-    if (!token) {
-      setUser(null);
-      setProgress(null);
+    if (refreshInflightRef.current) {
+      await refreshInflightRef.current;
       return;
     }
-    if (isSessionIdleExpired()) {
-      logout();
-      return;
-    }
-    touchSessionActivity();
+    const job = (async () => {
+      const token = getToken();
+      if (!token) {
+        setUser(null);
+        setProgress(null);
+        return;
+      }
+      if (isSessionIdleExpired()) {
+        logout();
+        return;
+      }
+      touchSessionActivity();
+      try {
+        const me = await fetchMe();
+        setUser(me);
+        setAnalyticsUser(me.id);
+        void refreshProgress();
+      } catch {
+        logout();
+      }
+    })();
+    refreshInflightRef.current = job;
     try {
-      const me = await fetchMe();
-      setUser(me);
-      setAnalyticsUser(me.id);
-      void refreshProgress();
-    } catch {
-      logout();
+      await job;
+    } finally {
+      refreshInflightRef.current = null;
     }
   }, [logout, refreshProgress]);
 

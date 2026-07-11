@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   createPracticeSession,
   fetchPacks,
-  PackSummary,
   type QuestionSetMode,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
@@ -23,17 +22,9 @@ import { meaningfulSessions } from "../utils/dashboardStats";
 export default function PracticePage() {
   const { user, progress, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [packs, setPacks] = useState<PackSummary[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    fetchPacks()
-      .then((p) => setPacks(p))
-      .catch((e) => setError(e.message));
-  }, []);
-
-  const practicePacks = useMemo(() => bankDisplayPacks(packs), [packs]);
   const isGuest = !user && !authLoading;
   const sessions = useMemo(
     () => (isGuest ? DEMO_SESSIONS : meaningfulSessions(progress?.recentSessions ?? [])),
@@ -57,12 +48,13 @@ export default function PracticePage() {
         navigate(`/login?next=${encodeURIComponent("/practice")}`);
         return;
       }
-      const pid = opts.packId || pickDefaultPack(practicePacks)?.packId;
+      const packs = bankDisplayPacks(await fetchPacks());
+      const pid = opts.packId || pickDefaultPack(packs)?.packId;
       if (!pid) {
         setError("Import NEET packs first (Admin) or check your connection.");
         return;
       }
-      const pack = practicePacks.find((p) => p.packId === pid);
+      const pack = packs.find((p) => p.packId === pid);
       const subj = opts.subject;
       const ch = opts.chapter;
       const setMode = opts.questionSet ?? "pyq";
@@ -94,7 +86,7 @@ export default function PracticePage() {
         setBusy(false);
       }
     },
-    [user, navigate, practicePacks]
+    [user, navigate]
   );
 
   const startFromBank = useCallback(
