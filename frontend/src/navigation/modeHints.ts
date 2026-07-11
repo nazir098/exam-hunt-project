@@ -4,7 +4,7 @@ import { MODES } from "./modes";
 export const PRACTICE_MODE_HINT = MODES.practice.helper;
 
 export const BANK_MODE_HINT =
-  "Question bank: Solve to learn, Practice for ranked scoring, or Add to Test for exam simulation.";
+  "Question bank: Solve to learn, or Practice for ranked scoring.";
 
 export const TEST_MODE_HINT = MODES.test.helper;
 

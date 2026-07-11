@@ -42,35 +42,53 @@ Optional: issue a **Cloudflare Origin Certificate** (15-year) and install on Ngi
 
 If someone uses the **EC2 public IP** or an unproxied hostname, they **skip** WAF and rate limits.
 
-### A. Nginx — only accept Cloudflare IPs (recommended)
+### A. Nginx — restore real visitor IP only (do not use allow/deny here)
+
+Nginx runs `real_ip` **before** `allow`/`deny`. After `real_ip_header CF-Connecting-IP`, `$remote_addr` is the **visitor** IP, not Cloudflare’s edge IP — so `allow <cloudflare-cidr>` no longer matches and **legitimate traffic can get 403**.
+
+**Correct nginx pattern** ([`deploy/ec2/nginx-exam-hunt-api.conf.example`](../deploy/ec2/nginx-exam-hunt-api.conf.example)):
+
+```nginx
+include /etc/nginx/conf.d/cloudflare-real-ip.conf;
+
+server {
+    server_name api.techmuzzle.in;
+
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header X-Real-IP $remote_addr;  # restored client IP
+        ...
+    }
+    listen 443 ssl;
+    ...
+}
+```
 
 On EC2:
 
 ```bash
-sudo curl -fsSL https://www.cloudflare.com/ips-v4 -o /etc/nginx/cloudflare-ips-v4.conf
-sudo curl -fsSL https://www.cloudflare.com/ips-v6 -o /etc/nginx/cloudflare-ips-v6.conf
-```
-
-Use the example server block in [`deploy/ec2/nginx-exam-hunt-api.conf.example`](../deploy/ec2/nginx-exam-hunt-api.conf.example) (real client IP + allowlist).
-
-Reload:
-
-```bash
+sudo bash deploy/cloudflare/update-cloudflare-ips.sh
+# Merge deploy/ec2/nginx-exam-hunt-api.conf.example with your Certbot SSL block
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Refresh Cloudflare IP lists monthly (cron):
+Refresh real_ip list monthly (cron): re-run `update-cloudflare-ips.sh`.
+
+### B. Host firewall — only Cloudflare may reach 80/443 (recommended bypass block)
+
+Block at **packet source IP** (iptables), not nginx `allow`/`deny`:
 
 ```bash
-# /etc/cron.monthly/update-cloudflare-ips
-curl -fsSL https://www.cloudflare.com/ips-v4 -o /etc/nginx/cloudflare-ips-v4.conf
-curl -fsSL https://www.cloudflare.com/ips-v6 -o /etc/nginx/cloudflare-ips-v6.conf
-nginx -t && systemctl reload nginx
+sudo bash deploy/cloudflare/lockdown-host-to-cloudflare.sh
 ```
 
-### B. AWS security group (optional extra layer)
+Undo: `sudo bash deploy/cloudflare/lockdown-host-to-cloudflare.sh --remove`
 
-Replace `0.0.0.0/0` on ports 80/443 with [Cloudflare IP ranges](https://www.cloudflare.com/ips/). Higher maintenance; Nginx allowlist is usually enough if **8081 is not public**.
+Keep **SSH (22)** open from your IP in the security group. Port **8081** must stay **not** public (Docker bind to 127.0.0.1 only).
+
+### C. AWS security group (optional extra layer)
+
+Replace `0.0.0.0/0` on ports 80/443 with [Cloudflare IP ranges](https://www.cloudflare.com/ips/). Same idea as (B), managed in AWS console.
 
 ---
 
@@ -143,7 +161,16 @@ This is **stricter** than the app limit (120/min) and slows bulk download of ste
 | **Requests** | 20 per 1 minute |
 | **Action** | Block |
 
-### Rule 5 — SEO sitemap (optional cap)
+### Rule 5 — SEO metadata (question pages)
+
+| Field | Value |
+|-------|--------|
+| **Name** | SEO question meta limit |
+| **Expression** | `(http.host eq "api.techmuzzle.in" and http.request.method eq "GET" and starts_with(http.request.uri.path, "/api/seo/questions/"))` |
+| **Requests** | 30 per 1 minute |
+| **Action** | Block |
+
+### Rule 6 — SEO sitemap (optional cap)
 
 | Field | Value |
 |-------|--------|

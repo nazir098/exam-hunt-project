@@ -18,15 +18,6 @@ type OutletCtx = {
   practiceBusy?: boolean;
 };
 
-function testCreateHref(packId: string, subject: string, searchParams: URLSearchParams): string {
-  const next = new URLSearchParams();
-  next.set("packId", packId);
-  if (subject) next.set("subject", subject);
-  const chapter = searchParams.get("chapter");
-  if (chapter) next.set("chapter", chapter);
-  return `/test/create?${next.toString()}`;
-}
-
 export default function QuestionCard({
   question: q,
   packId,
@@ -72,13 +63,6 @@ export default function QuestionCard({
             {MODES.practice.button}
           </button>
         )}
-        <Link
-          to={testCreateHref(packId, q.subject, searchParams)}
-          className="bank-mode-btn bank-mode-btn--test"
-          title={MODES.test.tooltip}
-        >
-          {MODES.test.button}
-        </Link>
       </div>
     </article>
   );

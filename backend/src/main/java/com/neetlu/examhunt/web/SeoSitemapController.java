@@ -1,6 +1,7 @@
 package com.neetlu.examhunt.web;
 
 import com.neetlu.examhunt.model.Question;
+import com.neetlu.examhunt.service.SeoQuestionService;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -15,16 +16,15 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Generates an XML sitemap of all original PYQ question URLs
- * so Google can discover and index individual question pages.
- * Variants (ai_variant) are excluded — only canonical PYQs are listed.
+ * XML sitemap of text-indexable PYQ solve URLs for Google discovery.
+ * Image-only questions are excluded so crawl budget focuses on readable text pages.
  */
 @RestController
 @RequestMapping("/api/seo")
 public class SeoSitemapController {
 
     private static final String SITE_URL = "https://www.techmuzzle.in";
-    private static final int MAX_URLS = 5000;
+    private static final int MAX_URLS = 10_000;
 
     private final MongoTemplate mongoTemplate;
 
@@ -35,20 +35,16 @@ public class SeoSitemapController {
     @GetMapping(value = "/sitemap", produces = MediaType.APPLICATION_XML_VALUE)
     public ResponseEntity<String> sitemap() {
         Query query = new Query()
-                .addCriteria(new Criteria().orOperator(
-                        Criteria.where("sourceType").is("pyq"),
-                        Criteria.where("sourceType").exists(false)))
-                .with(Sort.by("year").descending().and(Sort.by("questionNo")))
+                .addCriteria(indexableCriteria())
+                .with(Sort.by(Sort.Direction.DESC, "year").and(Sort.by("questionNo")))
                 .limit(MAX_URLS);
 
-        // Only fetch the fields we need
-        query.fields().include("questionId").include("exam").include("year")
-                .include("subject").include("questionTextPreview");
+        query.fields().include("questionId");
 
         List<Question> questions = mongoTemplate.find(query, Question.class);
         String today = LocalDate.now().toString();
 
-        StringBuilder xml = new StringBuilder(questions.size() * 200);
+        StringBuilder xml = new StringBuilder(questions.size() * 220);
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         xml.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
 
@@ -58,7 +54,7 @@ public class SeoSitemapController {
             xml.append("    <loc>").append(escapeXml(loc)).append("</loc>\n");
             xml.append("    <lastmod>").append(today).append("</lastmod>\n");
             xml.append("    <changefreq>monthly</changefreq>\n");
-            xml.append("    <priority>0.6</priority>\n");
+            xml.append("    <priority>0.8</priority>\n");
             xml.append("  </url>\n");
         }
 
@@ -69,8 +65,30 @@ public class SeoSitemapController {
                 .body(xml.toString());
     }
 
+    static Criteria indexableCriteria() {
+        Criteria pyqOnly = new Criteria()
+                .orOperator(
+                        Criteria.where("sourceType").is("pyq"),
+                        Criteria.where("sourceType").exists(false),
+                        Criteria.where("sourceType").is(""));
+
+        Criteria textLayout = new Criteria()
+                .orOperator(
+                        Criteria.where("renderMode").in("structured", "hybrid"),
+                        Criteria.where("contentTextNormalized").is(true));
+
+        Criteria readableStem = new Criteria()
+                .orOperator(
+                        Criteria.where("questionTextPreview").exists(true).ne(""),
+                        Criteria.where("options.0").exists(true));
+
+        return new Criteria().andOperator(pyqOnly, textLayout, readableStem);
+    }
+
     private static String escapeXml(String s) {
-        if (s == null) return "";
+        if (s == null) {
+            return "";
+        }
         return s.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")

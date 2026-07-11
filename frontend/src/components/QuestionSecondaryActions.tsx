@@ -1,10 +1,13 @@
 import BookmarkButton from "./BookmarkButton";
+import { Link } from "react-router-dom";
 
 type Props = {
   questionId: string;
   hasSolution?: boolean;
   solutionAllowed?: boolean;
   solutionOpen?: boolean;
+  guestSolutionLocked?: boolean;
+  loginHref?: string;
   onToggleSolution?: () => void;
   onReport?: () => void;
   reportTargetId?: string;
@@ -15,6 +18,8 @@ export default function QuestionSecondaryActions({
   hasSolution = false,
   solutionAllowed = true,
   solutionOpen = false,
+  guestSolutionLocked = false,
+  loginHref = "/login",
   onToggleSolution,
   onReport,
   reportTargetId = "question-report",
@@ -31,12 +36,28 @@ export default function QuestionSecondaryActions({
   return (
     <div
       className={`question-secondary-actions${
-        hasSolution && onToggleSolution ? "" : " question-secondary-actions--duo"
+        hasSolution && (onToggleSolution || guestSolutionLocked)
+          ? ""
+          : " question-secondary-actions--duo"
       }`}
       role="toolbar"
       aria-label="Question actions"
     >
-      {hasSolution && onToggleSolution && (
+      {hasSolution && guestSolutionLocked ? (
+        <Link
+          to={loginHref}
+          className="question-secondary-actions__btn"
+          title="Sign in to view solution"
+        >
+          <span className="material-symbols-outlined" aria-hidden>
+            lock
+          </span>
+          <span className="question-secondary-actions__label">Solution</span>
+          <span className="question-secondary-actions__label question-secondary-actions__label--wide">
+            Sign in for solution
+          </span>
+        </Link>
+      ) : hasSolution && onToggleSolution ? (
         <button
           type="button"
           className="question-secondary-actions__btn"
@@ -53,7 +74,7 @@ export default function QuestionSecondaryActions({
             {solutionOpen ? "Hide solution" : "View solution"}
           </span>
         </button>
-      )}
+      ) : null}
       <BookmarkButton
         questionId={questionId}
         variant="compact"

@@ -1,20 +1,25 @@
 # /etc/nginx/conf.d/exam-hunt-api.conf
 # Use after enabling Cloudflare proxy (orange cloud) on api.techmuzzle.in
 #
+# IMPORTANT: Do NOT combine cloudflare-allow.conf (allow/deny) with
+# cloudflare-real-ip.conf in the same server block. Nginx runs real_ip
+# before access checks, so $remote_addr becomes the visitor IP and
+# "allow <cloudflare-cidr>" no longer matches — legitimate traffic gets 403.
+#
 # Setup on EC2:
 #   sudo bash deploy/cloudflare/update-cloudflare-ips.sh
 #   sudo cp deploy/ec2/nginx-exam-hunt-api.conf.example /etc/nginx/conf.d/exam-hunt-api.conf
+#   # Merge with your Certbot 443 block (see below)
 #   sudo nginx -t && sudo systemctl reload nginx
-#   sudo certbot --nginx -d api.techmuzzle.in   # if not already done
-
+#
+# Block direct-to-EC2 bypass at the HOST firewall (packet source IP), not nginx allow:
+#   sudo bash deploy/cloudflare/lockdown-host-to-cloudflare.sh
+#
+# Restore visitor IPs to the Spring app (http context — before server blocks):
 include /etc/nginx/conf.d/cloudflare-real-ip.conf;
 
 server {
-    listen 80;
     server_name api.techmuzzle.in;
-
-    include /etc/nginx/conf.d/cloudflare-allow.conf;
-    deny all;
 
     location / {
         proxy_pass http://127.0.0.1:8081;
@@ -28,7 +33,24 @@ server {
         proxy_read_timeout 900s;
         send_timeout 900s;
     }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/api.techmuzzle.in/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/api.techmuzzle.in/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+    # Authenticated Origin Pulls (enable Global toggle in Cloudflare first, then reload nginx)
+    ssl_client_certificate /etc/nginx/cloudflare-origin-pull-ca.pem;
+    ssl_verify_client on;
 }
 
-# Certbot adds listen 443 ssl. After certbot, add the same include/deny/location
-# block to the SSL server { } it creates (or certbot --nginx merges this file).
+server {
+    if ($host = api.techmuzzle.in) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name api.techmuzzle.in;
+    return 404; # managed by Certbot
+}

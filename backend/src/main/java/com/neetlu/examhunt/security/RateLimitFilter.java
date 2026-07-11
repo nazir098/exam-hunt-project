@@ -30,6 +30,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int REGISTER_MAX = 10;
     private static final Duration CATALOG_WINDOW = Duration.ofMinutes(1);
     private static final int CATALOG_MAX = 120;
+    private static final Duration SEO_META_WINDOW = Duration.ofMinutes(1);
+    private static final int SEO_META_MAX = 30;
+    private static final Duration SEO_SITEMAP_WINDOW = Duration.ofHours(1);
+    private static final int SEO_SITEMAP_MAX = 30;
     private static final Duration AI_WINDOW = Duration.ofMinutes(1);
     private static final int AI_MAX = 30;
 
@@ -79,6 +83,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (HttpMethod.GET.matches(method) && ("/api/questions".equals(path)
                 || path.startsWith("/api/questions/"))) {
             return new RateRule("questions", CATALOG_MAX, CATALOG_WINDOW);
+        }
+        if (HttpMethod.GET.matches(method) && path.startsWith("/api/seo/questions/")) {
+            return new RateRule("seo-question-meta", SEO_META_MAX, SEO_META_WINDOW);
+        }
+        if (HttpMethod.GET.matches(method) && "/api/seo/sitemap".equals(path)) {
+            return new RateRule("seo-sitemap", SEO_SITEMAP_MAX, SEO_SITEMAP_WINDOW);
         }
         return null;
     }

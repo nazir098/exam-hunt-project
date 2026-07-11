@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchAllPackQuestions, fetchPack, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, QuestionDetail, QuestionFamily, QuestionPublic } from "../api";
+import { fetchAllPackQuestions, fetchPack, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, fetchSeoQuestionMeta, QuestionDetail, QuestionFamily, QuestionPublic, SeoQuestionMeta } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
@@ -11,7 +11,7 @@ import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
 import ZoomableImage from "../components/ZoomableImage";
 import ProductModeBanner from "../components/ProductModeBanner";
-import { applySeoConfig, type QuestionSchemaData } from "../components/Seo";
+import { applySeoConfig } from "../components/Seo";
 import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
 import OfficialSolutionBody from "../components/OfficialSolutionBody";
@@ -31,6 +31,7 @@ import {
   textMcqDisplayProps,
   usesQuestionCardLayout,
 } from "../utils/questionRender";
+import { seoExcerpt, seoPlainText } from "../utils/seoText";
 
 const OPTIONS = [
   { label: "1", value: "1" },
@@ -43,18 +44,10 @@ function optionLabel(value: string) {
   return `Option ${value}`;
 }
 
-function seoExcerpt(text?: string | null) {
-  const clean = (text || "")
-    .replace(/\s+/g, " ")
-    .replace(/[{}\\]/g, "")
-    .trim();
-  if (!clean) return "";
-  return clean.length > 135 ? `${clean.slice(0, 132)}...` : clean;
-}
-
 export default function QuestionPage() {
   const { questionId = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [q, setQ] = useState<QuestionDetail | null>(null);
@@ -71,6 +64,7 @@ export default function QuestionPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [family, setFamily] = useState<QuestionFamily | null>(null);
+  const [seoMeta, setSeoMeta] = useState<SeoQuestionMeta | null>(null);
   const questionCacheRef = useRef(new Map<string, QuestionDetail>());
   const variantSwitchGateRef = useRef<VariantSwitchGate | null>(null);
   const returnQs = searchParams.toString();
@@ -139,6 +133,22 @@ export default function QuestionPage() {
       cancelled = true;
     };
   }, [familyParent]);
+
+  useEffect(() => {
+    setSeoMeta(null);
+    if (!questionId) return;
+    let cancelled = false;
+    fetchSeoQuestionMeta(questionId)
+      .then((meta) => {
+        if (!cancelled) setSeoMeta(meta);
+      })
+      .catch(() => {
+        if (!cancelled) setSeoMeta(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [questionId]);
 
   const prefetchFamilyVariants = useCallback(() => {
     if (!family) return;
@@ -231,13 +241,44 @@ export default function QuestionPage() {
 
   useEffect(() => {
     if (!q) return;
+
+    const schemaBase = (stem: string, options?: { label: string; text: string }[]) => ({
+      questionText: stem,
+      options,
+      exam: seoMeta?.exam ?? examDisplayName(q.exam, q.year),
+      year: seoMeta?.year ?? q.year,
+      subject: seoMeta?.subject ?? q.subject,
+      chapter: seoMeta?.chapter ?? q.chapter,
+      questionNo: seoMeta?.questionNo ?? q.questionNo,
+      ...(user && q.answer?.trim()
+        ? {
+            correctAnswer: q.answer,
+            correctAnswerText: q.solutionTextPreview || undefined,
+            solutionImageUrl: q.solutionImageUrl || undefined,
+          }
+        : {}),
+    });
+
+    if (seoMeta) {
+      applySeoConfig({
+        title: `${seoMeta.title} | EduMaster AI`,
+        description: seoMeta.description,
+        path: `/solve/${questionId}`,
+        type: "article",
+        questionSchema: schemaBase(
+          seoMeta.questionTextPlain,
+          seoMeta.options.map((opt) => ({ label: opt.label, text: opt.textPlain }))
+        ),
+      });
+      return;
+    }
+
     const exam = examDisplayName(q.exam, q.year);
     const topic = q.topic || q.chapter || q.subject || "NEET";
     const variantLabel = isAiVariantQuestion(q)
       ? `${formatVariantTypeLabel(q.variantType, q.variantNo)}`
       : `Question ${q.questionNo}`;
-    const preview = seoExcerpt(q.questionTextPreview);
-    // Build title: include question text excerpt for SEO relevance
+    const preview = seoExcerpt(q.questionTextPreview, 135);
     const questionSnippet = preview
       ? preview.length > 60
         ? `${preview.slice(0, 57)}...`
@@ -248,31 +289,20 @@ export default function QuestionPage() {
       preview ||
       `Practice ${exam} ${q.subject} question ${q.questionNo} from ${topic} with answer checking, solution support, and AI study guidance.`;
 
-    // Build Question schema for Google rich results
-    const questionSchema: QuestionSchemaData = {
-      questionText: q.questionTextPreview || `${exam} ${q.year} ${q.subject} ${variantLabel}`,
-      options: q.options?.map((opt, i) => ({
-        label: String.fromCharCode(65 + i), // A, B, C, D
-        text: opt.text,
-      })),
-      correctAnswer: q.answer,
-      correctAnswerText: q.solutionTextPreview || undefined,
-      exam: examDisplayName(q.exam, q.year),
-      year: q.year,
-      subject: q.subject,
-      chapter: q.chapter,
-      questionNo: q.questionNo,
-      solutionImageUrl: q.solutionImageUrl || undefined,
-    };
-
     applySeoConfig({
       title,
       description,
       path: `/solve/${questionId}`,
       type: "article",
-      questionSchema,
+      questionSchema: schemaBase(
+        seoPlainText(q.questionTextPreview) || q.questionTextPreview || `${exam} ${q.year} ${q.subject} ${variantLabel}`,
+        q.options?.map((opt, i) => ({
+          label: String.fromCharCode(65 + i),
+          text: opt.text,
+        }))
+      ),
     });
-  }, [q, questionId]);
+  }, [q, questionId, seoMeta, user]);
 
   const goToQuestion = useCallback(
     (id: string) => {
@@ -370,6 +400,8 @@ export default function QuestionPage() {
     Boolean(q?.solutionTextPreview?.trim());
   const distinctSolution = q ? hasDistinctSolution(q) : false;
   const showSolutionPanel = solutionOpen && hasSolution && distinctSolution && checked;
+  const loginNext = `${location.pathname}${location.search}`;
+  const loginHref = `/login?next=${encodeURIComponent(loginNext)}`;
 
   const variantLoader = useMemo(() => {
     if (!contentLoading) return null;
@@ -639,9 +671,11 @@ export default function QuestionPage() {
 
           <QuestionSecondaryActions
             questionId={questionId}
-            hasSolution={distinctSolution}
+            hasSolution={user ? distinctSolution : q.hasSolution}
             solutionAllowed={checked}
             solutionOpen={solutionOpen}
+            guestSolutionLocked={!user}
+            loginHref={loginHref}
             onToggleSolution={() => {
               if (!checked) return;
               setSolutionOpen((v) => !v);
@@ -724,6 +758,15 @@ export default function QuestionPage() {
                   {isCorrect && selected && (
                     <p className="practice-run-result__answer-line practice-run-result__answer-line--yours">
                       You chose {optionLabel(selected)}
+                    </p>
+                  )}
+                  {!user && (
+                    <p className="practice-run-result__guest-unlock">
+                      <Link to={loginHref} className="practice-run-result__guest-unlock-link">
+                        Sign in
+                      </Link>{" "}
+                      to see the correct answer
+                      {q.hasSolution ? " and the official solution" : ""}.
                     </p>
                   )}
                 </div>

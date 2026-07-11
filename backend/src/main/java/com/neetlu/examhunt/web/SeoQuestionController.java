@@ -1,0 +1,32 @@
+package com.neetlu.examhunt.web;
+
+import com.neetlu.examhunt.service.SeoQuestionService;
+import com.neetlu.examhunt.service.SeoQuestionService.SeoQuestionView;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.concurrent.TimeUnit;
+
+@RestController
+@RequestMapping("/api/seo")
+public class SeoQuestionController {
+
+    private final SeoQuestionService seoQuestionService;
+
+    public SeoQuestionController(SeoQuestionService seoQuestionService) {
+        this.seoQuestionService = seoQuestionService;
+    }
+
+    /** Public crawl metadata for search engines — stems/options only, no answers. */
+    @GetMapping("/questions/{questionId}")
+    public ResponseEntity<SeoQuestionView> questionMeta(@PathVariable String questionId) {
+        SeoQuestionView view = seoQuestionService.getIndexableQuestion(questionId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(6, TimeUnit.HOURS).cachePublic())
+                .body(view);
+    }
+}

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { trackPageView } from "../analytics";
+import { seoExcerpt, seoPlainText } from "../utils/seoText";
 
 const SITE_URL = "https://www.techmuzzle.in";
 const PRODUCT_NAME = "EduMaster AI";
@@ -116,7 +117,7 @@ function buildFaqSchema(): Record<string, unknown> {
         name: "Where can I find NEET previous year questions (PYQ) with solutions?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "EduMaster AI provides NEET PYQs from 2016 to 2025 with detailed solutions, chapter-wise filtering, and AI-powered explanations for Biology, Physics, and Chemistry.",
+          text: "EduMaster AI provides NEET PYQs from 2016 to 2025 as readable text with LaTeX solutions, chapter-wise filters, and AI-powered explanations for Biology, Physics, and Chemistry.",
         },
       },
       {
@@ -163,16 +164,18 @@ function buildFaqSchema(): Record<string, unknown> {
   };
 }
 
-function buildQuestionSchema(q: QuestionSchemaData, canonicalUrl: string): Record<string, unknown> {
-  const schema: Record<string, unknown> = {
+function buildQuestionEntity(q: QuestionSchemaData, canonicalUrl: string): Record<string, unknown> {
+  const questionText = seoPlainText(q.questionText) || q.questionText;
+  const entity: Record<string, unknown> = {
     "@type": "Question",
     "@id": `${canonicalUrl}#question`,
-    name: q.questionText.slice(0, 200),
-    text: q.questionText,
+    name: seoExcerpt(questionText, 200),
+    text: questionText,
     url: canonicalUrl,
-    answerCount: 1,
+    answerCount: q.correctAnswer ? 1 : 0,
+    eduQuestionType: "Multiple choice",
     educationalLevel: "intermediate",
-    learningResourceType: "Question",
+    learningResourceType: "Practice problem",
     about: q.subject || "NEET",
     isPartOf: {
       "@type": "Quiz",
@@ -183,24 +186,39 @@ function buildQuestionSchema(q: QuestionSchemaData, canonicalUrl: string): Recor
   };
 
   if (q.options && q.options.length > 0) {
-    schema.suggestedAnswer = q.options.map((opt) => ({
+    entity.suggestedAnswer = q.options.map((opt) => ({
       "@type": "Answer",
-      text: `${opt.label}. ${opt.text}`,
+      text: `${opt.label}. ${seoPlainText(opt.text) || opt.text}`,
     }));
   }
 
-  if (q.correctAnswer) {
-    schema.acceptedAnswer = {
+  const acceptedText =
+    seoPlainText(q.correctAnswerText) ||
+    q.correctAnswerText ||
+    (q.correctAnswer ? `Correct answer: Option ${q.correctAnswer}` : "");
+
+  if (acceptedText) {
+    entity.acceptedAnswer = {
       "@type": "Answer",
-      text: q.correctAnswerText || `Correct answer: ${q.correctAnswer}`,
+      text: acceptedText,
+      upvoteCount: 1,
     };
   }
 
   if (q.solutionImageUrl) {
-    schema.image = q.solutionImageUrl;
+    entity.image = q.solutionImageUrl;
   }
 
-  return schema;
+  return entity;
+}
+
+function buildQaPageSchema(q: QuestionSchemaData, canonicalUrl: string): Record<string, unknown> {
+  return {
+    "@type": "QAPage",
+    "@id": `${canonicalUrl}#qa`,
+    url: canonicalUrl,
+    mainEntity: buildQuestionEntity(q, canonicalUrl),
+  };
 }
 
 export function applySeoConfig(seo: SeoConfig) {
@@ -239,9 +257,9 @@ export function applySeoConfig(seo: SeoConfig) {
     removeJsonLd("edumaster-ai-jsonld-faq");
   }
 
-  // Add Question schema for individual question pages
+  // QAPage schema for individual text PYQ solve pages
   if (seo.questionSchema) {
-    graph.push(buildQuestionSchema(seo.questionSchema, canonicalUrl));
+    graph.push(buildQaPageSchema(seo.questionSchema, canonicalUrl));
   } else {
     removeJsonLd("edumaster-ai-jsonld-question");
   }
@@ -274,9 +292,9 @@ function getSeoConfig(pathname: string): SeoConfig {
 
   if (pathname.startsWith("/solve/") || pathname.startsWith("/question/")) {
     return {
-      title: "NEET PYQ Solution with AI Explanation | EduMaster AI",
+      title: "NEET PYQ Question with Text Solution & Answer | EduMaster AI",
       description:
-        "Review a NEET previous year question with answer options, detailed solution, AI-powered explanation, and similar practice questions.",
+        "Read the full NEET previous year question in text, check your answer, and view the step-by-step solution with LaTeX explanations.",
       path: pathname,
       type: "article",
     };

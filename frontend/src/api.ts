@@ -616,6 +616,31 @@ export function fetchQuestionFamily(questionId: string): Promise<QuestionFamily>
   });
 }
 
+export type SeoQuestionMeta = {
+  questionId: string;
+  title: string;
+  description: string;
+  questionTextPlain: string;
+  options: { id: string; label: string; textPlain: string }[];
+  hasSolution: boolean;
+  exam: string;
+  year: number;
+  subject: string;
+  chapter: string;
+  topic: string;
+  questionNo: number;
+  renderMode: string;
+  indexable: boolean;
+};
+
+/** Public indexable metadata for search engines (text stem + solution excerpt). */
+export function fetchSeoQuestionMeta(questionId: string): Promise<SeoQuestionMeta> {
+  return getJsonCached<SeoQuestionMeta>(
+    `/api/seo/questions/${encodeURIComponent(questionId)}`,
+    `/api/seo/questions/${encodeURIComponent(questionId)}`
+  );
+}
+
 const familyByParent = new Map<string, { at: number; data: QuestionFamily }>();
 
 export function register(email: string, password: string, displayName?: string) {

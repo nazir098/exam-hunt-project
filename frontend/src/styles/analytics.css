@@ -14814,6 +14814,25 @@ html.fonts-loading .material-symbols-outlined::after {
   color: #9a98b8;
 }
 
+.practice-run-result__guest-unlock {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #b8b6d4;
+}
+
+.practice-run-result__guest-unlock-link {
+  font-weight: 700;
+  color: #c4b5fd;
+  text-decoration: none;
+}
+
+.practice-run-result__guest-unlock-link:hover {
+  color: #ddd6fe;
+  text-decoration: underline;
+}
+
 .practice-run-result--inline {
   margin-top: 0.75rem;
 }

@@ -57,7 +57,8 @@ public class QuestionController {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("questionNo"));
         Page<Question> result = questionBrowseService.browse(
                 packId, subject, chapter, topic, difficulty, q, questionNo, pageable);
-        return result.map(QuestionPublic::from);
+        boolean includeSensitive = includeSensitiveFields();
+        return result.map(question -> QuestionPublic.from(question, includeSensitive));
     }
 
     @GetMapping("/search")
@@ -78,7 +79,8 @@ public class QuestionController {
         } else {
             result = questionRepository.searchByExam(exam, regexPattern(q), pageable);
         }
-        return result.map(QuestionPublic::from);
+        boolean includeSensitive = includeSensitiveFields();
+        return result.map(question -> QuestionPublic.from(question, includeSensitive));
     }
 
     private static String regexPattern(String raw) {
@@ -128,11 +130,11 @@ public class QuestionController {
                 parentId,
                 parent.getQuestionNo(),
                 active.getQuestionId(),
-                QuestionPublic.from(parent),
+                QuestionPublic.from(parent, includeSensitiveFields()),
                 variantRefs);
     }
 
-    /** List view — answer hidden until client reveals it. */
+    /** List view — solution assets hidden until authenticated. */
     public record QuestionPublic(
             String questionId,
             String packId,
@@ -155,6 +157,11 @@ public class QuestionController {
             String variantType
     ) {
         static QuestionPublic from(Question q) {
+            return from(q, true);
+        }
+
+        static QuestionPublic from(Question q, boolean includeSensitive) {
+            boolean hasSolution = hasRenderableSolution(q);
             return new QuestionPublic(
                     q.getQuestionId(),
                     q.getPackId(),
@@ -165,10 +172,10 @@ public class QuestionController {
                     q.getChapter(),
                     q.getTopic(),
                     q.getDifficulty(),
-                    hasRenderableSolution(q),
+                    hasSolution,
                     q.isAnswerOnly(),
                     q.getQuestionImageUrl(),
-                    hasRenderableSolution(q) ? nullToEmpty(q.getSolutionImageUrl()) : "",
+                    includeSensitive && hasSolution ? nullToEmpty(q.getSolutionImageUrl()) : "",
                     q.getQuestionTextPreview(),
                     mapOptions(q),
                     q.getSourceType() != null ? q.getSourceType() : "pyq",

@@ -7,4 +7,4 @@ Disallow: /test/result
 Disallow: /test/session
 
 Sitemap: https://www.techmuzzle.in/sitemap.xml
-Sitemap: https://www.techmuzzle.in/api/seo/sitemap
+Sitemap: https://api.techmuzzle.in/api/seo/sitemap

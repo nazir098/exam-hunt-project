@@ -72,6 +72,7 @@ jobs:
         run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
+        id: image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -89,6 +90,92 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify image published to GHCR
+        env:
+          IMAGE_SHA_TAG: sha-${{ github.sha }}
+          PUSHED_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          docker buildx imagetools inspect "${IMAGE_NAME}:latest"
-          docker buildx imagetools inspect "${IMAGE_NAME}:sha-${{ github.sha }}"
+          set -euo pipefail
+
+          registry_digest() {
+            local ref="$1"
+            docker buildx imagetools inspect "${ref}" --format '{{json .}}' \
+              | jq -r '.manifest.digest // .Manifest.Digest // empty'
+          }
+
+          wait_for_tag() {
+            local tag="$1"
+            local attempt digest
+            for attempt in 1 2 3 4 5; do
+              if digest="$(registry_digest "${IMAGE_NAME}:${tag}")" && [[ -n "${digest}" ]]; then
+                printf '%s' "${digest}"
+                return 0
+              fi
+              echo "Tag ${tag} not visible in GHCR yet (attempt ${attempt}/5)"
+              sleep $((attempt * 3))
+            done
+            echo "Timed out waiting for ${IMAGE_NAME}:${tag}" >&2
+            return 1
+          }
+
+          sha_digest="$(wait_for_tag "${IMAGE_SHA_TAG}")"
+          echo "Resolved ${IMAGE_SHA_TAG} -> ${sha_digest}"
+
+          if [[ -n "${PUSHED_DIGEST}" && "${sha_digest}" != "${PUSHED_DIGEST}" ]]; then
+            echo "Registry digest (${sha_digest}) does not match build output (${PUSHED_DIGEST})" >&2
+            exit 1
+          fi
+
+          tags_checked="${IMAGE_SHA_TAG}"
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            latest_digest="$(wait_for_tag "latest")"
+            echo "Resolved latest -> ${latest_digest}"
+            if [[ "${latest_digest}" != "${sha_digest}" ]]; then
+              echo "latest (${latest_digest}) and ${IMAGE_SHA_TAG} (${sha_digest}) must match on main" >&2
+              exit 1
+            fi
+            tags_checked="${tags_checked}, latest"
+          fi
+
+          docker pull "${IMAGE_NAME}:${IMAGE_SHA_TAG}"
+
+          revision="$(
+            docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+              "${IMAGE_NAME}:${IMAGE_SHA_TAG}"
+          )"
+          commit_env="$(
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+              "${IMAGE_NAME}:${IMAGE_SHA_TAG}" \
+              | sed -n 's/^BUILD_COMMIT=//p' | head -n1
+          )"
+          image_tag_env="$(
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+              "${IMAGE_NAME}:${IMAGE_SHA_TAG}" \
+              | sed -n 's/^IMAGE_TAG=//p' | head -n1
+          )"
+
+          if [[ "${revision}" != "${GITHUB_SHA}" ]]; then
+            echo "Label org.opencontainers.image.revision=${revision}, expected ${GITHUB_SHA}" >&2
+            exit 1
+          fi
+          if [[ "${commit_env}" != "${GITHUB_SHA}" ]]; then
+            echo "Env BUILD_COMMIT=${commit_env}, expected ${GITHUB_SHA}" >&2
+            exit 1
+          fi
+          if [[ "${image_tag_env}" != "${IMAGE_SHA_TAG}" ]]; then
+            echo "Env IMAGE_TAG=${image_tag_env}, expected ${IMAGE_SHA_TAG}" >&2
+            exit 1
+          fi
+
+          docker run --rm --entrypoint test "${IMAGE_NAME}:${IMAGE_SHA_TAG}" -f /app/scripts/extractor_metadata.py
+          docker run --rm --entrypoint test "${IMAGE_NAME}:${IMAGE_SHA_TAG}" -f /app/app.jar
+
+          docker rmi "${IMAGE_NAME}:${IMAGE_SHA_TAG}" >/dev/null
+
+          {
+            echo "## Backend image verification"
+            echo "- Image: \`${IMAGE_NAME}\`"
+            echo "- Digest: \`${sha_digest}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Tags checked: \`${tags_checked}\`"
+            echo "- Deployment metadata and required files validated"
+          } >> "${GITHUB_STEP_SUMMARY}"
