@@ -10,6 +10,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import PracticeStudyAssistant from "../components/PracticeStudyAssistant";
 import PageLoadShell from "../components/PageLoadShell";
+import ReviewSolutionSection from "../components/ReviewSolutionSection";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestResultRetakeActions from "../components/TestResultRetakeActions";
 import TestReviewAnswerCompare from "../components/TestReviewAnswerCompare";
@@ -274,24 +275,12 @@ export default function TestReviewPage() {
                       <TestReviewAnswerCompare review={activeReview} />
                     )}
 
-                    {activeReview.hasSolution && activeReview.solutionImageUrl && (
-                      <div className="session-review-panel__solution">
-                        <button
-                          type="button"
-                          className="practice-run-solution__toggle"
-                          onClick={() => setShowSolution((v) => !v)}
-                        >
-                          {showSolution ? "Hide explanation" : "View explanation"}
-                        </button>
-                        {showSolution && (
-                          <img
-                            src={imageSrc(activeReview.solutionImageUrl, activeReview.questionId)}
-                            alt="Solution"
-                            draggable={false}
-                          />
-                        )}
-                      </div>
-                    )}
+                    <ReviewSolutionSection
+                      question={question}
+                      hasSolution={activeReview.hasSolution}
+                      showSolution={showSolution}
+                      onToggle={() => setShowSolution((v) => !v)}
+                    />
                   </section>
 
                   <div className="test-review-nav">

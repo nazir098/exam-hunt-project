@@ -222,6 +222,7 @@ function submitTileDetails(
 export default function PracticeQuestionPage() {
   const { sessionId = "", questionId = "" } = useParams();
   const location = useLocation();
+  const bootstrapSession = (location.state as { session?: PracticeSessionView } | null)?.session;
   const navigate = useNavigate();
   const routeMode: ProductMode = location.pathname.startsWith("/test/session/") ? "test" : "practice";
   const { user, loading: authLoading, refreshProgress } = useAuth();
@@ -255,15 +256,25 @@ export default function PracticeQuestionPage() {
       return;
     }
     let cancelled = false;
-    fetchQuestionFamily(questionId)
-      .then((data) => {
-        if (!cancelled) setFamily(data);
-      })
-      .catch(() => {
-        if (!cancelled) setFamily(null);
-      });
+    const schedule =
+      typeof requestIdleCallback !== "undefined"
+        ? (cb: () => void) => requestIdleCallback(cb)
+        : (cb: () => void) => window.setTimeout(cb, 200);
+    const idleId = schedule(() => {
+      if (cancelled) return;
+      fetchQuestionFamily(questionId)
+        .then((data) => {
+          if (!cancelled) setFamily(data);
+        })
+        .catch(() => {
+          if (!cancelled) setFamily(null);
+        });
+    });
     return () => {
       cancelled = true;
+      if (typeof cancelIdleCallback !== "undefined" && typeof idleId === "number") {
+        cancelIdleCallback(idleId);
+      }
     };
   }, [familyParent]);
 
@@ -389,11 +400,17 @@ export default function PracticeQuestionPage() {
       return sessionRef.current;
     }
 
+    if (bootstrapSession?.id === sessionId) {
+      loadedSessionIdRef.current = sessionId;
+      setSession(bootstrapSession);
+      return bootstrapSession;
+    }
+
     const s = await fetchPracticeSession(sessionId);
     loadedSessionIdRef.current = sessionId;
     setSession(s);
     return s;
-  }, [sessionId, routeMode]);
+  }, [sessionId, routeMode, bootstrapSession]);
 
   const onSessionEngagementUpdate = useCallback((updated: PracticeSessionView) => {
     setSession(updated);
@@ -444,7 +461,12 @@ export default function PracticeQuestionPage() {
       }
       const loaded = questionCacheRef.current.get(qid);
       const anchorId = sessionAnchorQuestionId(loaded ?? null, qid);
-      prefetchNextQuestion(sessionSnapshot.questionTiles, anchorId);
+      const schedulePrefetch = () => prefetchNextQuestion(sessionSnapshot.questionTiles, anchorId);
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(schedulePrefetch);
+      } else {
+        window.setTimeout(schedulePrefetch, 0);
+      }
       const tile = sessionSnapshot.questionTiles?.find((t) => t.questionId === anchorId);
       if (
         routeMode === "practice" &&

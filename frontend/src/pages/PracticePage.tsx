@@ -79,7 +79,7 @@ export default function PracticePage() {
         });
         const qId = session.currentQuestionId;
         if (!qId) throw new Error("Session has no questions");
-        navigate(`/practice/${session.id}/${qId}`);
+        navigate(`/practice/${session.id}/${qId}`, { state: { session } });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not start session");
       } finally {

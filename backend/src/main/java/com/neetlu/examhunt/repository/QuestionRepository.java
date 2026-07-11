@@ -28,6 +28,26 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
     Page<Question> findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
             String packId, String subject, String chapter, Pageable pageable);
 
+    @Query(
+            value = "{ 'packId': ?0 }",
+            fields =
+                    "{ 'questionId': 1, 'difficulty': 1, 'topic': 1, 'subject': 1, 'chapter': 1, 'sourceType': 1, 'variantNo': 1, 'parentQuestionId': 1, 'packId': 1 }")
+    Page<Question> findSessionPoolByPackId(String packId, Pageable pageable);
+
+    @Query(
+            value = "{ 'packId': ?0, 'subject': { $regex: '^?1$', $options: 'i' } }",
+            fields =
+                    "{ 'questionId': 1, 'difficulty': 1, 'topic': 1, 'subject': 1, 'chapter': 1, 'sourceType': 1, 'variantNo': 1, 'parentQuestionId': 1, 'packId': 1 }")
+    Page<Question> findSessionPoolByPackIdAndSubjectIgnoreCase(String packId, String subject, Pageable pageable);
+
+    @Query(
+            value =
+                    "{ 'packId': ?0, 'subject': { $regex: '^?1$', $options: 'i' }, 'chapter': { $regex: '^?2$', $options: 'i' } }",
+            fields =
+                    "{ 'questionId': 1, 'difficulty': 1, 'topic': 1, 'subject': 1, 'chapter': 1, 'sourceType': 1, 'variantNo': 1, 'parentQuestionId': 1, 'packId': 1 }")
+    Page<Question> findSessionPoolByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
+            String packId, String subject, String chapter, Pageable pageable);
+
     long countByPackId(String packId);
 
     long countByPackIdAndSourceType(String packId, String sourceType);

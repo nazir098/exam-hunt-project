@@ -28,6 +28,9 @@ public class PracticeService {
 
     private static final int SESSION_SIZE = 20;
     private static final int DEFAULT_TEST_SIZE = 45;
+    private static final int SESSION_POOL_CAP = 2500;
+    /** Smaller scan when user starts from a specific question (Practice on one card). */
+    private static final int ANCHORED_SESSION_POOL_CAP = 120;
 
     public static final String MODE_PRACTICE = "practice";
     public static final String MODE_TEST = "test";
@@ -604,19 +607,25 @@ public class PracticeService {
     }
 
     private List<Question> loadPool(CreateSessionRequest req) {
-        PageRequest pageable = PageRequest.of(0, 2500, Sort.by("questionNo").and(Sort.by("variantNo")));
+        int cap = hasStartAnchor(req) ? ANCHORED_SESSION_POOL_CAP : SESSION_POOL_CAP;
+        PageRequest pageable = PageRequest.of(0, cap, Sort.by("questionNo").and(Sort.by("variantNo")));
         if (req.subject() != null && !req.subject().isBlank()
                 && req.chapter() != null && !req.chapter().isBlank()) {
             return questions
-                    .findByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
+                    .findSessionPoolByPackIdAndSubjectIgnoreCaseAndChapterIgnoreCase(
                             req.packId(), req.subject(), req.chapter(), pageable)
                     .getContent();
         }
         if (req.subject() != null && !req.subject().isBlank()) {
-            return questions.findByPackIdAndSubjectIgnoreCase(req.packId(), req.subject(), pageable)
+            return questions
+                    .findSessionPoolByPackIdAndSubjectIgnoreCase(req.packId(), req.subject(), pageable)
                     .getContent();
         }
-        return questions.findByPackId(req.packId(), pageable).getContent();
+        return questions.findSessionPoolByPackId(req.packId(), pageable).getContent();
+    }
+
+    private static boolean hasStartAnchor(CreateSessionRequest req) {
+        return req.startQuestionId() != null && !req.startQuestionId().isBlank();
     }
 
     private List<Question> filterPool(List<Question> pool, CreateSessionRequest req) {

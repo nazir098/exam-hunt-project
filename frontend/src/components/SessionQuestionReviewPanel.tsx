@@ -1,20 +1,23 @@
-import { useState } from "react";
-import type { SessionQuestionReview } from "../api";
+import { useEffect, useState } from "react";
+import { fetchPracticeQuestion, type PracticeQuestion, type SessionQuestionReview } from "../api";
 import PracticeStudyAssistant from "./PracticeStudyAssistant";
+import ReviewSolutionSection from "./ReviewSolutionSection";
 
 type Props = {
   review: SessionQuestionReview;
   onClose: () => void;
 };
 
-function imageSrc(url: string, questionId: string) {
-  if (!url) return "";
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${encodeURIComponent(questionId)}`;
-}
-
 export default function SessionQuestionReviewPanel({ review, onClose }: Props) {
   const [showSolution, setShowSolution] = useState(false);
+  const [question, setQuestion] = useState<PracticeQuestion | null>(null);
+
+  useEffect(() => {
+    setShowSolution(false);
+    fetchPracticeQuestion(review.questionId)
+      .then(setQuestion)
+      .catch(() => setQuestion(null));
+  }, [review.questionId]);
   const statusLabel =
     review.status === "correct"
       ? "Correct"
@@ -60,23 +63,13 @@ export default function SessionQuestionReviewPanel({ review, onClose }: Props) {
           </dl>
         )}
 
-        {review.hasSolution && review.solutionImageUrl && (
-          <div className="session-review-panel__solution">
-            <button
-              type="button"
-              className="practice-run-solution__toggle"
-              onClick={() => setShowSolution((v) => !v)}
-            >
-              {showSolution ? "Hide explanation" : "View explanation"}
-            </button>
-            {showSolution && (
-              <img
-                src={imageSrc(review.solutionImageUrl, review.questionId)}
-                alt="Solution"
-                draggable={false}
-              />
-            )}
-          </div>
+        {question && (
+          <ReviewSolutionSection
+            question={question}
+            hasSolution={review.hasSolution}
+            showSolution={showSolution}
+            onToggle={() => setShowSolution((v) => !v)}
+          />
         )}
 
         {(review.status === "wrong" || review.status === "correct") && (

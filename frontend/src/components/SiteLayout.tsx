@@ -3,10 +3,9 @@ import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
   createPracticeSession,
-  fetchAllPackQuestions,
   fetchPacks,
 } from "../api";
-import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
+import { browsePathFromPack } from "../utils/practice";
 import { clampPracticeQuestionCount } from "../utils/practiceHub";
 import DesktopSiteFooter from "./DesktopSiteFooter";
 import DesktopSiteHeader from "./DesktopSiteHeader";
@@ -46,19 +45,6 @@ export default function SiteLayout() {
         navigate("/practice?exam=NEET");
         return;
       }
-      const res = await fetchAllPackQuestions(packId, {
-        subject: searchParams.get("subject") || undefined,
-        chapter: searchParams.get("chapter") || undefined,
-      });
-      const filtered = filterQuestionsForPractice(res.content, {
-        topic: searchParams.get("topic") || undefined,
-        difficulty: searchParams.get("difficulty") || undefined,
-        q: searchParams.get("q") || undefined,
-      });
-      if (filtered.length === 0) {
-        navigate(browsePathFromPack(packId, searchParams.toString()));
-        return;
-      }
       const rawCount = searchParams.get("count");
       const questionCount = rawCount
         ? clampPracticeQuestionCount(Number(rawCount))
@@ -77,9 +63,18 @@ export default function SiteLayout() {
       });
       const qId = startQuestionId || session.currentQuestionId;
       if (!qId) throw new Error("No questions");
-      navigate(`/practice/${session.id}/${qId}`);
+      navigate(`/practice/${session.id}/${qId}`, { state: { session } });
     } catch {
-      navigate(isPracticeHub ? `/practice?${searchParams.toString()}#question-bank` : "/practice?exam=NEET");
+      const packMatch = pathname.match(/^\/pack\/([^/]+)/);
+      const packId =
+        packIdOverride || packMatch?.[1] || searchParams.get("packId") || "";
+      navigate(
+        packId
+          ? browsePathFromPack(packId, searchParams.toString())
+          : isPracticeHub
+            ? `/practice?${searchParams.toString()}#question-bank`
+            : "/practice?exam=NEET"
+      );
     } finally {
       setPracticeBusy(false);
     }
