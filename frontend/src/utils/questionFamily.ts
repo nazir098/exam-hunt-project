@@ -24,6 +24,16 @@ export function isSamePaperQuestion(
   );
 }
 
+/** PYQ ↔ PYQ navigation within the same pack (not variant switches on one paper). */
+export function isPackSiblingNavigation(
+  nextQuestionId: string,
+  current: { questionId: string; parentQuestionId?: string | null; packId?: string | null } | null | undefined
+): boolean {
+  if (!current?.packId?.trim()) return false;
+  if (isSamePaperQuestion(nextQuestionId, current)) return false;
+  return familyParentId(nextQuestionId) !== familyParentId(current.questionId, current.parentQuestionId);
+}
+
 export function variantSwitchLoaderForTarget(
   targetQuestionId: string,
   family?: QuestionFamily | null

@@ -31,3 +31,23 @@ export function browsePathFromPack(packId: string, search: string): string {
   const qs = search ? (search.startsWith("?") ? search : `?${search}`) : "";
   return `/pack/${packId}${qs}`;
 }
+
+/** Client-side filters applied after fetching the pack list (topic, difficulty, text search). */
+export function hasActiveBankClientFilters(params: {
+  get: (key: string) => string | null;
+}): boolean {
+  return Boolean(
+    params.get("topic")?.trim() ||
+      params.get("difficulty")?.trim() ||
+      params.get("q")?.trim()
+  );
+}
+
+export function bankApiFilters(params: { get: (key: string) => string | null }) {
+  const subject = params.get("subject")?.trim();
+  const chapter = params.get("chapter")?.trim();
+  return {
+    subject: subject || undefined,
+    chapter: chapter || undefined,
+  };
+}

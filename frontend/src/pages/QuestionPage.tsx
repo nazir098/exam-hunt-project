@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchAllPackQuestions, fetchPack, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, fetchSeoQuestionMeta, QuestionDetail, QuestionFamily, QuestionPublic, SeoQuestionMeta } from "../api";
+import { fetchAllPackQuestions, fetchPack, fetchPackSiblingByQuestionNo, fetchQuestion, fetchQuestionFamily, fetchQuestionFresh, fetchSeoQuestionMeta, QuestionDetail, QuestionFamily, QuestionPublic, SeoQuestionMeta } from "../api";
 import { difficultyLabel, examDisplayName, marksLabel, questionHeadingTitle } from "../utils/labels";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
@@ -12,11 +12,11 @@ import AppLoader from "../components/AppLoader";
 import ZoomableImage from "../components/ZoomableImage";
 import ProductModeBanner from "../components/ProductModeBanner";
 import { applySeoConfig } from "../components/Seo";
-import { browsePathFromPack, filterQuestionsForPractice } from "../utils/practice";
+import { browsePathFromPack, bankApiFilters, filterQuestionsForPractice, hasActiveBankClientFilters } from "../utils/practice";
 import { hasDistinctSolution } from "../utils/questionSolution";
 import OfficialSolutionBody from "../components/OfficialSolutionBody";
 import AdminSolutionEditLink from "../components/AdminSolutionEditLink";
-import { familyParentId, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { familyParentId, isPackSiblingNavigation, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
 import {
   beginVariantSwitch,
   clearVariantSwitchGate,
@@ -79,16 +79,17 @@ export default function QuestionPage() {
     if (!questionId) return;
 
     const samePaper = isSamePaperQuestion(questionId, q);
+    const packSibling = isPackSiblingNavigation(questionId, q);
     const cached = questionCacheRef.current.get(questionId);
     const cacheStale =
       cached?.sourceType === "ai_variant" &&
       (!cached.options?.length || !cached.questionFormat);
-    if (samePaper && cached && !cacheStale) {
+    if ((samePaper || packSibling) && cached && !cacheStale) {
       setQ(cached);
       resolveContentLoadingEnd(variantSwitchGateRef, questionId, setContentLoading);
       return;
     }
-    if (!samePaper) {
+    if (!samePaper && !packSibling) {
       setQ(null);
       setContentLoading(false);
     } else if (variantSwitchGateRef.current?.targetId !== questionId) {
@@ -309,6 +310,8 @@ export default function QuestionPage() {
       if (id === questionId) return;
       if (isSamePaperQuestion(id, q)) {
         beginVariantSwitch(variantSwitchGateRef, id, setContentLoading);
+      } else if (isPackSiblingNavigation(id, q)) {
+        setContentLoading(true);
       }
       navigate(`/solve/${id}?${new URLSearchParams(searchParams).toString()}`);
       void fetchQuestion(id).then((data) => questionCacheRef.current.set(id, data));
@@ -316,6 +319,70 @@ export default function QuestionPage() {
     [navigate, searchParams, questionId, q]
   );
 
+  const anchorQuestionNo = useCallback((): number => {
+    if (!q) return 0;
+    const anchorId = familyParentId(questionId, q.parentQuestionId);
+    if (family?.pyq.questionId === anchorId) return family.pyq.questionNo;
+    if (q.parentQuestionId?.trim()) {
+      const fromList = siblings?.find((item) => item.questionId === anchorId);
+      if (fromList && fromList.questionNo > 0) return fromList.questionNo;
+    }
+    return q.questionNo;
+  }, [q, questionId, family, siblings]);
+
+  const resolveSiblingTarget = useCallback(
+    async (direction: "prev" | "next"): Promise<string | null> => {
+      if (!q?.packId) return null;
+      const anchorId = familyParentId(questionId, q.parentQuestionId);
+      const questionNo = anchorQuestionNo();
+
+      if (questionNo > 0 && !hasActiveBankClientFilters(searchParams)) {
+        const byNo = await fetchPackSiblingByQuestionNo(
+          q.packId,
+          questionNo,
+          direction,
+          bankApiFilters(searchParams)
+        );
+        if (byNo) return byNo;
+        if (direction === "next" && packQuestionCount > 0 && questionNo >= packQuestionCount) {
+          return null;
+        }
+      }
+
+      const list = await loadSiblings();
+      const idx = list.findIndex((p) => p.questionId === anchorId);
+      if (idx >= 0) {
+        const target = direction === "prev" ? list[idx - 1] : list[idx + 1];
+        return target?.questionId ?? null;
+      }
+
+      if (questionNo > 0) {
+        return fetchPackSiblingByQuestionNo(
+          q.packId,
+          questionNo,
+          direction,
+          bankApiFilters(searchParams)
+        );
+      }
+      return null;
+    },
+    [q, questionId, anchorQuestionNo, searchParams, packQuestionCount, loadSiblings]
+  );
+
+  const goToSibling = useCallback(
+    async (direction: "prev" | "next") => {
+      setError("");
+      const targetId = await resolveSiblingTarget(direction);
+      if (targetId) {
+        goToQuestion(targetId);
+        return;
+      }
+      if (hasActiveBankClientFilters(searchParams)) {
+        setError("No more questions in this filtered set.");
+      }
+    },
+    [resolveSiblingTarget, goToQuestion, searchParams]
+  );
   const nav = useMemo(() => {
     if (!siblings) {
       return { idx: -1, prev: null, next: null, total: 0, loaded: false };
@@ -357,17 +424,18 @@ export default function QuestionPage() {
     return String(current);
   }, [bankSiblingNav, nav, packQuestionCount, q, questionId, siblings, siblingsLoading]);
 
-  const goToSibling = useCallback(
-    async (direction: "prev" | "next") => {
-      const list = await loadSiblings();
-      const anchorId = familyParentId(questionId, q?.parentQuestionId);
-      const idx = list.findIndex((p) => p.questionId === anchorId);
-      if (idx < 0) return;
-      const target = direction === "prev" ? list[idx - 1] : list[idx + 1];
-      if (target) goToQuestion(target.questionId);
-    },
-    [loadSiblings, questionId, q?.parentQuestionId, goToQuestion]
-  );
+  const packSiblingSwitchPending =
+    Boolean(q) && isPackSiblingNavigation(questionId, q) && (contentLoading || q!.questionId !== questionId);
+
+  const optimisticNav = useMemo(() => {
+    const no = anchorQuestionNo();
+    const total = packQuestionCount;
+    if (no <= 0) return { canPrev: false, canNext: false };
+    return {
+      canPrev: no > 1,
+      canNext: total > 0 ? no < total : true,
+    };
+  }, [anchorQuestionNo, packQuestionCount]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -379,9 +447,9 @@ export default function QuestionPage() {
   }, [goToSibling]);
 
   useEffect(() => {
-    if (!q?.packId) return;
+    if (!q?.packId || !hasActiveBankClientFilters(searchParams)) return;
     void loadSiblings();
-  }, [q?.packId, returnQs, loadSiblings]);
+  }, [q?.packId, returnQs, loadSiblings, searchParams]);
 
   function backHref() {
     if (q) return browsePathFromPack(q.packId, returnQs);
@@ -408,9 +476,15 @@ export default function QuestionPage() {
     return variantSwitchLoaderForTarget(questionId, family);
   }, [contentLoading, questionId, family]);
 
-  const questionPending = Boolean(q && contentLoading && q.questionId !== questionId);
+  const questionPending = Boolean(
+    q &&
+      (packSiblingSwitchPending || (contentLoading && q.questionId !== questionId))
+  );
 
-  const showLastInSetHint = bankSiblingNav && nav.loaded && !nav.next && nav.idx >= 0;
+  const showLastInSetHint =
+    bankSiblingNav &&
+    ((nav.loaded && !nav.next && nav.idx >= 0) ||
+      (!nav.loaded && !optimisticNav.canNext && packQuestionCount > 0));
 
   function renderFooterNav(extraClass: string, variantChrome: boolean) {
     return (
@@ -427,7 +501,11 @@ export default function QuestionPage() {
           <button
             type="button"
             className="practice-run-nav-btn solve-page__nav-btn"
-            disabled={!bankSiblingNav || siblingsLoading || (nav.loaded && !nav.prev)}
+            disabled={
+              !bankSiblingNav ||
+              siblingsLoading ||
+              (nav.loaded ? !nav.prev : !optimisticNav.canPrev)
+            }
             onClick={() => void goToSibling("prev")}
           >
             <span className="material-symbols-outlined">arrow_back</span>
@@ -447,7 +525,11 @@ export default function QuestionPage() {
             className={`practice-run-nav-btn solve-page__nav-btn${
               variantChrome ? " solve-page__nav-btn--next" : ""
             }`}
-            disabled={!bankSiblingNav || siblingsLoading || (nav.loaded && !nav.next)}
+            disabled={
+              !bankSiblingNav ||
+              siblingsLoading ||
+              (nav.loaded ? !nav.next : !optimisticNav.canNext)
+            }
             onClick={() => void goToSibling("next")}
           >
             <span className="solve-page__nav-label">Next</span>

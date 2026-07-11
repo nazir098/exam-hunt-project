@@ -588,6 +588,25 @@ export async function fetchAllPackQuestions(
   return { content: all, totalElements };
 }
 
+/** Resolve adjacent PYQ in a pack by question number (one lightweight API call). */
+export async function fetchPackSiblingByQuestionNo(
+  packId: string,
+  currentQuestionNo: number,
+  direction: "prev" | "next",
+  params: { subject?: string; chapter?: string } = {}
+): Promise<string | null> {
+  const targetNo = direction === "next" ? currentQuestionNo + 1 : currentQuestionNo - 1;
+  if (targetNo < 1) return null;
+  const res = await fetchQuestions(packId, {
+    ...params,
+    questionNo: targetNo,
+    page: 0,
+    size: 5,
+  });
+  const exact = res.content.find((item) => item.questionNo === targetNo);
+  return exact?.questionId ?? null;
+}
+
 export function fetchQuestion(questionId: string) {
   const path = `/api/questions/${encodeURIComponent(questionId)}`;
   const cacheKey = `${path}:${getToken() ? "auth" : "anon"}`;
