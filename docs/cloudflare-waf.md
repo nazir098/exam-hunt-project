@@ -86,25 +86,68 @@ Undo: `sudo bash deploy/cloudflare/lockdown-host-to-cloudflare.sh --remove`
 
 Keep **SSH (22)** open from your IP in the security group. Port **8081** must stay **not** public (Docker bind to 127.0.0.1 only).
 
-### C. AWS security group (optional extra layer)
+### D. Authenticated Origin Pulls (optional, strongest origin lock)
 
-Replace `0.0.0.0/0` on ports 80/443 with [Cloudflare IP ranges](https://www.cloudflare.com/ips/). Same idea as (B), managed in AWS console.
+Use when **Global** AOP is enabled in Cloudflare but you have not finished nginx yet.
+
+**Cloudflare:** **SSL/TLS → Origin Server → Authenticated Origin Pulls → Global → On**
+
+**EC2:**
+
+```bash
+sudo curl -fsSL -o /etc/nginx/cloudflare-origin-pull-ca.pem \
+  https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem
+
+# Add inside the 443 server block for api.techmuzzle.in:
+#   ssl_client_certificate /etc/nginx/cloudflare-origin-pull-ca.pem;
+#   ssl_verify_client on;
+
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Only enable `ssl_verify_client on` **after** Global AOP is On in Cloudflare. Otherwise Cloudflare cannot connect and the API goes down.
 
 ---
 
 ## 3. Bot management
 
-**Security → Bots**
+### Free plan: turn Bot Fight Mode **Off** (cannot skip per hostname)
 
-| Setting | Recommendation |
-|---------|----------------|
-| **Bot Fight Mode** | **On** (Free plan) |
-| **Super Bot Fight Mode** | On if you have Pro/Business |
-| **Definitely automated** on `/api/questions*` | Challenge or Block (Pro: Bot Management rules) |
+On **Free**, **Bot Fight Mode does not appear** under WAF Skip components and **cannot be bypassed** with custom Skip rules. It runs outside the WAF ruleset engine. Checking **All Super Bot Fight Mode Rules** only helps on **Pro+** with Super Bot Fight — not regular Bot Fight Mode.
 
-**Security → Settings**
+**Security → Bots → Bot Fight Mode → Off**
 
-- **Security Level:** Medium for the zone, or **High** only on `api.techmuzzle.in` via Configuration Rule.
+Without this, `https://api.techmuzzle.in` returns **403** with `cf-mitigated: challenge` for normal `fetch()` / XHR from the SPA.
+
+Scraping protection stays covered by your **rate limit** on `/api/questions*` (section 4) and backend `RateLimitFilter`.
+
+### WAF skip rule for API (still useful)
+
+**Security → WAF → Custom rules → Create rule**
+
+| Field | Value |
+|-------|--------|
+| **Rule name** | `Skip hard checks on API` |
+| **Expression** | `(http.host eq "api.techmuzzle.in")` |
+| **Action** | **Skip** |
+
+Under **More components to skip**, enable:
+
+- **Browser Integrity Check** (often blocks API clients)
+- **Security Level** (optional — avoids extra challenges on API)
+
+Do **not** skip: rate limiting rules, managed rules, or remaining custom rules.
+
+Verify after Bot Fight is Off + rule deployed:
+
+```bash
+curl -sI https://api.techmuzzle.in/actuator/health | grep -E 'HTTP/|cf-mitigated'
+# Expect HTTP/2 200 and NO cf-mitigated: challenge
+```
+
+### Pro+ alternative
+
+Upgrade to **Super Bot Fight Mode**, disable plain Bot Fight, then use a Skip rule with **All Super Bot Fight Mode Rules** for `api.techmuzzle.in` only.
 
 **Security → WAF → Managed rules**
 
@@ -287,7 +330,7 @@ done
 | Rate limiting rules | 1 (basic) | 2+ (more on higher tiers) |
 | OWASP managed rules | Limited | Full |
 
-On **Free**, prioritize: **proxy API**, **Bot Fight Mode**, **one rate limit** on `/api/questions`, **Nginx CF IP allowlist**.
+On **Free**, prioritize: **proxy API**, **skip Bot Fight on `api`**, **one rate limit** on `/api/questions`, **host firewall lockdown** (not nginx allow/deny).
 
 ---
 
