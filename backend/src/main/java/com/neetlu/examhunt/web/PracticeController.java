@@ -137,17 +137,28 @@ public class PracticeController {
     public QuestionPracticeView practiceQuestion(
             @AuthenticationPrincipal String userId, @PathVariable String questionId) {
         Question q = practiceService.requireQuestion(questionId);
-        return QuestionPracticeView.from(q);
+        // Solutions are omitted until /solution or post-answer variant-check — avoid network spoiling.
+        return QuestionPracticeView.from(q, false);
     }
 
-    /** Official solution image — revealed after hint ladder in study assistant. */
+    /** Official solution — revealed after submit / study-assistant ladder / review. */
     @GetMapping("/questions/{questionId}/solution")
     public SolutionRevealView practiceSolution(
             @AuthenticationPrincipal String userId, @PathVariable String questionId) {
         Question q = practiceService.requireQuestion(questionId);
-        String imageUrl = q.isHasSolution() ? nullToEmpty(q.getSolutionImageUrl()) : "";
-        String textPreview = q.isHasSolution() ? nullToEmpty(q.getSolutionTextPreview()) : "";
-        return new SolutionRevealView(q.isHasSolution(), imageUrl, textPreview);
+        boolean hasSolution = q.isHasSolution()
+                || (q.getSolutionTextPreview() != null && !q.getSolutionTextPreview().isBlank())
+                || (q.getSolutionImageUrl() != null && !q.getSolutionImageUrl().isBlank())
+                || (q.getSolutionDiagramSvg() != null && !q.getSolutionDiagramSvg().isBlank());
+        if (!hasSolution) {
+            return new SolutionRevealView(false, "", "", "", java.util.List.of());
+        }
+        return new SolutionRevealView(
+                true,
+                nullToEmpty(q.getSolutionImageUrl()),
+                nullToEmpty(q.getSolutionTextPreview()),
+                QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()),
+                QuestionVariantMapper.mapSolutionAssetPlacementsForPractice(q));
     }
 
     private static String nullToEmpty(String s) {
@@ -232,7 +243,12 @@ public class PracticeController {
             java.util.List<AssetPlacementView> assetPlacements,
             java.util.List<AssetPlacementView> solutionAssetPlacements,
             boolean contentTextNormalized) {
-        static QuestionPracticeView from(Question q) {
+        static QuestionPracticeView from(Question q, boolean includeSolution) {
+            boolean hasSolution =
+                    q.isHasSolution()
+                            || (q.getSolutionTextPreview() != null && !q.getSolutionTextPreview().isBlank())
+                            || (q.getSolutionImageUrl() != null && !q.getSolutionImageUrl().isBlank())
+                            || (q.getSolutionDiagramSvg() != null && !q.getSolutionDiagramSvg().isBlank());
             return new QuestionPracticeView(
                     q.getQuestionId(),
                     q.getPackId(),
@@ -243,12 +259,12 @@ public class PracticeController {
                     q.getChapter(),
                     q.getTopic(),
                     q.getDifficulty(),
-                    q.isHasSolution(),
+                    hasSolution,
                     FormulaEligibility.questionNeedsFormula(q),
                     q.getQuestionImageUrl(),
                     q.getQuestionTextPreview(),
-                    q.getSolutionTextPreview(),
-                    QuestionVariantMapper.nullToEmpty(q.getSolutionImageUrl()),
+                    includeSolution ? nullToEmpty(q.getSolutionTextPreview()) : "",
+                    includeSolution ? QuestionVariantMapper.nullToEmpty(q.getSolutionImageUrl()) : "",
                     mapOptions(q),
                     q.getSourceType() != null ? q.getSourceType() : "pyq",
                     q.getParentQuestionId(),
@@ -262,10 +278,12 @@ public class PracticeController {
                     QuestionVariantMapper.mapMatchListBForPractice(q),
                     q.isHasDiagram(),
                     QuestionVariantMapper.nullToEmpty(q.getQuestionDiagramSvg()),
-                    QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()),
+                    includeSolution ? QuestionVariantMapper.nullToEmpty(q.getSolutionDiagramSvg()) : "",
                     QuestionVariantMapper.normalizeRenderMode(q.getRenderMode()),
                     QuestionVariantMapper.mapAssetPlacementsForPractice(q),
-                    QuestionVariantMapper.mapSolutionAssetPlacementsForPractice(q),
+                    includeSolution
+                            ? QuestionVariantMapper.mapSolutionAssetPlacementsForPractice(q)
+                            : java.util.List.of(),
                     q.isContentTextNormalized());
         }
 
@@ -280,5 +298,9 @@ public class PracticeController {
     }
 
     public record SolutionRevealView(
-            boolean hasSolution, String solutionImageUrl, String solutionTextPreview) {}
+            boolean hasSolution,
+            String solutionImageUrl,
+            String solutionTextPreview,
+            String solutionDiagramSvg,
+            java.util.List<AssetPlacementView> solutionAssetPlacements) {}
 }

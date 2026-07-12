@@ -941,14 +941,20 @@ public class PracticeService {
             } else {
                 status = "unattempted";
             }
+            boolean hasSolution =
+                    q.isHasSolution()
+                            || (q.getSolutionTextPreview() != null && !q.getSolutionTextPreview().isBlank())
+                            || (q.getSolutionImageUrl() != null && !q.getSolutionImageUrl().isBlank())
+                            || (q.getSolutionDiagramSvg() != null && !q.getSolutionDiagramSvg().isBlank());
+            // Keep hasSolution for UI; omit image URL so results JSON does not spoil via network tab.
             reviews.add(new SessionQuestionReview(
                     i + 1,
                     qid,
                     status,
                     selected,
                     correctAns,
-                    q.isHasSolution(),
-                    q.getSolutionImageUrl(),
+                    hasSolution,
+                    "",
                     q.getSubject(),
                     q.getChapter(),
                     q.getQuestionNo(),

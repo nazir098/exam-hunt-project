@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  fetchPracticeQuestion,
+  fetchPracticeQuestionFresh,
   fetchSessionResult,
   PracticeQuestion,
   SessionQuestionReview,
@@ -37,6 +37,9 @@ function variantMcqProps(q: PracticeQuestion) {
     questionImageUrl: hybridDiagramUrl(q),
     questionDiagramSvg: q.questionDiagramSvg,
     assetPlacements: q.assetPlacements,
+    renderMode: q.renderMode,
+    contentTextNormalized: q.contentTextNormalized,
+    sourceType: q.sourceType,
     ...textMcqDisplayProps(q),
   };
 }
@@ -90,7 +93,7 @@ export default function PracticeReviewPage() {
       return;
     }
     setShowSolution(false);
-    fetchPracticeQuestion(activeReview.questionId)
+    fetchPracticeQuestionFresh(activeReview.questionId)
       .then(setQuestion)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load question"));
   }, [activeReview?.questionId]);

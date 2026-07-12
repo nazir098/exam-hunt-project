@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  fetchPracticeQuestion,
+  fetchPracticeQuestionFresh,
   fetchSessionResult,
   PracticeQuestion,
   SessionQuestionReview,
@@ -14,8 +14,16 @@ import ReviewSolutionSection from "../components/ReviewSolutionSection";
 import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestResultRetakeActions from "../components/TestResultRetakeActions";
 import TestReviewAnswerCompare from "../components/TestReviewAnswerCompare";
+import TextMcqQuestion from "../components/TextMcqQuestion";
+import ZoomableImage from "../components/ZoomableImage";
 import { sessionResultRoute, testReviewRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
+import {
+  cacheBustImageUrl,
+  hybridDiagramUrl,
+  isImageQuestion,
+  textMcqDisplayProps,
+} from "../utils/questionRender";
 import {
   filterReviews,
   filterTiles,
@@ -26,14 +34,24 @@ import {
   type TestReviewFilter,
 } from "../utils/testReview";
 
-function imageSrc(url: string, questionId?: string) {
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
-  if (questionId) {
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}v=${encodeURIComponent(questionId)}`;
-  }
-  return url;
+function variantMcqProps(q: PracticeQuestion) {
+  return {
+    questionFormat: q.questionFormat,
+    variantType: q.variantType,
+    assertion: q.assertion,
+    reason: q.reason,
+    statements: q.statements,
+    matchListA: q.matchListA,
+    matchListB: q.matchListB,
+    questionId: q.questionId,
+    questionImageUrl: hybridDiagramUrl(q),
+    questionDiagramSvg: q.questionDiagramSvg,
+    assetPlacements: q.assetPlacements,
+    renderMode: q.renderMode,
+    contentTextNormalized: q.contentTextNormalized,
+    sourceType: q.sourceType,
+    ...textMcqDisplayProps(q),
+  };
 }
 
 function statusLabel(status: string): string {
@@ -89,7 +107,7 @@ export default function TestReviewPage() {
       return;
     }
     setShowSolution(false);
-    fetchPracticeQuestion(activeReview.questionId)
+    fetchPracticeQuestionFresh(activeReview.questionId)
       .then(setQuestion)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load question"));
   }, [activeReview?.questionId]);
@@ -167,6 +185,8 @@ export default function TestReviewPage() {
 
   const filterMeta = TEST_REVIEW_FILTERS.find((f) => f.id === filter)!;
   const retakeFilter = reviewFilterToRetakeFilter(filter);
+  const answerRevealed =
+    activeReview?.status === "correct" || activeReview?.status === "wrong";
 
   return (
     <main className="test-review-page pt-4 lg:pt-6">
@@ -251,14 +271,26 @@ export default function TestReviewPage() {
                     </header>
 
                     <div className="test-review-question__media">
-                      {question.questionImageUrl ? (
-                        <img
-                          src={imageSrc(question.questionImageUrl, question.questionId)}
+                      {isImageQuestion(question) ? (
+                        <ZoomableImage
+                          src={cacheBustImageUrl(question.questionImageUrl, question.questionId)}
                           alt={`Question ${activeReview.questionNo}`}
-                          draggable={false}
                         />
                       ) : (
-                        <p className="muted">{question.questionTextPreview || "No image"}</p>
+                        <TextMcqQuestion
+                          questionText={question.questionTextPreview || "No question text"}
+                          options={question.options ?? []}
+                          selected={activeReview.selectedAnswer}
+                          disabled
+                          correctAnswer={activeReview.correctAnswer}
+                          showCorrect={answerRevealed}
+                          showWrong={
+                            answerRevealed &&
+                            !!activeReview.selectedAnswer &&
+                            activeReview.selectedAnswer !== activeReview.correctAnswer
+                          }
+                          {...variantMcqProps(question)}
+                        />
                       )}
                     </div>
 

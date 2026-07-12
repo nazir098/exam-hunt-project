@@ -4,6 +4,7 @@ import {
   checkVariantPracticeAnswer,
   fetchPracticeQuestion,
   fetchPracticeSession,
+  fetchPracticeSolution,
   fetchQuestionFamily,
   finishPracticeSession,
   PracticeQuestion,
@@ -42,7 +43,6 @@ import {
   resolveContentLoadingEnd,
   type VariantSwitchGate,
 } from "../utils/variantSwitchTiming";
-import { hasDistinctSolution } from "../utils/questionSolution";
 import OfficialSolutionBody from "../components/OfficialSolutionBody";
 import AdminSolutionEditLink from "../components/AdminSolutionEditLink";
 import {
@@ -234,6 +234,12 @@ export default function PracticeQuestionPage() {
   const [loadTick, setLoadTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+  const [revealedSolution, setRevealedSolution] = useState<{
+    solutionTextPreview: string;
+    solutionImageUrl: string;
+    solutionDiagramSvg: string;
+    solutionAssetPlacements?: PracticeQuestion["solutionAssetPlacements"];
+  } | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [aiTrigger, setAiTrigger] = useState<PracticeAiFeature | null>(null);
   const [variantCheck, setVariantCheck] = useState<VariantCheckResult | null>(null);
@@ -293,11 +299,59 @@ export default function PracticeQuestionPage() {
   useEffect(() => () => clearVariantSwitchGate(variantSwitchGateRef), []);
 
   useEffect(() => {
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      // After content sync / tab idle, drop in-memory questions so next load re-enriches from API/R2.
+      if (hiddenAt > 0 && Date.now() - hiddenAt > 30_000) {
+        questionCacheRef.current.clear();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  useEffect(() => {
     setResult(null);
     setVariantCheck(null);
     setShowSolution(false);
+    setRevealedSolution(null);
     setSelected("");
   }, [questionId]);
+
+  useEffect(() => {
+    if (!showSolution || !q?.hasSolution) return;
+    if (variantCheck?.solutionTextPreview?.trim() || variantCheck?.solutionImageUrl?.trim()) return;
+    if (revealedSolution) return;
+    if (
+      q.solutionTextPreview?.trim() ||
+      q.solutionImageUrl?.trim() ||
+      q.solutionDiagramSvg?.trim()
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    fetchPracticeSolution(q.questionId)
+      .then((res) => {
+        if (cancelled || !res.hasSolution) return;
+        setRevealedSolution({
+          solutionTextPreview: res.solutionTextPreview ?? "",
+          solutionImageUrl: res.solutionImageUrl ?? "",
+          solutionDiagramSvg: res.solutionDiagramSvg ?? "",
+          solutionAssetPlacements: res.solutionAssetPlacements,
+        });
+      })
+      .catch(() => {
+        /* panel shows empty-state via OfficialSolutionBody */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showSolution, q, variantCheck, revealedSolution]);
 
   const resultPath = useCallback(
     (sid: string) => (routeMode === "test" ? `/test/result/${sid}` : `/practice/result/${sid}`),
@@ -336,6 +390,7 @@ export default function PracticeQuestionPage() {
         if (opts?.prefetch) return cached;
         setSelected("");
         setShowSolution(false);
+        setRevealedSolution(null);
         setResult(null);
         setVariantCheck(null);
         setQ(cached);
@@ -349,6 +404,7 @@ export default function PracticeQuestionPage() {
         }
         setSelected("");
         setShowSolution(false);
+        setRevealedSolution(null);
         setResult(null);
         setVariantCheck(null);
       }
@@ -358,6 +414,7 @@ export default function PracticeQuestionPage() {
         if (!opts?.prefetch) {
           setSelected("");
           setShowSolution(false);
+          setRevealedSolution(null);
           setResult(null);
           setVariantCheck(null);
           setQ(question);
@@ -395,6 +452,7 @@ export default function PracticeQuestionPage() {
     setResult(null);
     setSelected("");
     setShowSolution(false);
+    setRevealedSolution(null);
 
     if (routeMode === "test" && loadedSessionIdRef.current === sessionId && sessionRef.current) {
       return sessionRef.current;
@@ -945,12 +1003,7 @@ export default function PracticeQuestionPage() {
   const hasSolution = variantChecked
     ? variantCheck?.hasSolution ?? q.hasSolution
     : practiceAnswerReview?.hasSolution ?? q.hasSolution;
-  const solutionUrl = variantChecked
-    ? variantCheck?.solutionImageUrl
-    : practiceAnswerReview?.solutionImageUrl || result?.solutionImageUrl;
-  const distinctSolution = q
-    ? hasDistinctSolution(q) || Boolean(solutionUrl?.trim())
-    : false;
+  const distinctSolution = Boolean(hasSolution);
 
   const assistantProps = {
     questionId,
@@ -975,7 +1028,7 @@ export default function PracticeQuestionPage() {
     examLocked: isTestActive,
     directSolutionReveal: variantChecked && hasSolution,
     prefetchedSolutionImage: variantCheck?.solutionImageUrl ?? "",
-    prefetchedSolutionText: variantCheck?.solutionTextPreview ?? q.solutionTextPreview ?? "",
+    prefetchedSolutionText: variantCheck?.solutionTextPreview ?? "",
     contentTextNormalized: q.contentTextNormalized,
     renderMode: q.renderMode,
   };
@@ -1248,7 +1301,20 @@ export default function PracticeQuestionPage() {
   function renderPracticeSolutionPanel() {
     if (!q || !showSolution || !hasSolution) return null;
     const solutionText =
-      variantCheck?.solutionTextPreview?.trim() || q.solutionTextPreview?.trim() || "";
+      variantCheck?.solutionTextPreview?.trim() ||
+      revealedSolution?.solutionTextPreview?.trim() ||
+      q.solutionTextPreview?.trim() ||
+      "";
+    const solutionImageUrl =
+      variantCheck?.solutionImageUrl?.trim() ||
+      revealedSolution?.solutionImageUrl?.trim() ||
+      q.solutionImageUrl?.trim() ||
+      result?.solutionImageUrl?.trim() ||
+      "";
+    const solutionDiagramSvg =
+      revealedSolution?.solutionDiagramSvg?.trim() || q.solutionDiagramSvg?.trim() || "";
+    const solutionAssetPlacements =
+      revealedSolution?.solutionAssetPlacements ?? q.solutionAssetPlacements;
     return (
       <section className="solve-page__solution glass-card" aria-label="Official solution">
         <div className="solve-page__solution-head">
@@ -1260,10 +1326,10 @@ export default function PracticeQuestionPage() {
           questionId={q.questionId}
           questionNo={q.questionNo}
           assetPlacements={q.assetPlacements}
-          solutionAssetPlacements={q.solutionAssetPlacements}
+          solutionAssetPlacements={solutionAssetPlacements}
           solutionTextPreview={solutionText}
-          solutionImageUrl={q.solutionImageUrl}
-          solutionDiagramSvg={q.solutionDiagramSvg}
+          solutionImageUrl={solutionImageUrl}
+          solutionDiagramSvg={solutionDiagramSvg}
           contentTextNormalized={q.contentTextNormalized}
           renderMode={q.renderMode}
           sourceType={q.sourceType}

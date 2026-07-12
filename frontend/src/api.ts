@@ -998,11 +998,20 @@ export function fetchPracticeQuestion(questionId: string) {
   return getJsonCached<PracticeQuestion>(path, path);
 }
 
+/** Bypass short-lived GET cache — use on review / after content sync so R2 enrich can refresh Mongo. */
+export function fetchPracticeQuestionFresh(questionId: string) {
+  const path = `/api/practice/questions/${encodeURIComponent(questionId)}`;
+  shortLivedGetCache.delete(path);
+  return getJson<PracticeQuestion>(path);
+}
+
 export function fetchPracticeSolution(questionId: string) {
   return request<{
     hasSolution: boolean;
     solutionImageUrl: string;
     solutionTextPreview: string;
+    solutionDiagramSvg?: string;
+    solutionAssetPlacements?: AssetPlacementView[];
   }>(`/api/practice/questions/${encodeURIComponent(questionId)}/solution`);
 }
 

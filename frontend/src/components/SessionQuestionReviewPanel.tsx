@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchPracticeQuestion, type PracticeQuestion, type SessionQuestionReview } from "../api";
+import { fetchPracticeQuestionFresh, type PracticeQuestion, type SessionQuestionReview } from "../api";
 import PracticeStudyAssistant from "./PracticeStudyAssistant";
 import ReviewSolutionSection from "./ReviewSolutionSection";
 
@@ -14,7 +14,7 @@ export default function SessionQuestionReviewPanel({ review, onClose }: Props) {
 
   useEffect(() => {
     setShowSolution(false);
-    fetchPracticeQuestion(review.questionId)
+    fetchPracticeQuestionFresh(review.questionId)
       .then(setQuestion)
       .catch(() => setQuestion(null));
   }, [review.questionId]);
