@@ -32,7 +32,10 @@ export default function VariantDiagram({
   const handleError = useCallback(() => {
     if (fallback && src !== fallback) {
       setSrc(fallback);
+      return;
     }
+    // Hide broken-image icon when CDN asset 404s after metadata sync.
+    setSrc("");
   }, [fallback, src]);
 
   if (!src && !markup) return null;

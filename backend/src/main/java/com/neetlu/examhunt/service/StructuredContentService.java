@@ -324,6 +324,12 @@ public class StructuredContentService {
         }
 
         String diagramUrl = text(meta, "question_diagram_url");
+        if (diagramUrl.isBlank()) {
+            diagramUrl = text(meta, "question_diagram");
+        }
+        if (!diagramUrl.isBlank()) {
+            diagramUrl = rewriteAssetUrl(diagramUrl, sourceFolder);
+        }
         if (diagramUrl.isBlank() && !placements.isEmpty()) {
             diagramUrl = placements.get(0).getUrl();
         }
@@ -412,8 +418,12 @@ public class StructuredContentService {
                     path = diagramPaths.get(index);
                 }
                 String url = text(placement, "url");
-                if (url.isBlank() && !path.isBlank()) {
+                // Path is authoritative after metadata patches (stale absolute url fields are common).
+                // Relative url-only rows still need the public CDN base applied.
+                if (!path.isBlank()) {
                     url = rewriteAssetUrl(path, sourceFolder);
+                } else if (!url.isBlank()) {
+                    url = rewriteAssetUrl(url, sourceFolder);
                 }
                 if (url.isBlank()) {
                     continue;

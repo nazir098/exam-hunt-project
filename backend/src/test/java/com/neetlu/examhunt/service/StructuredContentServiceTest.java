@@ -236,6 +236,72 @@ class StructuredContentServiceTest {
     }
 
     @Test
+    void rebuildsPlacementUrlFromPathWhenMetadataUrlIsStale() throws Exception {
+        String json =
+                """
+                {
+                  "render_mode": "hybrid",
+                  "question_stem": "Consider a water tank shown in the figure.\\n{{asset:0}}\\n(Take $\\\\theta$)",
+                  "options": [
+                    {"id": "1", "text": "A"},
+                    {"id": "2", "text": "B"},
+                    {"id": "3", "text": "C"},
+                    {"id": "4", "text": "D"}
+                  ],
+                  "question_asset_placements": [
+                    {
+                      "index": 0,
+                      "marker": "asset:0",
+                      "path": "diagrams/NEET_2016_Q42_fig_0.webp",
+                      "url": "https://cdn.example/2016/questions/NEET_2016_Q42.webp"
+                    }
+                  ],
+                  "mineru_diagrams": ["diagrams/NEET_2016_Q42_fig_0.webp"]
+                }
+                """;
+        Question doc = new Question();
+
+        boolean applied =
+                service.applyStructuredContent(doc, objectMapper.readTree(json), "2016");
+
+        assertThat(applied).isTrue();
+        assertThat(doc.getAssetPlacements()).hasSize(1);
+        assertThat(doc.getAssetPlacements().get(0).getUrl())
+                .isEqualTo("https://cdn.example/2016/diagrams/NEET_2016_Q42_fig_0.webp");
+    }
+
+    @Test
+    void rewritesRelativePlacementUrlWhenPathMissing() throws Exception {
+        String json =
+                """
+                {
+                  "render_mode": "structured",
+                  "question_stem": "Figure\\n{{asset:0}}",
+                  "options": [
+                    {"id": "1", "text": "A"},
+                    {"id": "2", "text": "B"},
+                    {"id": "3", "text": "C"},
+                    {"id": "4", "text": "D"}
+                  ],
+                  "question_asset_placements": [
+                    {
+                      "index": 0,
+                      "url": "diagrams/only_relative.webp"
+                    }
+                  ]
+                }
+                """;
+        Question doc = new Question();
+
+        boolean applied =
+                service.applyStructuredContent(doc, objectMapper.readTree(json), "2025");
+
+        assertThat(applied).isTrue();
+        assertThat(doc.getAssetPlacements().get(0).getUrl())
+                .isEqualTo("https://cdn.example/2025/diagrams/only_relative.webp");
+    }
+
+    @Test
     void needsSolutionMetadataRefreshPrefersMineruOverStalePdfText() throws Exception {
         String json =
                 """
