@@ -57,6 +57,13 @@ public interface QuestionRepository extends MongoRepository<Question, String> {
     List<Question> findByParentQuestionIdAndPackIdOrderByVariantNoAsc(
             String parentQuestionId, String packId);
 
+    /** Lightweight fields for /family switcher — avoids loading full stems/options. */
+    @Query(
+            value = "{ 'parentQuestionId': ?0, 'packId': ?1 }",
+            fields =
+                    "{ 'questionId': 1, 'packId': 1, 'variantNo': 1, 'variantType': 1, 'difficulty': 1, 'hasSolution': 1 }")
+    List<Question> findFamilyVariantRefsByParentAndPack(String parentQuestionId, String packId);
+
     List<Question> findByParentQuestionIdAndPackIdAndVariantNo(
             String parentQuestionId, String packId, int variantNo);
 

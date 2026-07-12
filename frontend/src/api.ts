@@ -150,14 +150,19 @@ export type QuestionVariantRef = {
   variantType?: string | null;
   difficulty: number;
   hasSolution: boolean;
-  questionTextPreview: string;
+};
+
+export type FamilyPyqRef = {
+  questionId: string;
+  packId: string;
+  questionNo: number;
 };
 
 export type QuestionFamily = {
   parentQuestionId: string;
   paperQuestionNo: number;
   activeQuestionId: string;
-  pyq: QuestionPublic;
+  pyq: FamilyPyqRef;
   variants: QuestionVariantRef[];
 };
 

@@ -111,11 +111,14 @@ public class QuestionController {
         String parentId = active.getParentQuestionId() != null && !active.getParentQuestionId().isBlank()
                 ? active.getParentQuestionId()
                 : active.getQuestionId();
-        Question parent = questionRepository.findByQuestionId(parentId).orElse(active);
+        Question parent =
+                parentId.equals(active.getQuestionId())
+                        ? active
+                        : questionRepository.findByQuestionId(parentId).orElse(active);
         List<Question> variants =
-                AiVariantCatalog.forParentInPack(
-                        questionRepository.findByParentQuestionIdOrderByVariantNoAsc(parentId),
-                        parent.getPackId());
+                AiVariantCatalog.dedupeByVariantNo(
+                        questionRepository.findFamilyVariantRefsByParentAndPack(
+                                parentId, parent.getPackId()));
         List<VariantRef> variantRefs = new ArrayList<>();
         for (Question v : variants) {
             variantRefs.add(new VariantRef(
@@ -123,14 +126,13 @@ public class QuestionController {
                     v.getVariantNo(),
                     v.getVariantType(),
                     v.getDifficulty(),
-                    v.isHasSolution(),
-                    v.getQuestionTextPreview()));
+                    v.isHasSolution()));
         }
         return new QuestionFamily(
                 parentId,
                 parent.getQuestionNo(),
                 active.getQuestionId(),
-                QuestionPublic.from(parent, includeSensitiveFields()),
+                new FamilyPyqRef(parent.getQuestionId(), parent.getPackId(), parent.getQuestionNo()),
                 variantRefs);
     }
 
@@ -204,14 +206,16 @@ public class QuestionController {
             int variantNo,
             String variantType,
             int difficulty,
-            boolean hasSolution,
-            String questionTextPreview) {}
+            boolean hasSolution) {}
+
+    /** Minimal parent PYQ identity for the variant switcher (full detail comes from GET /questions/{id}). */
+    public record FamilyPyqRef(String questionId, String packId, int questionNo) {}
 
     public record QuestionFamily(
             String parentQuestionId,
             int paperQuestionNo,
             String activeQuestionId,
-            QuestionPublic pyq,
+            FamilyPyqRef pyq,
             List<VariantRef> variants) {}
 
     /** Detail — includes answer for reveal / practice submit. */
