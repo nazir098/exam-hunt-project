@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Props = {
   imageUrl?: string;
   fallbackImageUrl?: string;
+  /** Extra fallbacks tried in order after fallbackImageUrl (e.g. composite question image). */
+  fallbackImageUrls?: string[];
   svg?: string;
   alt: string;
   className?: string;
@@ -11,32 +13,42 @@ type Props = {
 export default function VariantDiagram({
   imageUrl,
   fallbackImageUrl = "",
+  fallbackImageUrls = [],
   svg,
   alt,
   className = "",
 }: Props) {
-  const primary = imageUrl?.trim() ?? "";
-  const fallback = fallbackImageUrl?.trim() ?? "";
-  const [src, setSrc] = useState(primary || fallback);
+  const candidates = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of [imageUrl, fallbackImageUrl, ...fallbackImageUrls]) {
+      const value = raw?.trim() ?? "";
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      out.push(value);
+    }
+    return out;
+  }, [imageUrl, fallbackImageUrl, fallbackImageUrls]);
+
+  const [index, setIndex] = useState(0);
+  const src = candidates[index] ?? "";
   const markup = svg?.trim();
   const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
-    setSrc(primary || fallback);
-  }, [primary, fallback]);
+    setIndex(0);
+  }, [candidates]);
 
   const openZoom = useCallback(() => {
     if (src) setZoomed(true);
   }, [src]);
 
   const handleError = useCallback(() => {
-    if (fallback && src !== fallback) {
-      setSrc(fallback);
-      return;
-    }
-    // Hide broken-image icon when CDN asset 404s after metadata sync.
-    setSrc("");
-  }, [fallback, src]);
+    setIndex((i) => {
+      if (i + 1 < candidates.length) return i + 1;
+      return candidates.length; // past end → hide
+    });
+  }, [candidates.length]);
 
   if (!src && !markup) return null;
 
@@ -67,7 +79,9 @@ export default function VariantDiagram({
               onError={handleError}
             />
             <span className="variant-diagram__zoom-hint">
-              <span className="material-symbols-outlined" aria-hidden>zoom_in</span>
+              <span className="material-symbols-outlined" aria-hidden>
+                zoom_in
+              </span>
               Tap to zoom
             </span>
           </>

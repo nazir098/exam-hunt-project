@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import AiMarkdown from "./AiMarkdown";
 import VariantDiagram from "./VariantDiagram";
 import type { AssetPlacementView } from "../api";
-import { resolveAssetUrl, resolveAssetSvgUrl, stemHasInlineAssets } from "../utils/questionRender";
+import { resolveAssetUrl, resolveAssetSvgUrl, resolveAssetCompositeFallbackUrl, stemHasInlineAssets } from "../utils/questionRender";
 
 type Props = {
   text: string;
@@ -45,11 +45,19 @@ function renderChunks(
       );
     }
     const assetIndex = Number(match[1]);
+    const primary = resolveAssetUrl(assetIndex, assetPlacements, questionId);
+    const svgFallback = resolveAssetSvgUrl(assetIndex, assetPlacements, questionId);
+    const compositeFallback = resolveAssetCompositeFallbackUrl(
+      assetIndex,
+      assetPlacements,
+      questionId
+    );
     nodes.push(
       <VariantDiagram
         key={`asset-${match.index}`}
-        imageUrl={resolveAssetUrl(assetIndex, assetPlacements, questionId)}
-        fallbackImageUrl={resolveAssetSvgUrl(assetIndex, assetPlacements, questionId)}
+        imageUrl={primary}
+        fallbackImageUrl={svgFallback}
+        fallbackImageUrls={compositeFallback ? [compositeFallback] : []}
         svg=""
         alt={diagramAlt}
         className={diagramClassName}

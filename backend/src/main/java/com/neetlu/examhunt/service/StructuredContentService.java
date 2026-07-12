@@ -204,6 +204,9 @@ public class StructuredContentService {
         if (doc == null || meta == null || meta.isMissingNode()) {
             return false;
         }
+        if (hasLocalDevAssetUrls(doc.getSolutionAssetPlacements())) {
+            return true;
+        }
         String solution = Optional.ofNullable(doc.getSolutionTextPreview()).orElse("").strip();
         if (solution.isBlank()) {
             solution = AiTextNormalizer.sanitizeSolutionText(QuestionMetadataStore.resolveSolutionText(meta));
@@ -220,6 +223,31 @@ public class StructuredContentService {
         }
         JsonNode diagrams = meta.path("solution_mineru_diagrams");
         return diagrams.isArray() && !diagrams.isEmpty();
+    }
+
+    /** True when Mongo still stores local-dev {@code /files/} URLs that browsers cannot load remotely. */
+    public boolean needsPublicAssetUrlRefresh(Question doc) {
+        if (doc == null) {
+            return false;
+        }
+        if (AssetUrlRewriter.isLocalDevFilesUrl(doc.getQuestionImageUrl())
+                || AssetUrlRewriter.isLocalDevFilesUrl(doc.getSolutionImageUrl())) {
+            return true;
+        }
+        return hasLocalDevAssetUrls(doc.getAssetPlacements())
+                || hasLocalDevAssetUrls(doc.getSolutionAssetPlacements());
+    }
+
+    private static boolean hasLocalDevAssetUrls(java.util.List<AssetPlacement> placements) {
+        if (placements == null || placements.isEmpty()) {
+            return false;
+        }
+        for (AssetPlacement p : placements) {
+            if (p != null && AssetUrlRewriter.isLocalDevFilesUrl(p.getUrl())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void applySolutionAssets(Question doc, JsonNode meta, String sourceFolder) {
@@ -491,28 +519,7 @@ public class StructuredContentService {
     }
 
     private String rewriteAssetUrl(String url, String sourceFolder) {
-        if (url == null || url.isBlank()) {
-            return "";
-        }
-        String trimmed = url.strip();
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            return trimmed;
-        }
-        while (trimmed.startsWith("/")) {
-            trimmed = trimmed.substring(1);
-        }
-        String base = Optional.ofNullable(appProperties.publicFilesBaseUrl()).orElse("").strip();
-        if (base.isBlank()) {
-            return trimmed;
-        }
-        base = base.replaceAll("/$", "");
-        if (sourceFolder != null && !sourceFolder.isBlank() && trimmed.startsWith(sourceFolder + "/")) {
-            return base + "/" + trimmed;
-        }
-        if (sourceFolder == null || sourceFolder.isBlank()) {
-            return base + "/" + trimmed;
-        }
-        return base + "/" + sourceFolder + "/" + trimmed;
+        return AssetUrlRewriter.rewrite(url, sourceFolder, appProperties.publicFilesBaseUrl());
     }
 
     private static List<McqOption> readMcqOptions(JsonNode arr) {

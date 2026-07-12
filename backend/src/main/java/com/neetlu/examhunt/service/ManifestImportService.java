@@ -1049,25 +1049,7 @@ public class ManifestImportService {
     }
 
     private String rewriteAssetUrl(String url, String sourceFolder) {
-        if (url == null || url.isBlank()) {
-            return "";
-        }
-        String trimmed = url.strip();
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            return trimmed;
-        }
-        while (trimmed.startsWith("/")) {
-            trimmed = trimmed.substring(1);
-        }
-        Optional<String> base = remotePublicFilesBaseUrl();
-        if (base.isEmpty()) {
-            return trimmed;
-        }
-        String root = base.get();
-        if (trimmed.startsWith(sourceFolder + "/")) {
-            return root + "/" + trimmed;
-        }
-        return root + "/" + sourceFolder + "/" + trimmed;
+        return AssetUrlRewriter.rewrite(url, sourceFolder, appProperties.publicFilesBaseUrl());
     }
 
     private static String sanitize(String value) {
@@ -1292,7 +1274,11 @@ public class ManifestImportService {
                     structuredContentService.needsSolutionMetadataRefresh(doc, meta);
             boolean shouldRefreshSolutionAssets =
                     structuredContentService.needsSolutionAssetRefresh(doc, meta);
-            if (!shouldRefreshStem && !shouldRefreshSolution && !shouldRefreshSolutionAssets) {
+            boolean shouldRefreshPublicUrls = structuredContentService.needsPublicAssetUrlRefresh(doc);
+            if (!shouldRefreshStem
+                    && !shouldRefreshSolution
+                    && !shouldRefreshSolutionAssets
+                    && !shouldRefreshPublicUrls) {
                 return doc;
             }
             String before = nullToEmpty(doc.getQuestionTextPreview());
@@ -1303,6 +1289,9 @@ public class ManifestImportService {
                 if (!structuredApplied && structuredContentService.needsPyqDiskEnrichment(doc)) {
                     doc.setRenderMode("image");
                 }
+            } else if (shouldRefreshPublicUrls || shouldRefreshSolutionAssets) {
+                // Rebuild CDN URLs / placements without rewriting stem text.
+                structuredContentService.applyStructuredContent(doc, meta, folder);
             }
             applyVariantEnrichment(doc, meta, folder);
             structuredContentService.applySolutionAssets(doc, meta, folder);
@@ -1311,6 +1300,7 @@ public class ManifestImportService {
             if (structuredApplied
                     || shouldRefreshSolution
                     || shouldRefreshSolutionAssets
+                    || shouldRefreshPublicUrls
                     || shouldRefreshMatchLists
                     || !before.equals(afterStem)
                     || !beforeSolution.equals(afterSolution)) {

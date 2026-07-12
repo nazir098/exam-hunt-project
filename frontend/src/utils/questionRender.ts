@@ -23,10 +23,38 @@ export type QuestionRenderFields = {
   assetPlacements?: AssetPlacementView[];
 };
 
+/** R2 public base — used when API still returns local-dev {@code /files/} URLs. */
+const PUBLIC_FILES_BASE = (
+  (import.meta.env.VITE_PUBLIC_FILES_BASE_URL as string | undefined) ||
+  "https://pub-e97c6c0fb4ed4d289eea27512d33293d.r2.dev"
+).replace(/\/$/, "");
+
+const LOCAL_FILES_URL =
+  /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/files\/(.+)$/i;
+
+/** Rewrite local API file URLs to the public CDN so production browsers can load diagrams. */
+export function publicifyAssetUrl(url: string): string {
+  if (!url?.trim()) return "";
+  const trimmed = url.trim();
+  const local = trimmed.match(LOCAL_FILES_URL);
+  if (local) {
+    return `${PUBLIC_FILES_BASE}/${local[1]}`;
+  }
+  return trimmed;
+}
+
+/** When a MinerU diagram crop is missing on CDN, fall back to the composite question image. */
+export function diagramCompositeFallbackUrl(url: string, questionId: string): string {
+  const publicUrl = publicifyAssetUrl(url);
+  if (!publicUrl || !questionId || !/\/diagrams\//i.test(publicUrl)) return "";
+  return publicUrl.replace(/\/diagrams\/[^/?#]+/i, `/questions/${encodeURIComponent(questionId)}.webp`);
+}
+
 export function cacheBustImageUrl(url: string, questionId: string) {
-  if (!url) return "";
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${encodeURIComponent(questionId)}`;
+  const publicUrl = publicifyAssetUrl(url);
+  if (!publicUrl) return "";
+  const sep = publicUrl.includes("?") ? "&" : "?";
+  return `${publicUrl}${sep}v=${encodeURIComponent(questionId)}`;
 }
 
 export function isStructuredRenderMode(renderMode?: string | null) {
@@ -157,15 +185,27 @@ export function resolveAssetSvgUrl(
 ) {
   const row = placements?.find((p) => p.index === index);
   if (!row) return "";
-  const fromUrl = row.url?.trim().replace(/\.webp(\?|$)/i, ".svg$1");
-  if (fromUrl && fromUrl !== row.url) {
+  const fromUrl = publicifyAssetUrl(row.url || "").replace(/\.webp(\?|$)/i, ".svg$1");
+  if (fromUrl && fromUrl !== publicifyAssetUrl(row.url || "")) {
     return cacheBustImageUrl(fromUrl, questionId);
   }
   const fromPath = row.path?.trim().replace(/\.webp$/i, ".svg");
   if (!fromPath) return "";
   if (row.url?.trim()) {
-    const base = row.url.trim().replace(/\/[^/]+$/, "");
+    const base = publicifyAssetUrl(row.url).replace(/\/[^/]+$/, "");
     return cacheBustImageUrl(`${base}/${fromPath.split("/").pop()}`, questionId);
   }
   return "";
+}
+
+/** Composite question image fallback when diagram crop 404s. */
+export function resolveAssetCompositeFallbackUrl(
+  index: number,
+  placements: AssetPlacementView[] | undefined,
+  questionId: string
+) {
+  const row = placements?.find((p) => p.index === index);
+  if (!row?.url) return "";
+  const composite = diagramCompositeFallbackUrl(row.url, questionId);
+  return composite ? cacheBustImageUrl(composite, questionId) : "";
 }
