@@ -7,6 +7,8 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://127.0.0.1:27017/exam-hunt}
+      # Create @Indexed / @CompoundIndex from entity mappings on startup (safe; no-op if already present).
+      auto-index-creation: true
 
 app:
   cors-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}

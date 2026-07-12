@@ -12,6 +12,8 @@ import java.util.Set;
 @Document(collection = "questions")
 @CompoundIndex(name = "pack_question_no", def = "{'packId': 1, 'questionNo': 1}")
 @CompoundIndex(name = "pack_subject_chapter", def = "{'packId': 1, 'subject': 1, 'chapter': 1}")
+@CompoundIndex(name = "pack_source_question_no", def = "{'packId': 1, 'sourceType': 1, 'questionNo': 1}")
+@CompoundIndex(name = "parent_variant", def = "{'parentQuestionId': 1, 'variantNo': 1}")
 public class Question {
 
     @Id

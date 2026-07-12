@@ -3,7 +3,9 @@ package com.neetlu.examhunt.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neetlu.examhunt.config.AppProperties;
+import com.neetlu.examhunt.model.AssetPlacement;
 import com.neetlu.examhunt.model.Question;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -233,6 +235,25 @@ class StructuredContentServiceTest {
         assertThat(once).doesNotContain("\\begin{array{l}");
         assertThat(twice).contains("\\begin{array}{l}");
         assertThat(twice).doesNotContain("\\begin{array{l}");
+    }
+
+    @Test
+    void rewriteLocalDevAssetUrlsUsesPublicCdnWithoutMetadata() {
+        Question doc = new Question();
+        doc.setQuestionImageUrl("http://127.0.0.1:8080/files/2025/diagrams/NEET_2025_Q1_fig_0.webp");
+        AssetPlacement placement = new AssetPlacement();
+        placement.setIndex(0);
+        placement.setPath("diagrams/NEET_2025_Q1_fig_0.webp");
+        placement.setUrl("http://127.0.0.1:8080/files/2025/diagrams/NEET_2025_Q1_fig_0.webp");
+        doc.setAssetPlacements(List.of(placement));
+
+        assertThat(service.needsPublicAssetUrlRefresh(doc)).isTrue();
+        assertThat(service.rewriteLocalDevAssetUrls(doc, "2025")).isTrue();
+        assertThat(doc.getQuestionImageUrl())
+                .isEqualTo("https://cdn.example/2025/diagrams/NEET_2025_Q1_fig_0.webp");
+        assertThat(doc.getAssetPlacements().get(0).getUrl())
+                .isEqualTo("https://cdn.example/2025/diagrams/NEET_2025_Q1_fig_0.webp");
+        assertThat(service.needsPublicAssetUrlRefresh(doc)).isFalse();
     }
 
     @Test

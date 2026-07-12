@@ -238,6 +238,61 @@ public class StructuredContentService {
                 || hasLocalDevAssetUrls(doc.getSolutionAssetPlacements());
     }
 
+    /**
+     * Rewrite local-dev {@code /files/} URLs to {@code PUBLIC_FILES_BASE_URL} without fetching R2
+     * metadata. Returns true when any field changed.
+     */
+    public boolean rewriteLocalDevAssetUrls(Question doc, String sourceFolder) {
+        if (doc == null || !needsPublicAssetUrlRefresh(doc)) {
+            return false;
+        }
+        boolean changed = false;
+        String qImg = rewriteAssetUrl(nullToEmpty(doc.getQuestionImageUrl()), sourceFolder);
+        if (!qImg.equals(nullToEmpty(doc.getQuestionImageUrl()))) {
+            doc.setQuestionImageUrl(qImg);
+            changed = true;
+        }
+        String sImg = rewriteAssetUrl(nullToEmpty(doc.getSolutionImageUrl()), sourceFolder);
+        if (!sImg.equals(nullToEmpty(doc.getSolutionImageUrl()))) {
+            doc.setSolutionImageUrl(sImg);
+            changed = true;
+        }
+        if (rewritePlacementList(doc.getAssetPlacements(), sourceFolder)) {
+            changed = true;
+        }
+        if (rewritePlacementList(doc.getSolutionAssetPlacements(), sourceFolder)) {
+            changed = true;
+        }
+        return changed;
+    }
+
+    private boolean rewritePlacementList(List<AssetPlacement> placements, String sourceFolder) {
+        if (placements == null || placements.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        for (AssetPlacement p : placements) {
+            if (p == null) {
+                continue;
+            }
+            String path = nullToEmpty(p.getPath());
+            String url = nullToEmpty(p.getUrl());
+            String next =
+                    !path.isBlank()
+                            ? rewriteAssetUrl(path, sourceFolder)
+                            : rewriteAssetUrl(url, sourceFolder);
+            if (!next.isBlank() && !next.equals(url)) {
+                p.setUrl(next);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
     private static boolean hasLocalDevAssetUrls(java.util.List<AssetPlacement> placements) {
         if (placements == null || placements.isEmpty()) {
             return false;

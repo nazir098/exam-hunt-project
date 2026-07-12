@@ -37,6 +37,13 @@ public class QuestionBrowseService {
             Integer questionNo,
             Pageable pageable
     ) {
+        // Exact question-number lookup (Next/Prev sibling) must use the indexed filter path.
+        // browseRanked loads the whole pack into memory for fuzzy search — ~1–2s for a 2KB response.
+        boolean exactQuestionNo =
+                questionNo != null && questionNo > 0 && (q == null || q.isBlank());
+        if (exactQuestionNo) {
+            return browseStrict(packId, subject, chapter, topic, difficulty, null, questionNo, pageable);
+        }
         if (hasSearchIntent(q, questionNo)) {
             return browseRanked(packId, subject, chapter, topic, difficulty, q, questionNo, pageable);
         }

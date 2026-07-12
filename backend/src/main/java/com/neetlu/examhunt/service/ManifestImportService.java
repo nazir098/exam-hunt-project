@@ -1242,10 +1242,29 @@ public class ManifestImportService {
     private Question enrichPyqFromDisk(Question doc) {
         try {
             String folder = resolveSourceFolder(doc.getPackId());
+
+            // Hot path: student question GETs must not wait on R2 when Mongo is already usable.
+            boolean needsStructure = structuredContentService.needsPyqDiskEnrichment(doc);
+            boolean needsPublicUrls = structuredContentService.needsPublicAssetUrlRefresh(doc);
+            boolean corruptSolution =
+                    AiTextNormalizer.looksLikeCorruptSolution(
+                            nullToEmpty(doc.getSolutionTextPreview()));
+            boolean corruptMatchLists =
+                    "matching".equalsIgnoreCase(nullToEmpty(doc.getQuestionFormat()))
+                            && MatchingVariantParser.listsLookCorrupt(
+                                    doc.getMatchListA(), doc.getMatchListB());
+            if (!needsStructure && !corruptSolution && !corruptMatchLists) {
+                if (needsPublicUrls
+                        && structuredContentService.rewriteLocalDevAssetUrls(doc, folder)) {
+                    return questionRepository.save(doc);
+                }
+                return doc;
+            }
+
             java.util.Optional<JsonNode> metadata =
                     loadQuestionMetadataNode(doc.getQuestionId(), folder);
             if (metadata.isEmpty()) {
-                if (structuredContentService.needsPyqDiskEnrichment(doc)) {
+                if (needsStructure) {
                     doc.setRenderMode("image");
                     return questionRepository.save(doc);
                 }
@@ -1267,14 +1286,14 @@ public class ManifestImportService {
             boolean shouldRefreshMatchLists =
                     structuredContentService.needsMatchListsMetadataRefresh(doc, meta);
             boolean shouldRefreshStem =
-                    structuredContentService.needsPyqDiskEnrichment(doc)
+                    needsStructure
                             || structuredContentService.needsPyqStemMetadataRefresh(doc, meta)
                             || shouldRefreshMatchLists;
             boolean shouldRefreshSolution =
                     structuredContentService.needsSolutionMetadataRefresh(doc, meta);
             boolean shouldRefreshSolutionAssets =
                     structuredContentService.needsSolutionAssetRefresh(doc, meta);
-            boolean shouldRefreshPublicUrls = structuredContentService.needsPublicAssetUrlRefresh(doc);
+            boolean shouldRefreshPublicUrls = needsPublicUrls;
             if (!shouldRefreshStem
                     && !shouldRefreshSolution
                     && !shouldRefreshSolutionAssets
