@@ -36,6 +36,8 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
   const [open, setOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [fittedSize, setFittedSize] = useState({ width: 0, height: 0 });
+  const [loaded, setLoaded] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<string | undefined>(undefined);
 
   const scaleRef = useRef(scale);
   const pinchStart = useRef({ distance: 0, scale: 1 });
@@ -55,6 +57,11 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
     scaleRef.current = scale;
   }, [scale]);
 
+  useEffect(() => {
+    setLoaded(false);
+    setAspectRatio(undefined);
+  }, [src]);
+
   const centerViewport = useCallback(() => {
     const viewport = viewportRef.current;
     const stage = stageRef.current;
@@ -72,14 +79,35 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
   }, []);
 
   const openLightbox = useCallback(() => {
+    if (!loaded) return;
     setScale(1);
     setFittedSize({ width: 0, height: 0 });
     setOpen(true);
-  }, []);
+  }, [loaded]);
 
   const toggleDoubleTapZoom = useCallback(() => {
     setScale((current) => (current > 1 ? 1 : DOUBLE_TAP_ZOOM));
   }, []);
+
+  const onThumbLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      setAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+    }
+    setLoaded(true);
+  }, []);
+
+  // Cached images can finish before onLoad is attached.
+  const thumbRef = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (!img || loaded) return;
+      if (img.complete && img.naturalWidth > 0) {
+        setAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+        setLoaded(true);
+      }
+    },
+    [loaded]
+  );
 
   const onLightboxImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -322,11 +350,24 @@ export default function ZoomableImage({ src, alt, className = "" }: Props) {
     <>
       <button
         type="button"
-        className={`zoomable-image${className ? ` ${className}` : ""}`}
+        className={`zoomable-image${loaded ? " zoomable-image--ready" : " zoomable-image--loading"}${
+          className ? ` ${className}` : ""
+        }`}
         onClick={openLightbox}
-        aria-label={`${alt} — tap to enlarge`}
+        aria-label={loaded ? `${alt} — tap to enlarge` : `${alt} — loading`}
+        aria-busy={!loaded}
+        style={aspectRatio ? { aspectRatio } : undefined}
       >
-        <img src={src} alt={alt} draggable={false} />
+        {!loaded ? <span className="zoomable-image__skeleton" aria-hidden /> : null}
+        <img
+          ref={thumbRef}
+          src={src}
+          alt={alt}
+          draggable={false}
+          decoding="async"
+          onLoad={onThumbLoad}
+          className={loaded ? "is-loaded" : undefined}
+        />
       </button>
       {lightbox}
     </>

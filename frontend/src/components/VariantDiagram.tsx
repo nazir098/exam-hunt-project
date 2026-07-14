@@ -38,12 +38,17 @@ export default function VariantDiagram({
   const [index, setIndex] = useState(0);
   const rawSrc = candidates[index] ?? "";
   const [displaySrc, setDisplaySrc] = useState("");
+  const [imgLoaded, setImgLoaded] = useState(false);
   const markup = svg?.trim();
   const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     setIndex(0);
   }, [candidates]);
+
+  useEffect(() => {
+    setImgLoaded(false);
+  }, [displaySrc]);
 
   useEffect(() => {
     let revoked = "";
@@ -86,8 +91,8 @@ export default function VariantDiagram({
   }, [rawSrc, candidates.length]);
 
   const openZoom = useCallback(() => {
-    if (displaySrc) setZoomed(true);
-  }, [displaySrc]);
+    if (displaySrc && imgLoaded) setZoomed(true);
+  }, [displaySrc, imgLoaded]);
 
   const handleError = useCallback(() => {
     setIndex((i) => {
@@ -96,14 +101,24 @@ export default function VariantDiagram({
     });
   }, [candidates.length]);
 
-  if (!displaySrc && !markup) return null;
+  if (!displaySrc && !markup) {
+    if (candidates.length > 0) {
+      return (
+        <figure className={`variant-diagram variant-diagram--loading${className ? ` ${className}` : ""}`}>
+          <span className="variant-diagram__skeleton" aria-hidden />
+          <span className="sr-only">Loading diagram</span>
+        </figure>
+      );
+    }
+    return null;
+  }
 
   return (
     <>
       <figure
         className={`variant-diagram${className ? ` ${className}` : ""}${
           displaySrc ? " variant-diagram--zoomable" : ""
-        }`}
+        }${displaySrc && !imgLoaded ? " variant-diagram--loading" : ""}`}
         onClick={openZoom}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -111,27 +126,32 @@ export default function VariantDiagram({
             openZoom();
           }
         }}
-        tabIndex={displaySrc ? 0 : undefined}
-        role={displaySrc ? "button" : undefined}
-        aria-label={displaySrc ? `${alt} — tap to zoom` : undefined}
+        tabIndex={displaySrc && imgLoaded ? 0 : undefined}
+        role={displaySrc && imgLoaded ? "button" : undefined}
+        aria-label={displaySrc && imgLoaded ? `${alt} — tap to zoom` : undefined}
+        aria-busy={Boolean(displaySrc && !imgLoaded)}
       >
         {displaySrc ? (
           <>
+            {!imgLoaded ? <span className="variant-diagram__skeleton" aria-hidden /> : null}
             <img
-              className="variant-diagram__img"
+              className={`variant-diagram__img${imgLoaded ? " is-loaded" : ""}`}
               src={displaySrc}
               alt={alt}
               draggable={false}
               loading="lazy"
               decoding="async"
+              onLoad={() => setImgLoaded(true)}
               onError={handleError}
             />
+            {imgLoaded ? (
             <span className="variant-diagram__zoom-hint">
               <span className="material-symbols-outlined" aria-hidden>
                 zoom_in
               </span>
-              Tap to zoom
+              <span className="variant-diagram__zoom-hint-label">Tap to zoom</span>
             </span>
+            ) : null}
           </>
         ) : (
           <div
