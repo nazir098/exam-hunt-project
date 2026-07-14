@@ -11,6 +11,8 @@ import "./styles/stitch.css";
 import "./styles/analytics.css";
 import "./styles/typography.css";
 import "./styles.css";
+import "./styles/tokens.css";
+import "./styles/theme-light.css";
 
 initTheme();
 initAnalytics();

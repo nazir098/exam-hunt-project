@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { BRAND_NAME } from "../design/stitchAssets";
 import ProfileMenu from "./ProfileMenu";
+import ThemeToggle from "./ThemeToggle";
 
 export default function MobileSiteHeader() {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ export default function MobileSiteHeader() {
           {BRAND_NAME}
         </Link>
         <div className="stitch-mobile-header__actions">
+          <ThemeToggle className="stitch-theme-toggle--mobile" />
           <button
             type="button"
             className="stitch-mobile-icon-btn"

@@ -1,0 +1,605 @@
+/**
+ * Light-mode paint overrides for surfaces that still hardcode dark glass.
+ * Tokens (tokens.css) supply the colors; this file remaps component paint.
+ */
+
+/* ─── Glass cards ─────────────────────────────────────────────── */
+[data-theme="light"] .glass-card {
+  background: var(--surface-glass);
+  border: 1px solid var(--question-card-border);
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06);
+  color: var(--on-surface);
+}
+
+[data-theme="light"] .glass-card:hover {
+  border-color: rgba(109, 40, 217, 0.22);
+  background: #ffffff;
+}
+
+[data-theme="light"] .bank-page .glass-card,
+[data-theme="light"] .glass-card--bank,
+[data-theme="light"] .analytics-page .glass-card {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.1);
+  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.06);
+}
+
+[data-theme="light"] .bank-page .glass-card:hover,
+[data-theme="light"] .glass-card--bank:hover {
+  border-color: rgba(109, 40, 217, 0.28);
+  background: #fbfaff;
+}
+
+/* ─── Site chrome ─────────────────────────────────────────────── */
+[data-theme="light"] .stitch-desktop-header {
+  background: var(--chrome-bg);
+  border-bottom-color: var(--chrome-border);
+  box-shadow: 0 2px 16px rgba(17, 24, 39, 0.06);
+}
+
+[data-theme="light"] .stitch-desktop-header__nav-row {
+  border-top-color: rgba(17, 24, 39, 0.06);
+}
+
+[data-theme="light"] .stitch-logo,
+[data-theme="light"] .stitch-desktop-header__brand .stitch-logo {
+  color: #4c1d95;
+}
+
+[data-theme="light"] .stitch-desktop-nav__link {
+  color: #5a5368;
+}
+
+[data-theme="light"] .stitch-desktop-nav__link:hover {
+  color: #5b21b6;
+  background: rgba(109, 40, 217, 0.08);
+}
+
+[data-theme="light"] .stitch-desktop-nav__link--active {
+  color: #5b21b6;
+  background: rgba(109, 40, 217, 0.12);
+}
+
+[data-theme="light"] .stitch-desktop-sign-in--ghost {
+  border-color: rgba(109, 40, 217, 0.28);
+  color: #5b21b6;
+  background: transparent;
+}
+
+[data-theme="light"] .stitch-desktop-sign-in--ghost:hover {
+  background: rgba(109, 40, 217, 0.08);
+}
+
+[data-theme="light"] .stitch-mobile-header {
+  background: var(--chrome-bg-solid);
+  border-bottom: 1px solid var(--chrome-border);
+  box-shadow: 0 2px 12px rgba(17, 24, 39, 0.05);
+}
+
+[data-theme="light"] .stitch-mobile-header__brand,
+[data-theme="light"] .stitch-mobile-header .stitch-logo {
+  color: #4c1d95;
+}
+
+[data-theme="light"] .stitch-mobile-icon-btn,
+[data-theme="light"] .stitch-mobile-icon-link {
+  color: #5a5368;
+  border-color: rgba(17, 24, 39, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="light"] .stitch-mobile-icon-btn:hover,
+[data-theme="light"] .stitch-mobile-icon-link:hover {
+  background: rgba(109, 40, 217, 0.08);
+  color: #5b21b6;
+}
+
+[data-theme="light"] .stitch-mobile-search {
+  background: #f0eef8;
+  border-color: rgba(17, 24, 39, 0.1);
+}
+
+[data-theme="light"] .stitch-mobile-search__input {
+  color: #1c1828;
+}
+
+[data-theme="light"] .stitch-mobile-search__input::placeholder {
+  color: #8b819c;
+}
+
+[data-theme="light"] .mobile-bottom-nav,
+[data-theme="light"] .mobile-bottom-bar {
+  background: rgba(255, 255, 255, 0.96);
+  border-top-color: rgba(17, 24, 39, 0.1);
+  box-shadow: 0 -4px 20px rgba(17, 24, 39, 0.08);
+}
+
+[data-theme="light"] .mobile-bottom-nav a {
+  color: #5a5368;
+}
+
+[data-theme="light"] .mobile-bottom-nav a.text-primary,
+[data-theme="light"] .mobile-bottom-nav a[class*="text-primary"] {
+  color: #6d28d9;
+}
+
+[data-theme="light"] .stitch-desktop-footer,
+[data-theme="light"] .stitch-site-footer {
+  background: #efedf7;
+  border-top-color: rgba(17, 24, 39, 0.08);
+  color: #5a5368;
+}
+
+[data-theme="light"] .site-legal-links a {
+  color: #5b21b6;
+}
+
+/* ─── Product mode banner ─────────────────────────────────────── */
+[data-theme="light"] .product-mode-banner,
+[data-theme="light"] .product-mode-banner-twin {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.1);
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.05);
+}
+
+[data-theme="light"] .product-mode-banner__helper {
+  color: #5a5368;
+}
+
+[data-theme="light"] .product-mode-banner--solve .product-mode-banner__label {
+  color: #047857;
+}
+
+[data-theme="light"] .product-mode-banner--practice .product-mode-banner__label {
+  color: #6d28d9;
+}
+
+[data-theme="light"] .product-mode-banner--test .product-mode-banner__label {
+  color: #b45309;
+}
+
+[data-theme="light"] .product-mode-banner__tag {
+  background: #f0eef8;
+  color: #5a5368;
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+/* ─── Solve / practice question cards ─────────────────────────── */
+[data-theme="light"] .solve-page .practice-run-question.glass-card,
+[data-theme="light"] .practice-run-page .practice-run-question.glass-card,
+[data-theme="light"] .solve-page .practice-run-question--variant.glass-card,
+[data-theme="light"] .practice-run-page .practice-run-question--variant.glass-card,
+[data-theme="light"] .solve-page .practice-run-question--variant,
+[data-theme="light"] .practice-run-page .practice-run-question--variant,
+[data-theme="light"] .solve-page .practice-run-question,
+[data-theme="light"] .practice-run-page .practice-run-question {
+  background: var(--question-card-bg) !important;
+  border: 1px solid var(--question-card-border) !important;
+  box-shadow: 0 2px 10px rgba(17, 24, 39, 0.06) !important;
+  color: var(--on-surface);
+}
+
+[data-theme="light"] .practice-run-question__toolbar-qno,
+[data-theme="light"] .practice-run-question__title {
+  color: #1c1828;
+}
+
+[data-theme="light"] .practice-run-question__eyebrow {
+  color: #5a5368;
+}
+
+[data-theme="light"] .practice-run-question__toolbar-bookmark {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #f8f7fc;
+  color: #6d28d9;
+}
+
+[data-theme="light"] .practice-run-question__toolbar-bookmark:hover {
+  border-color: rgba(109, 40, 217, 0.35);
+  background: rgba(109, 40, 217, 0.1);
+}
+
+[data-theme="light"] .question-variant-switcher__trigger {
+  background: #f8f7fc;
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #1c1828;
+}
+
+[data-theme="light"] .variant-question-card__edit,
+[data-theme="light"] .solve-page__admin-edit {
+  border-color: rgba(109, 40, 217, 0.35);
+  background: rgba(109, 40, 217, 0.1);
+  color: #5b21b6;
+}
+
+/* Meta chips */
+[data-theme="light"] .solve-page__meta-chips {
+  background: #efedf7;
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+[data-theme="light"] .solve-page__meta-chips .practice-run-chip--meta,
+[data-theme="light"] .practice-run-chip {
+  color: #5a5368;
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-theme="light"] .solve-page__meta-chips .practice-run-chip--qno,
+[data-theme="light"] .practice-run-chip--accent {
+  color: #5b21b6;
+}
+
+[data-theme="light"] .practice-run-header__back,
+[data-theme="light"] .solve-page__back {
+  color: #5b21b6;
+}
+
+/* ─── Text MCQ variant (main question body) ───────────────────── */
+[data-theme="light"] .text-mcq-paper--variant {
+  background: #ffffff !important;
+  color: #1c1828 !important;
+  border-color: rgba(17, 24, 39, 0.08) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__stem,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem {
+  background: transparent !important;
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__stem,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__question-body .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__question-body .ai-markdown p,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__block .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__block .ai-markdown p,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__intro .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__intro .ai-markdown p,
+[data-theme="light"] .text-mcq-paper--variant .variant-matching-col__item .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .variant-matching-col__item .ai-markdown p {
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__intro.muted,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__outro.muted,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__stem-note,
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__label {
+  color: #5a5368 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__statement-list .variant-stem__label {
+  color: #6d28d9 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__block {
+  background: #f8f7fc !important;
+  border-color: rgba(17, 24, 39, 0.1) !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-stem__q-marker {
+  color: #5b21b6;
+  background: rgba(109, 40, 217, 0.12);
+  border-color: rgba(109, 40, 217, 0.28);
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card {
+  background: #f8f7fc !important;
+  border-color: rgba(17, 24, 39, 0.12) !important;
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card:hover:not(:disabled) {
+  border-color: rgba(109, 40, 217, 0.35) !important;
+  background: #f3e8ff !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-badge {
+  background: #e8e4f2 !important;
+  color: #4c1d95 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown p {
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected {
+  border-color: #7c3aed !important;
+  background: rgba(124, 58, 237, 0.1) !important;
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.15) !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected .text-mcq-paper__option-badge {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-correct {
+  border-color: rgba(5, 150, 105, 0.55) !important;
+  background: rgba(5, 150, 105, 0.08) !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-wrong {
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  background: rgba(220, 38, 38, 0.06) !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__diagram,
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__diagram--inline {
+  background: #f8f7fc;
+  border-color: rgba(17, 24, 39, 0.1);
+  box-shadow: none;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-matching-col__title {
+  color: #5b21b6;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .variant-matching-col__item {
+  background: #f8f7fc;
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+/* KaTeX / markdown reading text */
+[data-theme="light"] .ai-markdown,
+[data-theme="light"] .ai-markdown--variant,
+[data-theme="light"] .ai-markdown--paper {
+  color: #1c1828;
+}
+
+[data-theme="light"] .ai-markdown h3,
+[data-theme="light"] .ai-markdown strong {
+  color: #111827;
+}
+
+[data-theme="light"] .ai-markdown .katex,
+[data-theme="light"] .text-mcq-paper--variant .katex {
+  color: #1c1828;
+}
+
+/* ─── Actions / footer nav ────────────────────────────────────── */
+[data-theme="light"] .solve-page__check-btn,
+[data-theme="light"] .practice-submit-btn {
+  color: #ffffff;
+}
+
+[data-theme="light"] .solve-page__footer-nav--fixed,
+[data-theme="light"] .solve-page__footer-nav--sticky {
+  background: linear-gradient(
+    180deg,
+    rgba(245, 244, 250, 0) 0%,
+    rgba(245, 244, 250, 0.94) 28%,
+    rgba(245, 244, 250, 0.98) 100%
+  );
+  border-top-color: rgba(17, 24, 39, 0.1);
+}
+
+[data-theme="light"] .solve-page__nav-pos {
+  background: #efedf7;
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #5a5368;
+}
+
+[data-theme="light"] .practice-run-nav-btn,
+[data-theme="light"] .solve-page__nav-btn {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.12);
+  color: #1c1828;
+}
+
+[data-theme="light"] .practice-run-nav-btn--submit,
+[data-theme="light"] .solve-page__nav-btn--next {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #ffffff;
+}
+
+[data-theme="light"] .solve-page__submit-hint,
+[data-theme="light"] .muted {
+  color: #5a5368 !important;
+}
+
+[data-theme="light"] .solve-page__solution,
+[data-theme="light"] .solve-page__solution.glass-card {
+  background: #ffffff !important;
+  border-color: rgba(17, 24, 39, 0.1) !important;
+  color: #1c1828;
+}
+
+[data-theme="light"] .solve-page__solution-title {
+  color: #1c1828;
+}
+
+[data-theme="light"] .solve-page__solution-text,
+[data-theme="light"] .solve-page__solution-text .ai-markdown {
+  color: #1c1828;
+}
+
+[data-theme="light"] .solve-page__feedback,
+[data-theme="light"] .solve-page__answer-banner {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #1c1828;
+}
+
+/* Practice run session header */
+[data-theme="light"] .practice-run-header,
+[data-theme="light"] .practice-run-header__sticky {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #1c1828;
+}
+
+[data-theme="light"] .practice-run-header-chip,
+[data-theme="light"] .session-timer--compact {
+  background: #efedf7;
+  border-color: rgba(17, 24, 39, 0.08);
+  color: #5a5368;
+}
+
+[data-theme="light"] .session-qnav__tile {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.12);
+  color: #1c1828;
+}
+
+/* Global search / profile */
+[data-theme="light"] .global-search__input,
+[data-theme="light"] .global-search input {
+  background: #f0eef8;
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #1c1828;
+}
+
+[data-theme="light"] .profile-menu__trigger,
+[data-theme="light"] .profile-menu__panel {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.12);
+  color: #1c1828;
+  box-shadow: 0 8px 28px rgba(17, 24, 39, 0.12);
+}
+
+/* Practice hub / bank / analytics page text */
+[data-theme="light"] .practice-page,
+[data-theme="light"] .bank-page,
+[data-theme="light"] .analytics-page,
+[data-theme="light"] .leaderboard-page {
+  color: #1c1828;
+}
+
+[data-theme="light"] .content-loader-panel {
+  color: #5a5368;
+}
+
+[data-theme="light"] .content-loader-panel--overlay {
+  background: rgba(245, 244, 250, 0.88);
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+/* Auth / legacy cards that still use glass */
+[data-theme="light"] .auth-card,
+[data-theme="light"] .login-page .glass-card {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.1);
+  color: #1c1828;
+}
+
+/* Secondary actions under Check answer — were white-on-white */
+[data-theme="light"] .solve-page__secondary-btn,
+[data-theme="light"] .question-secondary-actions__btn {
+  color: #4c1d95 !important;
+  background: #f8f7fc !important;
+  border: 1px solid rgba(17, 24, 39, 0.12) !important;
+}
+
+[data-theme="light"] .solve-page__secondary-btn:hover,
+[data-theme="light"] .question-secondary-actions__btn:hover:not(:disabled),
+[data-theme="light"] .solve-page__secondary-btn[aria-pressed="true"],
+[data-theme="light"] .question-secondary-actions__btn[aria-pressed="true"] {
+  background: rgba(109, 40, 217, 0.12) !important;
+  border-color: rgba(109, 40, 217, 0.35) !important;
+  color: #5b21b6 !important;
+}
+
+[data-theme="light"] .solve-page__secondary-btn .material-symbols-outlined,
+[data-theme="light"] .question-secondary-actions__btn .material-symbols-outlined {
+  color: inherit !important;
+}
+
+/* Bank / practice hub question cards — titles were near-white */
+[data-theme="light"] .question-card--compact .question-card__title,
+[data-theme="light"] .question-card--compact .question-card__title .ai-markdown--stem-preview,
+[data-theme="light"] .question-card--compact .question-card__title .ai-markdown--stem-preview p {
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .question-card--compact .question-card__title .katex,
+[data-theme="light"] .question-card--compact .question-card__title .katex * {
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .question-card__meta,
+[data-theme="light"] .bank-results-feed__caption,
+[data-theme="light"] .bank-results-feed__caption-muted,
+[data-theme="light"] .bank-results-feed__meta {
+  color: #5a5368 !important;
+}
+
+[data-theme="light"] .bank-results-feed__caption strong,
+[data-theme="light"] .bank-results-feed__meta strong {
+  color: #5b21b6 !important;
+}
+
+[data-theme="light"] .question-card__actions a,
+[data-theme="light"] .question-card__actions button,
+[data-theme="light"] .question-card__solve,
+[data-theme="light"] .question-card__practice {
+  color: #5b21b6;
+}
+
+/* Strong KaTeX contrast everywhere in light mode */
+[data-theme="light"] .katex,
+[data-theme="light"] .katex * {
+  color: #1c1828 !important;
+}
+
+[data-theme="light"] .ai-markdown,
+[data-theme="light"] .ai-markdown--variant,
+[data-theme="light"] .ai-markdown--paper,
+[data-theme="light"] .ai-markdown--stem-preview {
+  color: #1c1828 !important;
+}
+
+/* Practice hub subject chips / browse chrome */
+[data-theme="light"] .practice-bank-section,
+[data-theme="light"] .practice-page--hub,
+[data-theme="light"] .bank-page {
+  color: #1c1828;
+}
+
+[data-theme="light"] .bank-results-feed__next,
+[data-theme="light"] .bank-results-feed__prev {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.12);
+  color: #5b21b6;
+}
+
+[data-theme="light"] .practice-bank-start-banner,
+[data-theme="light"] .practice-page--hub .practice-bank-start-banner-anchor .practice-bank-start-banner {
+  background: rgba(255, 255, 255, 0.97) !important;
+  border-color: rgba(109, 40, 217, 0.28) !important;
+  color: #1c1828 !important;
+}
+
+/* Desktop header nav link colors that stay purple-tinted white in dark theme */
+[data-theme="light"] .stitch-desktop-nav__link .material-symbols-outlined {
+  color: inherit;
+}
+
+[data-theme="light"] .stitch-desktop-header,
+[data-theme="light"] .stitch-desktop-header * {
+  --tw-text-opacity: 1;
+}
+
+/* Check-answer keeps white label on purple fill */
+[data-theme="light"] .solve-page__check-btn,
+[data-theme="light"] .practice-submit-btn.electric-glow,
+[data-theme="light"] .electric-glow {
+  color: #ffffff !important;
+}
+
+/* Ensure variant option badges stay legible */
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-badge {
+  background: #ede9fe !important;
+  color: #5b21b6 !important;
+}
+
+[data-theme="light"] .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected .text-mcq-paper__option-badge {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+}

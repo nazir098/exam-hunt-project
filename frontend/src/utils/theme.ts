@@ -12,11 +12,12 @@ export function getStoredTheme(): Theme | null {
 }
 
 export function getSystemTheme(): Theme {
-  return "dark";
+  if (typeof window === "undefined") return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function resolveTheme(): Theme {
-  return "dark";
+  return getStoredTheme() ?? getSystemTheme();
 }
 
 export function applyTheme(theme: Theme) {
@@ -37,6 +38,5 @@ export function storeTheme(theme: Theme) {
 
 /** Call once before React mounts (see index.html). */
 export function initTheme() {
-  applyTheme("dark");
-  storeTheme("dark");
+  applyTheme(resolveTheme());
 }

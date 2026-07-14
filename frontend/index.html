@@ -3,9 +3,19 @@
   <head>
     <script>
       (function () {
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.documentElement.classList.add("dark");
-        document.documentElement.style.colorScheme = "dark";
+        var key = "exam-hunt-theme";
+        var theme = "dark";
+        try {
+          var stored = localStorage.getItem(key);
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          } else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+            theme = "light";
+          }
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.classList.toggle("dark", theme === "dark");
+        document.documentElement.style.colorScheme = theme;
       })();
     </script>
     <meta charset="UTF-8" />
@@ -63,6 +73,10 @@
         color: #e2e0fc;
         font-family: Inter, system-ui, sans-serif;
       }
+      html[data-theme="light"] #app-boot {
+        background: #f5f4fa;
+        color: #1c1828;
+      }
       #app-boot__spinner {
         width: 2.25rem;
         height: 2.25rem;
@@ -71,10 +85,17 @@
         border-top-color: #a78bfa;
         animation: app-boot-spin 0.8s linear infinite;
       }
+      html[data-theme="light"] #app-boot__spinner {
+        border-color: rgba(109, 40, 217, 0.22);
+        border-top-color: #7c3aed;
+      }
       #app-boot__label {
         margin: 0;
         font-size: 0.82rem;
         color: #9a98b8;
+      }
+      html[data-theme="light"] #app-boot__label {
+        color: #5a5368;
       }
       @keyframes app-boot-spin {
         to {

@@ -12,6 +12,7 @@ import DesktopSiteHeader from "./DesktopSiteHeader";
 import Seo from "./Seo";
 import StitchShell from "./StitchShell";
 import StitchViewport from "./StitchViewport";
+import ThemeToggle from "./ThemeToggle";
 
 export default function SiteLayout() {
   const { pathname } = useLocation();
@@ -94,6 +95,9 @@ export default function SiteLayout() {
         <Seo />
         <div className="flex flex-col min-h-[100dvh] stitch-shell stitch-shell--no-mobile-chrome">
           <DesktopSiteHeader />
+          <div className="lg:hidden stitch-session-theme-bar">
+            <ThemeToggle className="stitch-theme-toggle--mobile" />
+          </div>
           <div className="flex-1 flex flex-col min-h-0">
             <div className="stitch-page-content flex-1">{outlet}</div>
             <DesktopSiteFooter />
