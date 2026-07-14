@@ -13,7 +13,7 @@ export default function AnalyticsRecommendedCard({ recommended, weakChapter }: P
     return (
       <section className="analytics-recommended-promo glass-card">
         <h2 className="analytics-recommended-promo__title">Recommended practice</h2>
-        <p className="analytics-empty">Import NEET packs to get personalized recommendations.</p>
+        <p className="analytics-empty">Practice a few questions to unlock personalized recommendations.</p>
       </section>
     );
   }

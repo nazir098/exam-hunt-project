@@ -202,8 +202,8 @@ export default function PracticeAdvancedBuilder({
           </div>
           <span className="practice-advanced__meta">
             {variantCount > 0
-              ? `${variantCount} QC-accepted variants imported (up to 5 per PYQ)`
-              : "Re-import pack from Admin to load AI variants"}
+              ? `${variantCount} AI practice variants available`
+              : "AI variants aren’t available for this pack yet"}
           </span>
         </div>
 

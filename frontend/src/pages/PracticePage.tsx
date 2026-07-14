@@ -51,7 +51,7 @@ export default function PracticePage() {
       const packs = bankDisplayPacks(await fetchPacks());
       const pid = opts.packId || pickDefaultPack(packs)?.packId;
       if (!pid) {
-        setError("Import NEET packs first (Admin) or check your connection.");
+        setError("Questions aren't available right now. Please try again later.");
         return;
       }
       const pack = packs.find((p) => p.packId === pid);

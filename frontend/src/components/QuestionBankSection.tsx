@@ -513,8 +513,7 @@ export default function QuestionBankSection({
                 </>
               ) : (
                 <>
-                  <p className="muted">An administrator must import published NEET manifests.</p>
-                  <p className="muted">Sign in with the admin account, then open Admin to sync data.</p>
+                  <p className="muted">Questions aren’t available yet. Please try again later.</p>
                 </>
               )}
             </div>

@@ -477,9 +477,17 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 25_000):
     res = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error("Request timed out — the server may still be starting. Try again in a moment.");
+      throw new Error(
+        import.meta.env.DEV
+          ? "Request timed out — the server may still be starting. Try again in a moment."
+          : "Request timed out. Please try again."
+      );
     }
-    throw new Error("Cannot reach server — if you restarted the backend, wait a few seconds and try again.");
+    throw new Error(
+      import.meta.env.DEV
+        ? "Cannot reach server — if you restarted the backend, wait a few seconds and try again."
+        : "Unable to connect. Check your internet connection and try again."
+    );
   } finally {
     window.clearTimeout(timeout);
   }
@@ -495,7 +503,9 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 25_000):
 
 function formatHttpError(status: number, statusText: string, path: string): string {
   if (status === 404 && path.startsWith("/api/auth")) {
-    return "Auth API not found — restart the backend (mvn spring-boot:run in backend/).";
+    return import.meta.env.DEV
+      ? "Auth API not found — restart the backend (mvn spring-boot:run in backend/)."
+      : "Sign-in is temporarily unavailable. Please try again later.";
   }
   if (status === 401) {
     return "Please sign in again.";
@@ -504,7 +514,9 @@ function formatHttpError(status: number, statusText: string, path: string): stri
     if (path.startsWith("/api/practice") || path.startsWith("/api/auth/me")) {
       return "Please sign in to use Practice and saved progress.";
     }
-    return "Access denied. If developing locally, use npm run dev (Vite proxy) and avoid VITE_API_BASE_URL_FORCE unless needed.";
+    return import.meta.env.DEV
+      ? "Access denied. If developing locally, use npm run dev (Vite proxy) and avoid VITE_API_BASE_URL_FORCE unless needed."
+      : "Access denied.";
   }
   return statusText || `HTTP ${status}`;
 }

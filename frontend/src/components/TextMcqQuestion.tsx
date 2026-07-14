@@ -610,7 +610,7 @@ export default function TextMcqQuestion({
         </ol>
       ) : (
         <p className="text-mcq-paper__empty-options muted">
-          Options are not loaded yet. Refresh the page or re-sync the pack from Admin.
+          Options aren’t available for this question yet. Please refresh and try again.
         </p>
       )}
     </div>

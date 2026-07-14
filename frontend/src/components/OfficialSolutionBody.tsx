@@ -27,7 +27,7 @@ export default function OfficialSolutionBody({
   contentTextNormalized,
   renderMode,
   sourceType,
-  emptyMessage = "Solution is marked available but not loaded — try re-syncing the pack.",
+  emptyMessage = "Solution isn’t available for this question yet.",
 }: Props) {
   const display = pickSolutionDisplay({
     solutionTextPreview,

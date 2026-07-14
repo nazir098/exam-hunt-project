@@ -103,7 +103,7 @@ export default function SourceImageCropDialog({
       .catch(() => {
         if (!cancelled) {
           setDisplaySrc("");
-          setLoadError("Could not load source image. Check extractor files / login.");
+          setLoadError("Could not load source image. Try signing in again.");
         }
       });
 
