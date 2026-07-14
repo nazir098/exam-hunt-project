@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +36,52 @@ public class ExtractorPipelineRunner {
 
     public JsonNode saveRawTextAndRefresh(
             String folder, String questionId, String target, String rawText) throws IOException, InterruptedException {
+        Path tempFile = Files.createTempFile("exam-hunt-raw-", ".txt");
+        try {
+            Files.writeString(tempFile, rawText == null ? "" : rawText, StandardCharsets.UTF_8);
+            List<String> extra = List.of("--action", "raw-text", "--text-file", tempFile.toString());
+            return runBridge(folder, questionId, target, extra);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    public JsonNode addContentAssetFromSource(
+            String folder,
+            String questionId,
+            String target,
+            List<Double> sourceBboxNorm1000,
+            boolean insertMarker)
+            throws IOException, InterruptedException {
+        String bboxJson = objectMapper.writeValueAsString(sourceBboxNorm1000);
+        List<String> extra =
+                List.of(
+                        "--action",
+                        "add-asset",
+                        "--source-bbox-json",
+                        bboxJson,
+                        "--insert-marker",
+                        insertMarker ? "true" : "false");
+        return runBridge(folder, questionId, target, extra);
+    }
+
+    public JsonNode cropContentAssetFromSource(
+            String folder, String questionId, String target, int index, List<Double> sourceBboxNorm1000)
+            throws IOException, InterruptedException {
+        String bboxJson = objectMapper.writeValueAsString(sourceBboxNorm1000);
+        List<String> extra =
+                List.of(
+                        "--action",
+                        "crop-asset",
+                        "--index",
+                        Integer.toString(index),
+                        "--source-bbox-json",
+                        bboxJson);
+        return runBridge(folder, questionId, target, extra);
+    }
+
+    private JsonNode runBridge(String folder, String questionId, String target, List<String> extraArgs)
+            throws IOException, InterruptedException {
         Path outputRoot = metadataStore.outputRootOrThrow();
         Path script = resolveScriptPath();
         if (!Files.isRegularFile(script)) {
@@ -44,52 +89,43 @@ public class ExtractorPipelineRunner {
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "Extractor bridge script not found at " + script);
         }
-        Path tempFile = Files.createTempFile("exam-hunt-raw-", ".txt");
-        try {
-            Files.writeString(tempFile, rawText == null ? "" : rawText, StandardCharsets.UTF_8);
-            List<String> command = new ArrayList<>();
-            command.add(resolvePythonBinary());
-            command.add(script.toString());
-            command.add("--output-root");
-            command.add(outputRoot.toString());
-            command.add("--folder");
-            command.add(folder);
-            command.add("--question-id");
-            command.add(questionId);
-            command.add("--target");
-            command.add(target == null || target.isBlank() ? "question" : target);
-            command.add("--text-file");
-            command.add(tempFile.toString());
+        List<String> command = new ArrayList<>();
+        command.add(resolvePythonBinary());
+        command.add(script.toString());
+        command.add("--output-root");
+        command.add(outputRoot.toString());
+        command.add("--folder");
+        command.add(folder);
+        command.add("--question-id");
+        command.add(questionId);
+        command.add("--target");
+        command.add(target == null || target.isBlank() ? "question" : target);
+        command.addAll(extraArgs);
 
-            ProcessBuilder pb = new ProcessBuilder(command);
-            pb.redirectErrorStream(true);
-            Map<String, String> env = pb.environment();
-            String srcRoot = resolveExtractorSourceRoot();
-            if (srcRoot != null && !srcRoot.isBlank()) {
-                env.put("EXTRACTOR_SOURCE_ROOT", srcRoot.strip());
-            }
-
-            log.info("Extractor bridge: {}", String.join(" ", command));
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            boolean finished = process.waitFor(3, TimeUnit.MINUTES);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new ResponseStatusException(
-                        HttpStatus.GATEWAY_TIMEOUT, "Extractor metadata refresh timed out");
-            }
-            int code = process.exitValue();
-            if (code != 0) {
-                log.warn("Extractor bridge failed (exit {}): {}", code, output);
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_GATEWAY,
-                        "Extractor refresh failed: " + summarizeOutput(output));
-            }
-            String jsonLine = lastNonEmptyLine(output);
-            return objectMapper.readTree(jsonLine);
-        } finally {
-            Files.deleteIfExists(tempFile);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Map<String, String> env = pb.environment();
+        String srcRoot = resolveExtractorSourceRoot();
+        if (srcRoot != null && !srcRoot.isBlank()) {
+            env.put("EXTRACTOR_SOURCE_ROOT", srcRoot.strip());
         }
+
+        log.info("Extractor bridge: {}", String.join(" ", command));
+        Process process = pb.start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new ResponseStatusException(
+                    HttpStatus.GATEWAY_TIMEOUT, "Extractor metadata refresh timed out");
+        }
+        int code = process.exitValue();
+        if (code != 0) {
+            log.warn("Extractor bridge failed (exit {}): {}", code, output);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY, "Extractor refresh failed: " + summarizeOutput(output));
+        }
+        return objectMapper.readTree(lastNonEmptyLine(output));
     }
 
     private static String summarizeOutput(String output) {

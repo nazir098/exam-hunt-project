@@ -1900,11 +1900,12 @@ html:not(.dark) .stitch-viewport {
     align-items: stretch;
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    transform: none;
     z-index: 50;
     width: 100%;
-    max-width: 430px;
+    max-width: none;
     height: 4.25rem;
     padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
     gap: 0.1rem;
@@ -1931,11 +1932,12 @@ html:not(.dark) .stitch-viewport {
     display: none;
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    transform: none;
     z-index: 40;
     width: 100%;
-    max-width: 430px;
+    max-width: none;
     background: rgba(30, 30, 50, 0.92);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -1994,11 +1996,16 @@ html:not(.dark) .stitch-viewport {
   }
 }
 
-/* Glass card tighter padding on mobile */
+/* Glass card tighter padding on mobile — keep solve/practice question cards edge-tight */
 @media (max-width: 480px) {
   .glass-card {
     padding: 0.85rem 1rem;
     border-radius: 0.75rem;
+  }
+
+  .solve-page .practice-run-question.glass-card,
+  .practice-run-page .practice-run-question.glass-card {
+    padding: 0.65rem 0.7rem 0.8rem;
   }
 }
 

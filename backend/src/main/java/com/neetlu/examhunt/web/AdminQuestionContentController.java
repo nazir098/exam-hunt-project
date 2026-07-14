@@ -52,4 +52,24 @@ public class AdminQuestionContentController {
         adminAuthorization.requireAdminAccess(userId, adminKey);
         return contentFormatService.fixRawTextLatex(questionId, body.target(), body.text());
     }
+
+    @PostMapping("/content-asset/add")
+    public AdminQuestionContentFormatService.ContentFormatView addContentAsset(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey,
+            @PathVariable String questionId,
+            @RequestBody AdminQuestionContentFormatService.ContentAssetRequest body) {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        return contentFormatService.addContentAsset(questionId, body);
+    }
+
+    @PostMapping("/content-asset/crop")
+    public AdminQuestionContentFormatService.ContentFormatView cropContentAsset(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey,
+            @PathVariable String questionId,
+            @RequestBody AdminQuestionContentFormatService.ContentAssetRequest body) {
+        adminAuthorization.requireAdminAccess(userId, adminKey);
+        return contentFormatService.cropContentAsset(questionId, body);
+    }
 }

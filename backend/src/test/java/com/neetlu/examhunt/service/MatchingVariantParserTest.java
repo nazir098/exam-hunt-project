@@ -119,6 +119,32 @@ class MatchingVariantParserTest {
             List.of(option("1", "I"))));
   }
 
+  @Test
+  void parsesTwoColumnMineruMatchingTableLikeQ66() throws Exception {
+    String json =
+        """
+        {
+          "question_id": "NEET_2025_Q66",
+          "question_format": "matching",
+          "question_stem": "Match List-I with List-II.\\n| List-I | List-II |\\n|------------|-------------|\\n| (Example) | (Type of Solution)|\\n| A. Humidity | I. Solid in solid |\\n| B. Alloys | II. Liquid in gas |\\n| C. Amalgams | III. Solid in gas |\\n| D. Smoke | IV. Liquid in solid |"
+        }
+        """;
+    var node = mapper.readTree(json);
+    MatchingVariantParser.ParsedMatching parsed = MatchingVariantParser.parse(node);
+    assertEquals("Match List-I with List-II", parsed.intro());
+    assertEquals(4, parsed.listA().size());
+    assertEquals("Humidity", parsed.listA().get(0).getText());
+    assertEquals("Alloys", parsed.listA().get(1).getText());
+    assertEquals("Amalgams", parsed.listA().get(2).getText());
+    assertEquals("Smoke", parsed.listA().get(3).getText());
+    assertEquals(4, parsed.listB().size());
+    assertEquals("I", parsed.listB().get(0).getId());
+    assertEquals("Solid in solid", parsed.listB().get(0).getText());
+    assertEquals("Liquid in gas", parsed.listB().get(1).getText());
+    assertEquals("Solid in gas", parsed.listB().get(2).getText());
+    assertEquals("Liquid in solid", parsed.listB().get(3).getText());
+  }
+
   private static McqOption option(String id, String text) {
     McqOption o = new McqOption();
     o.setId(id);

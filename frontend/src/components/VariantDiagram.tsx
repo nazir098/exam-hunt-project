@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getToken } from "../auth/storage";
 
 type Props = {
   imageUrl?: string;
@@ -9,6 +10,10 @@ type Props = {
   alt: string;
   className?: string;
 };
+
+function isAdminProtectedUrl(url: string) {
+  return url.startsWith("/api/admin/") || url.includes("/api/admin/extractor-files/");
+}
 
 export default function VariantDiagram({
   imageUrl,
@@ -31,7 +36,8 @@ export default function VariantDiagram({
   }, [imageUrl, fallbackImageUrl, fallbackImageUrls]);
 
   const [index, setIndex] = useState(0);
-  const src = candidates[index] ?? "";
+  const rawSrc = candidates[index] ?? "";
+  const [displaySrc, setDisplaySrc] = useState("");
   const markup = svg?.trim();
   const [zoomed, setZoomed] = useState(false);
 
@@ -39,9 +45,49 @@ export default function VariantDiagram({
     setIndex(0);
   }, [candidates]);
 
+  useEffect(() => {
+    let revoked = "";
+    let cancelled = false;
+
+    if (!rawSrc) {
+      setDisplaySrc("");
+      return;
+    }
+
+    if (!isAdminProtectedUrl(rawSrc)) {
+      setDisplaySrc(rawSrc);
+      return;
+    }
+
+    const token = getToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    setDisplaySrc("");
+    fetch(rawSrc, { headers })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        revoked = URL.createObjectURL(blob);
+        setDisplaySrc(revoked);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDisplaySrc("");
+          setIndex((i) => (i + 1 < candidates.length ? i + 1 : candidates.length));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [rawSrc, candidates.length]);
+
   const openZoom = useCallback(() => {
-    if (src) setZoomed(true);
-  }, [src]);
+    if (displaySrc) setZoomed(true);
+  }, [displaySrc]);
 
   const handleError = useCallback(() => {
     setIndex((i) => {
@@ -50,12 +96,14 @@ export default function VariantDiagram({
     });
   }, [candidates.length]);
 
-  if (!src && !markup) return null;
+  if (!displaySrc && !markup) return null;
 
   return (
     <>
       <figure
-        className={`variant-diagram${className ? ` ${className}` : ""}${src ? " variant-diagram--zoomable" : ""}`}
+        className={`variant-diagram${className ? ` ${className}` : ""}${
+          displaySrc ? " variant-diagram--zoomable" : ""
+        }`}
         onClick={openZoom}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -63,15 +111,15 @@ export default function VariantDiagram({
             openZoom();
           }
         }}
-        tabIndex={src ? 0 : undefined}
-        role={src ? "button" : undefined}
-        aria-label={src ? `${alt} — tap to zoom` : undefined}
+        tabIndex={displaySrc ? 0 : undefined}
+        role={displaySrc ? "button" : undefined}
+        aria-label={displaySrc ? `${alt} — tap to zoom` : undefined}
       >
-        {src ? (
+        {displaySrc ? (
           <>
             <img
               className="variant-diagram__img"
-              src={src}
+              src={displaySrc}
               alt={alt}
               draggable={false}
               loading="lazy"
@@ -95,33 +143,28 @@ export default function VariantDiagram({
         )}
       </figure>
 
-      {zoomed && src && (
+      {zoomed && displaySrc && (
         <div
           className="variant-diagram-modal"
           role="dialog"
           aria-modal="true"
           aria-label={alt}
           onClick={() => setZoomed(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setZoomed(false);
+          }}
         >
-          <div
-            className="variant-diagram-modal__inner"
-            onClick={(e) => e.stopPropagation()}
+          <button
+            type="button"
+            className="variant-diagram-modal__close"
+            aria-label="Close zoom"
+            onClick={() => setZoomed(false)}
           >
-            <button
-              type="button"
-              className="variant-diagram-modal__close"
-              onClick={() => setZoomed(false)}
-              aria-label="Close zoomed image"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-            <img
-              className="variant-diagram-modal__img"
-              src={src}
-              alt={alt}
-              draggable={false}
-            />
-          </div>
+            <span className="material-symbols-outlined" aria-hidden>
+              close
+            </span>
+          </button>
+          <img className="variant-diagram-modal__img" src={displaySrc} alt={alt} draggable={false} />
         </div>
       )}
     </>

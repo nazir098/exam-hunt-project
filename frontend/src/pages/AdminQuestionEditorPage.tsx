@@ -62,6 +62,19 @@ function normalizeOptions(options: McqOptionView[] | undefined): McqOptionView[]
   return OPTION_IDS.map((id) => ({ id, text: byId.get(id) ?? "" }));
 }
 
+/** Keep A–E ids; do not coerce letter statements onto MCQ option ids 1–4. */
+function normalizeStatements(options: McqOptionView[] | undefined): McqOptionView[] {
+  const src = (options ?? []).filter((o) => String(o.text ?? "").trim());
+  if (src.length === 0) return emptyOptions().slice(0, 3);
+  const letterIds = src.every((o) => /^[A-E]$/i.test(String(o.id ?? "").trim()));
+  if (letterIds) {
+    return [...src]
+      .map((o) => ({ id: String(o.id).trim().toUpperCase(), text: o.text }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
+  return normalizeOptions(src);
+}
+
 function draftFromQuestion(q: AdminQuestionDetail): ContentDraft {
   return {
     questionTextPreview: q.questionTextPreview ?? "",
@@ -71,7 +84,7 @@ function draftFromQuestion(q: AdminQuestionDetail): ContentDraft {
     questionFormat: q.questionFormat ?? "",
     assertion: q.assertion ?? "",
     reason: q.reason ?? "",
-    statements: q.statements?.length ? normalizeOptions(q.statements) : emptyOptions().slice(0, 3),
+    statements: normalizeStatements(q.statements),
     questionDiagramSvg: q.questionDiagramSvg ?? "",
     solutionDiagramSvg: q.solutionDiagramSvg ?? "",
   };
@@ -111,7 +124,7 @@ const EDITOR_TABS: { id: EditorTab; label: string; hint: string }[] = [
   {
     id: "fix",
     label: "Fix question",
-    hint: "Compare PDF → edit text → save (most common)",
+    hint: "Localhost + EXTRACTOR_ROOT only — syncs local, R2, and Mongo",
   },
   {
     id: "override",

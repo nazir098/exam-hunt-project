@@ -1,5 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import { repairMathBody } from "../utils/mathRepairCore";
+import { repairMathBody, repairPseudoDollarDelimiters } from "../utils/mathRepairCore";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -155,7 +155,9 @@ type Props = {
 };
 
 export default function AiMarkdown({ text, className = "", preformatted = false }: Props) {
-  const normalized = preformatted ? text : normalizeAiText(text);
+  // Even preformatted PYQ stems can contain bare LaTeX (e.g. statement lines without $…$).
+  // Always run delimiter/wrap fixes; skip only the LLM-oriented normalizeAiText pass.
+  const normalized = preformatted ? ensurePreformattedMath(text) : normalizeAiText(text);
   return (
     <div className={`ai-markdown${className ? ` ${className}` : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
@@ -163,4 +165,21 @@ export default function AiMarkdown({ text, className = "", preformatted = false 
       </ReactMarkdown>
     </div>
   );
+}
+
+/**
+ * Keep extractor text mostly as-is, but make bare LaTeX KaTeX-ready.
+ * Do NOT run LLM paren→$ conversion here — it breaks PYQ `\left(...\right)`.
+ */
+function ensurePreformattedMath(text: string): string {
+  let t = repairPseudoDollarDelimiters(text.trim());
+  if (!t) return t;
+  // Already delimited (or repaired into $…$) — only refresh math bodies.
+  if (t.includes("$") || t.includes("\\(")) {
+    return normalizeInlineMath(t);
+  }
+  if (!/\\[a-zA-Z]/.test(t)) return t;
+  t = wrapBareLatexSegments(t);
+  t = normalizeInlineMath(t);
+  return t;
 }

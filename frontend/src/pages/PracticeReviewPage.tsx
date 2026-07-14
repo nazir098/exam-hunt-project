@@ -15,6 +15,7 @@ import SessionQuestionNav from "../components/SessionQuestionNav";
 import TestReviewAnswerCompare from "../components/TestReviewAnswerCompare";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import ZoomableImage from "../components/ZoomableImage";
+import { useScrollQuestionIntoView } from "../hooks/useScrollQuestionIntoView";
 import { practiceReviewRoute, sessionResultRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
 import {
@@ -97,6 +98,11 @@ export default function PracticeReviewPage() {
       .then(setQuestion)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load question"));
   }, [activeReview?.questionId]);
+
+  useScrollQuestionIntoView(
+    activeReview?.questionId,
+    Boolean(question && activeReview && question.questionId === activeReview.questionId)
+  );
 
   useEffect(() => {
     if (!activeReview || qParam === activeReview.questionId) return;
@@ -190,7 +196,7 @@ export default function PracticeReviewPage() {
       {activeReview && question && (
         <div className="test-review-layout">
           <div className="test-review-layout__main">
-            <section className="test-review-question glass-card">
+            <section className="test-review-question glass-card" data-question-main>
               <header className="test-review-question__head">
                 <div>
                   <h2 className="test-review-question__title">

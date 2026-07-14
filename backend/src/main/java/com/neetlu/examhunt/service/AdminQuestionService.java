@@ -99,10 +99,17 @@ public class AdminQuestionService {
     }
 
     public AdminQuestionDetail resetContentFromMetadata(String questionId) {
+        if (!manifestImportService.isLocalContentWorkspace()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Content sync requires EXTRACTOR_ROOT on localhost — production serves Mongo only");
+        }
         Question q = require(questionId);
         AdminQuestionPreserve.unlockContentFields(q);
         questions.save(q);
-        q = manifestImportService.enrichFromDisk(q);
+        // Force full metadata → Mongo apply. Plain enrichFromDisk skips when Mongo already
+        // looks structured, which left the admin "student view out of date" banner stuck.
+        q = manifestImportService.forceRefreshContentFromDisk(q);
         return AdminQuestionDetail.from(q);
     }
 

@@ -49,6 +49,8 @@ public final class AiTextNormalizer {
         }
         String t = text.strip();
         t = trimEmbeddedMcqOptions(t);
+        // Repair \left$$ before ensureMathBoundarySpaces (which would insert `\left $$`).
+        t = MathRepairCore.repairPseudoDollarDelimiters(t);
         t = ensureMathBoundarySpaces(t);
         return sanitizeStructuredMcqText(t, false);
     }
@@ -76,6 +78,7 @@ public final class AiTextNormalizer {
         }
         String t = text.strip();
         t = t.replaceAll("(?m)^Sol\\.?\\s*:?\\s*", "");
+        t = repairMarkdownTableSpacing(t);
         t = MathRepairCore.repairPseudoDollarDelimiters(t);
         t = repairMalformedEnvironmentOpener(t);
         t = t.replaceAll("\\${4,}", "\n\n");
@@ -178,12 +181,44 @@ public final class AiTextNormalizer {
         sb.append(normalized);
     }
 
+    private static boolean looksLikeMarkdownTableRow(String line) {
+        String t = line == null ? "" : line.strip();
+        return t.startsWith("|") && t.indexOf('|', 1) >= 0;
+    }
+
     private static String normalizeProseSolution(String text) {
         if (text == null || text.isBlank()) {
             return "";
         }
-        String[] lines = text.strip().split("\\n+");
-        StringBuilder sb = new StringBuilder();
+        // Keep single newlines inside markdown tables; use blank lines only between prose blocks.
+        String[] lines = text.strip().split("\\R", -1);
+        StringBuilder blocks = new StringBuilder();
+        StringBuilder table = new StringBuilder();
+        StringBuilder prose = new StringBuilder();
+
+        java.util.function.Consumer<StringBuilder> flushTable =
+                (buf) -> {
+                    if (buf.isEmpty()) {
+                        return;
+                    }
+                    if (!blocks.isEmpty()) {
+                        blocks.append("\n\n");
+                    }
+                    blocks.append(buf.toString().strip());
+                    buf.setLength(0);
+                };
+        java.util.function.Consumer<StringBuilder> flushProse =
+                (buf) -> {
+                    if (buf.isEmpty()) {
+                        return;
+                    }
+                    if (!blocks.isEmpty()) {
+                        blocks.append("\n\n");
+                    }
+                    blocks.append(buf.toString().strip());
+                    buf.setLength(0);
+                };
+
         for (String rawLine : lines) {
             String line = rawLine.strip();
             if (line.isBlank() || "$".equals(line) || "$$".equals(line)) {
@@ -193,12 +228,31 @@ public final class AiTextNormalizer {
             if (line.isBlank()) {
                 continue;
             }
-            if (!sb.isEmpty()) {
-                sb.append("\n\n");
+            if (looksLikeMarkdownTableRow(line)) {
+                flushProse.accept(prose);
+                if (!table.isEmpty()) {
+                    table.append('\n');
+                }
+                table.append(line);
+            } else {
+                flushTable.accept(table);
+                if (!prose.isEmpty()) {
+                    prose.append("\n\n");
+                }
+                prose.append(line);
             }
-            sb.append(line);
         }
-        return sb.toString().strip();
+        flushTable.accept(table);
+        flushProse.accept(prose);
+        return blocks.toString().strip();
+    }
+
+    /** Collapse blank lines between markdown table rows. */
+    public static String repairMarkdownTableSpacing(String text) {
+        if (text == null || text.isBlank()) {
+            return text == null ? "" : text;
+        }
+        return text.replaceAll("(\\|[^\\n]*\\|)\\n(?:[ \\t]*\\n)+(?=\\|)", "$1\n");
     }
 
     private static String normalizeSolutionLine(String line) {
@@ -573,14 +627,17 @@ public final class AiTextNormalizer {
         t = t.replace("\\{", "{");
         t = t.replace("\\}", "}");
         // LLM/export typo: \left$$ or \right)$$ used instead of parentheses
-        t = t.replaceAll("\\\\left\\$\\$", "\\\\left(");
-        t = t.replaceAll("\\\\left\\$", "\\\\left(");
-        t = t.replaceAll("\\\\right\\)\\$\\$", "\\\\right)");
-        t = t.replaceAll("\\\\right\\$\\$", "\\\\right)");
+        t = t.replaceAll("\\\\left\\s*\\$\\$", "\\\\left(");
+        t = t.replaceAll("\\\\left\\s*\\$", "\\\\left(");
+        t = t.replaceAll("\\\\right\\)\\s*\\$\\$", "\\\\right)");
+        t = t.replaceAll("\\\\right\\s*\\$\\$", "\\\\right)");
         // \left\frac → \left(\frac
         t = t.replaceAll("\\\\left\\s*\\\\frac", "\\\\left(\\\\frac");
-        // \right with no closing delimiter (e.g. "\right$$" from bad export)
-        t = t.replaceAll("\\\\right(?![)\\]|.|])", "\\\\right)");
+        // Incomplete \right delimiter — never touch \rightarrow / \Rightarrow / …
+        while (t.contains("\\right)arrow")) {
+            t = t.replace("\\right)arrow", "\\rightarrow");
+        }
+        t = t.replaceAll("\\\\right(?![a-zA-Z)\\]\\|.\\|])", "\\\\right)");
         return t.strip();
     }
 }

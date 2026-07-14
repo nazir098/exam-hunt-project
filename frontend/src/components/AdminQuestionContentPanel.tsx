@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  addAdminContentAssetFromSource,
+  cropAdminContentAssetFromSource,
   fetchAdminQuestionContentFormat,
   fixAdminQuestionRawTextLatex,
   resetAdminQuestionFromMetadata,
@@ -9,12 +11,23 @@ import {
 import AiMarkdown from "./AiMarkdown";
 import InlineAssetMarkdown from "./InlineAssetMarkdown";
 import TextMcqQuestion from "./TextMcqQuestion";
+import SourceImageCropDialog, { type NormBbox } from "./SourceImageCropDialog";
+import AdminAuthImage from "./AdminAuthImage";
 import { hybridDiagramUrl, textMcqDisplayProps } from "../utils/questionRender";
 import { displayPyqSolution } from "../utils/pyqTextDisplay";
 import { normalizeSolutionText } from "../utils/questionStemNormalize";
-import type { AssetPlacementView } from "../api";
+import { resolveMatchingColumns } from "../utils/matchingVariant";
+import { parseLetterStatementsStem } from "../utils/letterStatementsStem";
+import type { AssetPlacementView, McqOptionView } from "../api";
 
 type RawTarget = "question" | "solution";
+
+type CropSession = {
+  target: RawTarget;
+  mode: "add" | "recrop";
+  index?: number;
+  initialBbox?: number[] | null;
+};
 
 type RawEditorState = {
   saved: string;
@@ -45,8 +58,33 @@ function previewPlacements(cf: AdminContentFormatView): AssetPlacementView[] {
   }));
 }
 
+function studentPlacements(cf: AdminContentFormatView): AssetPlacementView[] {
+  const rows = cf.mongoAssetPlacements?.length ? cf.mongoAssetPlacements : cf.questionAssetPlacements;
+  return rows.map((p) => ({
+    index: p.index,
+    marker: p.marker,
+    path: p.path,
+    url: p.url,
+  }));
+}
+
 function previewSolutionPlacements(cf: AdminContentFormatView): AssetPlacementView[] {
   const rows = cf.solutionAssetPlacements?.length ? cf.solutionAssetPlacements : cf.questionAssetPlacements;
+  return rows.map((p) => ({
+    index: p.index,
+    marker: p.marker,
+    path: p.path,
+    url: p.url,
+  }));
+}
+
+function studentSolutionPlacements(cf: AdminContentFormatView): AssetPlacementView[] {
+  const rows =
+    cf.mongoSolutionAssetPlacements?.length
+      ? cf.mongoSolutionAssetPlacements
+      : cf.mongoAssetPlacements?.length
+        ? cf.mongoAssetPlacements
+        : previewSolutionPlacements(cf);
   return rows.map((p) => ({
     index: p.index,
     marker: p.marker,
@@ -74,6 +112,7 @@ export default function AdminQuestionContentPanel({
   const [questionRaw, setQuestionRaw] = useState<RawEditorState>(emptyRawState());
   const [solutionRaw, setSolutionRaw] = useState<RawEditorState>(emptyRawState());
   const [fixSection, setFixSection] = useState<"question" | "solution">(initialSection);
+  const [cropSession, setCropSession] = useState<CropSession | null>(null);
 
   useEffect(() => {
     setFixSection(initialSection);
@@ -120,28 +159,55 @@ export default function AdminQuestionContentPanel({
 
   const metadataStem = cf?.questionStem?.trim() || "";
   const studentStem = cf?.mongoQuestionTextPreview?.trim() || "";
-  const metadataOptions = cf ? (cf.options.length ? cf.options : cf.mongoOptions) : [];
-  const studentOptions = cf ? (cf.mongoOptions.length ? cf.mongoOptions : cf.options) : [];
-  const previewRenderProps = cf
+  const metadataOptions = cf?.options ?? [];
+  // Do not fall back to metadata options — that hides the real student/Mongo mismatch.
+  const studentOptions = cf?.mongoOptions ?? [];
+  const studentPreviewPlacements = cf ? studentPlacements(cf) : [];
+  const metadataPreviewPlacements = cf ? previewPlacements(cf) : [];
+  const studentPreviewProps = cf
+    ? textMcqDisplayProps({
+        questionId: cf.questionId,
+        renderMode: cf.mongoRenderMode || cf.renderMode,
+        sourceType: "pyq",
+        variantType: null,
+        variantNo: null,
+        questionTextPreview: studentStem,
+        hasDiagram: cf.hasDiagram,
+      })
+    : { variantTheme: false as const };
+  const metadataPreviewProps = cf
     ? textMcqDisplayProps({
         questionId: cf.questionId,
         renderMode: cf.renderMode,
         sourceType: "pyq",
         variantType: null,
         variantNo: null,
-        questionTextPreview: studentStem || metadataStem,
+        questionTextPreview: metadataStem,
         hasDiagram: cf.hasDiagram,
       })
     : { variantTheme: false as const };
-  const previewHybridUrl =
-    cf && (studentStem || metadataStem)
+  const studentHybridUrl =
+    cf && studentStem
+      ? hybridDiagramUrl({
+          questionId: cf.questionId,
+          renderMode: cf.mongoRenderMode || cf.renderMode,
+          questionTextPreview: studentStem,
+          hasDiagram: cf.hasDiagram,
+          questionImageUrl: cf.questionImageUrl,
+          assetPlacements: studentPreviewPlacements,
+          options: studentOptions,
+        })
+      : "";
+  const metadataHybridUrl =
+    cf && metadataStem
       ? hybridDiagramUrl({
           questionId: cf.questionId,
           renderMode: cf.renderMode,
-          questionTextPreview: studentStem || metadataStem,
+          questionTextPreview: metadataStem,
           hasDiagram: cf.hasDiagram,
           questionImageUrl: cf.questionImageUrl,
-          assetPlacements: previewPlacements(cf),
+          assetPlacements: metadataPreviewPlacements,
+          options: metadataOptions,
         })
       : "";
 
@@ -151,8 +217,16 @@ export default function AdminQuestionContentPanel({
     setError("");
     try {
       await resetAdminQuestionFromMetadata(questionId);
-      await load();
-      setStatus("Student view updated from PDF metadata.");
+      const data = await fetchAdminQuestionContentFormat(questionId);
+      setCf(data);
+      syncEditors(data);
+      if (data.studentViewStale || data.solutionViewStale) {
+        setStatus(
+          "Synced from metadata, but a difference remains — reload or check locked Quick override fields."
+        );
+      } else {
+        setStatus("Student view updated from PDF metadata.");
+      }
       await onMongoRefresh?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update student view");
@@ -161,22 +235,176 @@ export default function AdminQuestionContentPanel({
     }
   }
 
-  function renderMcqPreview(stem: string, options: typeof metadataOptions, label: string) {
+  async function applyCrop(bbox: NormBbox) {
+    if (!questionId || !cf || !cropSession) return;
+    if (!cf.metadataWritable) {
+      setError("Metadata is read-only — mount EXTRACTOR_ROOT on the API server to crop.");
+      return;
+    }
+    setBusy("crop-asset");
+    setError("");
+    try {
+      const data =
+        cropSession.mode === "add"
+          ? await addAdminContentAssetFromSource(questionId, {
+              target: cropSession.target,
+              sourceBbox: bbox,
+              insertMarker: true,
+            })
+          : await cropAdminContentAssetFromSource(questionId, {
+              target: cropSession.target,
+              index: cropSession.index ?? 0,
+              sourceBbox: bbox,
+            });
+      setCf(data);
+      syncEditors(data);
+      setStatus(
+        data.message ||
+          "Figure saved. If R2 credentials are configured in pdf-qa-extractor/.env, production CDN is updated too."
+      );
+      setCropSession(null);
+      // Persist CDN URLs + options into Mongo so prod (shared Atlas / next pack sync) matches.
+      try {
+        await resetAdminQuestionFromMetadata(questionId);
+        await load();
+      } catch {
+        // Crop already succeeded; sync failure is reported via load/status separately.
+      }
+      await onMongoRefresh?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Crop failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openAddCrop(target: RawTarget) {
+    setCropSession({ target, mode: "add", initialBbox: null });
+  }
+
+  function openRecrop(target: RawTarget, index: number, bbox?: number[] | null) {
+    setCropSession({ target, mode: "recrop", index, initialBbox: bbox ?? null });
+  }
+
+  function renderAssetList(target: RawTarget) {
     if (!cf) return null;
+    const rows =
+      target === "solution" ? cf.solutionAssetPlacements ?? [] : cf.questionAssetPlacements;
+    const sourceUrl = target === "solution" ? cf.solutionImageUrl : cf.questionImageUrl;
+    return (
+      <div className="admin-content-qc__assets">
+        <div className="admin-content-qc__assets-head">
+          <p className="admin-content-qc__assets-label">Inline assets</p>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={!cf.metadataWritable || !sourceUrl || busy !== null}
+            onClick={() => openAddCrop(target)}
+          >
+            Add new figure
+          </button>
+        </div>
+        <p className="muted admin-content-qc__hint">
+          To fix a broken slot (e.g. <code>asset:2</code>), click <strong>Crop from source</strong> on
+          that row — it re-crops that index from the PDF image above.
+        </p>
+        {rows.length === 0 ? (
+          <p className="muted admin-content-qc__hint">
+            No figures yet. Use &quot;Add new figure&quot; to crop a region from the PDF source image.
+          </p>
+        ) : (
+          <ul>
+            {rows.map((p) => (
+              <li key={`${p.marker || "asset"}-${p.index}`}>
+                <div className="admin-content-qc__asset-row">
+                  <code>{p.marker || `asset:${p.index}`}</code>
+                  {p.hidden ? " (hidden)" : ""}
+                  <button
+                    type="button"
+                    className="btn btn-sm primary"
+                    disabled={!cf.metadataWritable || !sourceUrl || busy !== null || p.index < 0}
+                    onClick={() => openRecrop(target, p.index, p.bbox)}
+                  >
+                    Crop from source
+                  </button>
+                </div>
+                {p.url ? (
+                  <AdminAuthImage
+                    src={p.url}
+                    alt={p.marker || `asset:${p.index}`}
+                    className="admin-content-qc__asset-thumb"
+                  />
+                ) : (
+                  <p className="muted admin-content-qc__asset-missing">
+                    No file yet — crop from source
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  function renderMcqPreview(
+    stem: string,
+    options: typeof metadataOptions,
+    label: string,
+    placements: AssetPlacementView[],
+    hybridUrl: string,
+    renderProps: typeof studentPreviewProps,
+    matchListA: McqOptionView[] = [],
+    matchListB: McqOptionView[] = [],
+    statements: McqOptionView[] = []
+  ) {
+    if (!cf) return null;
+    const draftStem = questionRaw.draft.trim();
+    const format = cf.questionFormat || "";
+    // Prefer editable MinerU/raw draft when Mongo stem was stripped (matching / statement_based).
+    let previewStem = stem;
+    if (draftStem && draftStem !== stem) {
+      if (
+        format === "matching" &&
+        !resolveMatchingColumns({
+          questionTextPreview: stem,
+          questionFormat: format,
+          matchListA,
+          matchListB,
+          options,
+        }) &&
+        resolveMatchingColumns({
+          questionTextPreview: draftStem,
+          questionFormat: format,
+          options,
+        })
+      ) {
+        previewStem = draftStem;
+      } else if (
+        (format === "statement_based" || /statement/i.test(format)) &&
+        statements.length < 2 &&
+        parseLetterStatementsStem(draftStem)
+      ) {
+        previewStem = draftStem;
+      }
+    }
     return (
       <div className="admin-content-qc__pane">
         <div className="admin-content-qc__pane-label">{label}</div>
         <div className="admin-content-qc__pane-body">
-          {stem ? (
+          {previewStem ? (
             <TextMcqQuestion
-              questionText={stem}
+              questionText={previewStem}
               options={options}
               questionFormat={cf.questionFormat}
+              statements={statements}
+              matchListA={matchListA}
+              matchListB={matchListB}
               questionId={cf.questionId}
-              questionImageUrl={previewHybridUrl}
-              assetPlacements={previewPlacements(cf)}
+              questionImageUrl={hybridUrl}
+              assetPlacements={placements}
               correctAnswer={cf.answer}
-              {...previewRenderProps}
+              {...renderProps}
             />
           ) : (
             <AiMarkdown className="admin-content-qc__markdown" preformatted text="(no structured stem yet)" />
@@ -375,9 +603,9 @@ export default function AdminQuestionContentPanel({
       )}
       {!cf.contentRenderApproved && (
         <p className="admin-content-qc__lead muted admin-content-qc__lead--warn">
-          <strong>Not approved for students</strong> — this is draft MinerU/parsed text. Broken line
-          breaks usually mean OCR never became clean LaTeX. Fix here, then approve in pdf-qa-extractor,
-          or use <strong>Quick override</strong>. Until approved, students should see the PDF image.
+          <strong>Not approved in pdf-qa-extractor yet</strong> — draft MinerU/parsed text. Fix here,
+          then approve there for pack export. Use <strong>Update student view</strong> to push this
+          draft into Mongo so the practice page shows text (not the PDF crop).
         </p>
       )}
       {(cf.studentViewStale || cf.solutionViewStale) && (
@@ -385,7 +613,7 @@ export default function AdminQuestionContentPanel({
           <p className="admin-content-qc__lead admin-content-qc__lead--warn">
             <strong>Student view is out of date.</strong>
             {cf.studentViewStale
-              ? " The solve page still shows old question text, not the structured version from PDF metadata."
+              ? " The solve page still shows old text, missing 1–4 choices, or a different figure than PDF metadata."
               : ""}
             {cf.solutionViewStale
               ? " The official solution still shows the PDF image instead of extracted LaTeX text."
@@ -441,24 +669,39 @@ export default function AdminQuestionContentPanel({
         </header>
         {cf.studentViewStale && metadataStem ? (
           <div className="admin-content-qc__metadata-preview">
-            {renderMcqPreview(metadataStem, metadataOptions, "Structured version (PDF metadata)")}
+            {renderMcqPreview(
+              metadataStem,
+              metadataOptions,
+              "Structured version (PDF metadata)",
+              metadataPreviewPlacements,
+              metadataHybridUrl,
+              metadataPreviewProps,
+              [],
+              [],
+              cf.statements ?? []
+            )}
           </div>
         ) : null}
         <div className="admin-content-qc__grid">
           {renderMcqPreview(
-            studentStem || metadataStem,
+            studentStem,
             studentOptions,
-            cf.studentViewStale ? "How students see it (live)" : "How students see it"
+            cf.studentViewStale ? "How students see it (live)" : "How students see it",
+            studentPreviewPlacements,
+            studentHybridUrl,
+            studentPreviewProps,
+            cf.mongoMatchListA ?? [],
+            cf.mongoMatchListB ?? [],
+            cf.mongoStatements ?? []
           )}
           <div className="admin-content-qc__pane admin-content-qc__pane--source">
             <div className="admin-content-qc__pane-label">Original PDF crop</div>
             <div className="admin-content-qc__pane-body admin-content-qc__pane-body--image">
               {cf.questionImageUrl ? (
-                <img
+                <AdminAuthImage
                   src={cf.questionImageUrl}
                   alt="Question source crop"
                   className="admin-content-qc__source-img"
-                  loading="lazy"
                 />
               ) : (
                 <p className="muted">No source crop URL.</p>
@@ -467,28 +710,18 @@ export default function AdminQuestionContentPanel({
                 <div className="admin-content-qc__diagrams">
                   <p className="admin-content-qc__diagrams-label">Figure extracts</p>
                   {cf.mineruDiagramUrls.map((url) => (
-                    <img key={url} src={url} alt="Diagram extract" className="admin-content-qc__diagram-img" loading="lazy" />
+                    <AdminAuthImage
+                      key={url}
+                      src={url}
+                      alt="Diagram extract"
+                      className="admin-content-qc__diagram-img"
+                    />
                   ))}
                 </div>
               )}
             </div>
             {renderRawEditor("question")}
-            {cf.questionAssetPlacements.length > 0 && (
-              <div className="admin-content-qc__assets">
-                <p className="admin-content-qc__assets-label">Inline assets</p>
-                <ul>
-                  {cf.questionAssetPlacements.map((p) => (
-                    <li key={p.marker || p.url}>
-                      <code>{p.marker || "asset"}</code>
-                      {p.hidden ? " (hidden)" : ""}
-                      {p.url ? (
-                        <img src={p.url} alt={p.marker} className="admin-content-qc__asset-thumb" loading="lazy" />
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {renderAssetList("question")}
           </div>
         </div>
       </article>
@@ -543,7 +776,7 @@ export default function AdminQuestionContentPanel({
                         renderMode: cf.renderMode,
                       })}
                       questionId={cf.questionId}
-                      assetPlacements={previewSolutionPlacements(cf)}
+                      assetPlacements={studentSolutionPlacements(cf)}
                       markdownClass="admin-content-qc__markdown"
                       diagramAlt="Solution figure"
                       preformatted
@@ -556,21 +789,40 @@ export default function AdminQuestionContentPanel({
               <div className="admin-content-qc__pane-label">Original PDF crop</div>
               <div className="admin-content-qc__pane-body admin-content-qc__pane-body--image">
                 {cf.solutionImageUrl ? (
-                  <img
+                  <AdminAuthImage
                     src={cf.solutionImageUrl}
                     alt="Solution source crop"
                     className="admin-content-qc__source-img"
-                    loading="lazy"
                   />
                 ) : (
                   <p className="muted">No solution PDF crop — edit from the text box below.</p>
                 )}
               </div>
               {renderRawEditor("solution")}
+              {renderAssetList("solution")}
             </div>
           </div>
         </article>
       )}
+
+      {cropSession && (cropSession.target === "question" ? cf.questionImageUrl : cf.solutionImageUrl) ? (
+        <SourceImageCropDialog
+          open
+          imageUrl={
+            cropSession.target === "question" ? cf.questionImageUrl : cf.solutionImageUrl
+          }
+          title={
+            cropSession.mode === "add"
+              ? "Crop figure from source image"
+              : `Re-crop {{asset:${cropSession.index}}}`
+          }
+          initialBbox={cropSession.initialBbox}
+          busy={busy === "crop-asset"}
+          confirmLabel={cropSession.mode === "add" ? "Add figure" : `Save asset:${cropSession.index}`}
+          onCancel={() => busy !== "crop-asset" && setCropSession(null)}
+          onConfirm={applyCrop}
+        />
+      ) : null}
     </section>
   );
 }

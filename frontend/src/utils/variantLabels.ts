@@ -94,7 +94,12 @@ export function questionStemBody(text: string): string {
 export function capitalizeStemStart(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
-  return trimmed.replace(/^([^\p{L}]*)(\p{L})/u, (_, prefix: string, letter: string) => {
-    return prefix + letter.toUpperCase();
-  });
+  // Never capitalize inside LaTeX — `$[\mathrm{NiCl4}]$` became `$[\Mathrm{NiCl4}]$` and KaTeX failed.
+  const match = trimmed.match(/^([^\p{L}]*)(\p{L})/u);
+  if (!match) return trimmed;
+  const prefix = match[1];
+  if (prefix.includes("$") || prefix.includes("\\") || prefix.endsWith("\\")) {
+    return trimmed;
+  }
+  return prefix + match[2].toUpperCase() + trimmed.slice(match[0].length);
 }

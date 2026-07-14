@@ -23,9 +23,15 @@ final class MatchingVariantParser {
     private static final Pattern ANSWER_MAPPING =
             Pattern.compile("\\b([A-D])\\s*[-–:]\\s*(.+?)(?=\\s*,\\s*[A-D]\\s*[-–:]|$)", Pattern.DOTALL);
 
-    private static final Pattern MATCHING_TABLE_ROW =
+    /** 4-col MinerU: {@code | A. | item | I. | item |} */
+    private static final Pattern MATCHING_TABLE_ROW_4 =
             Pattern.compile(
                     "^\\|\\s*([A-D])\\.?\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(?:\\(?([IVX]+)\\)?\\.?)\\s*\\|\\s*([^|]+?)\\s*\\|",
+                    Pattern.CASE_INSENSITIVE);
+    /** 2-col MinerU: {@code | A. item | I. item |} */
+    private static final Pattern MATCHING_TABLE_ROW_2 =
+            Pattern.compile(
+                    "^\\|\\s*([A-D])\\.\\s*([^|]+?)\\s*\\|\\s*(?:\\(?([IVX]+)\\)?\\.?)\\s*([^|]+?)\\s*\\|",
                     Pattern.CASE_INSENSITIVE);
 
     private MatchingVariantParser() {}
@@ -136,14 +142,21 @@ final class MatchingVariantParser {
             if (!trimmed.startsWith("|")) {
                 continue;
             }
-            Matcher matcher = MATCHING_TABLE_ROW.matcher(trimmed);
+            Matcher matcher = MATCHING_TABLE_ROW_4.matcher(trimmed);
             if (!matcher.find()) {
-                continue;
+                matcher = MATCHING_TABLE_ROW_2.matcher(trimmed);
+                if (!matcher.find()) {
+                    continue;
+                }
             }
             String idA = matcher.group(1).toUpperCase(Locale.ROOT);
             String bodyA = matcher.group(2).trim().replaceAll("\\s+", " ");
             String idB = matcher.group(3).toUpperCase(Locale.ROOT);
             String bodyB = matcher.group(4).trim().replaceAll("\\s+", " ");
+            // Skip subtitle/header cells like "(Example)" / "(Type of Solution)"
+            if (bodyA.matches("^\\([^)]+\\)$") && bodyB.matches("^\\([^)]+\\)$")) {
+                continue;
+            }
             if (!bodyA.isBlank()) {
                 McqOption rowA = new McqOption();
                 rowA.setId(idA);

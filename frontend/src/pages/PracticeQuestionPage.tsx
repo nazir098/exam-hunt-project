@@ -26,7 +26,9 @@ import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
+import BookmarkButton from "../components/BookmarkButton";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
+import { useScrollQuestionIntoView } from "../hooks/useScrollQuestionIntoView";
 import ZoomableImage from "../components/ZoomableImage";
 import SessionExpiredDialog from "../components/SessionExpiredDialog";
 import SessionQuestionNav from "../components/SessionQuestionNav";
@@ -321,6 +323,8 @@ export default function PracticeQuestionPage() {
     setRevealedSolution(null);
     setSelected("");
   }, [questionId]);
+
+  useScrollQuestionIntoView(questionId, Boolean(questionId));
 
   useEffect(() => {
     if (!showSolution || !q?.hasSolution) return;
@@ -1099,6 +1103,7 @@ export default function PracticeQuestionPage() {
     return (
       <section
         className="glass-card content-loader-panel practice-run-question-skeleton"
+        data-question-main
         aria-busy="true"
         aria-live="polite"
       >
@@ -1140,6 +1145,7 @@ export default function PracticeQuestionPage() {
       <section
         key={questionId}
         className={`practice-run-question glass-card${questionCardChrome ? " practice-run-question--variant" : ""}`}
+        data-question-main
       >
         {(routeMode !== "practice" || includeMarkReview) && (
           <div className="practice-run-question__head">
@@ -1163,12 +1169,44 @@ export default function PracticeQuestionPage() {
           </div>
         )}
         {routeMode === "practice" && (
-          <QuestionVariantSwitcher
-            questionId={questionId}
-            family={family}
-            onSelect={goVariant}
-            onPrefetchVariants={prefetchFamilyVariants}
-          />
+          <div
+            className={`practice-run-question__toolbar${
+              questionCardChrome ? " practice-run-question__toolbar--variant" : ""
+            }`}
+          >
+            <QuestionVariantSwitcher
+              questionId={questionId}
+              family={family}
+              onSelect={goVariant}
+              onPrefetchVariants={prefetchFamilyVariants}
+            />
+            {q.questionNo > 0 ? (
+              <span className="practice-run-question__toolbar-qno" aria-label={`Question ${q.questionNo}`}>
+                Q{q.questionNo}
+              </span>
+            ) : null}
+            {questionCardChrome ? (
+              <div className="practice-run-question__toolbar-actions">
+                {user?.admin ? (
+                  <Link
+                    to={`/admin/questions/${encodeURIComponent(questionId)}`}
+                    className="variant-question-card__edit practice-run-question__toolbar-edit"
+                    title="Edit question (admin)"
+                  >
+                    <span className="material-symbols-outlined" aria-hidden>
+                      edit_square
+                    </span>
+                    <span className="variant-question-card__edit-label">Edit</span>
+                  </Link>
+                ) : null}
+                <BookmarkButton
+                  questionId={questionId}
+                  variant="icon"
+                  className="practice-run-question__toolbar-bookmark"
+                />
+              </div>
+            ) : null}
+          </div>
         )}
         <div
           className={`practice-run-question__media${
@@ -1208,6 +1246,7 @@ export default function PracticeQuestionPage() {
                 answerRevealed && !!selected && !!revealedAnswer && selected !== revealedAnswer
               }
               {...variantMcqProps(q)}
+              hideChromeHeader={routeMode === "practice" && questionCardChrome}
               adminEditHref={
                 user?.admin ? `/admin/questions/${encodeURIComponent(questionId)}` : ""
               }

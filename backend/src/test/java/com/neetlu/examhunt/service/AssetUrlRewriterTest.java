@@ -31,4 +31,20 @@ class AssetUrlRewriterTest {
         assertThat(AssetUrlRewriter.isLocalDevFilesUrl("https://cdn.example/2025/diagrams/x.webp"))
                 .isFalse();
     }
+
+    @Test
+    void ignoresLocalhostPublicBase() {
+        assertThat(AssetUrlRewriter.isLocalDevPublicBase("http://127.0.0.1:8081/files")).isTrue();
+        assertThat(AssetUrlRewriter.effectivePublicBase("http://localhost:8080/files")).isEmpty();
+        assertThat(
+                        AssetUrlRewriter.rewrite(
+                                "diagrams/x.webp", "2025", "http://127.0.0.1:8081/files"))
+                .isEqualTo("diagrams/x.webp");
+        assertThat(
+                        AssetUrlRewriter.rewrite(
+                                "http://127.0.0.1:8080/files/2025/diagrams/x.webp",
+                                "2025",
+                                "http://localhost:8081/files"))
+                .isEqualTo("2025/diagrams/x.webp");
+    }
 }

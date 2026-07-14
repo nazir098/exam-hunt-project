@@ -23,11 +23,18 @@ export function parseLetterStatementsStem(text: string): ParsedLetterStatements 
     .trim()
     .replace(/[:\s]+$/, "");
 
+  const stopAt = (chunk: string) => {
+    const cut = chunk.search(
+      /(?:^|\n)(?:Choose\b|\(\s*1\s*\)|['"]?[A-Z]['"]?\s+is\s*:)/i
+    );
+    return (cut >= 0 ? chunk.slice(0, cut) : chunk).trim();
+  };
+
   const statements: McqOptionView[] = [];
   for (let i = 0; i < matches.length; i++) {
     const start = (matches[i].index ?? 0) + matches[i][0].length;
     const end = i + 1 < matches.length ? matches[i + 1].index ?? raw.length : raw.length;
-    const body = raw.slice(start, end).trim();
+    const body = stopAt(raw.slice(start, end));
     if (body) {
       statements.push({ id: matches[i][1], text: body });
     }

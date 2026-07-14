@@ -1420,6 +1420,7 @@ export type AdminContentFormatView = {
   questionFormat: string;
   questionStem: string;
   options: McqOptionView[];
+  statements?: McqOptionView[];
   answer: string;
   hasDiagram: boolean;
   hasEquation: boolean;
@@ -1431,11 +1432,45 @@ export type AdminContentFormatView = {
   questionImageUrl: string;
   solutionImageUrl: string;
   mineruDiagramUrls: string[];
-  questionAssetPlacements: { index: number; marker: string; path: string; url: string; hidden: boolean }[];
-  solutionAssetPlacements: { index: number; marker: string; path: string; url: string; hidden: boolean }[];
+  questionAssetPlacements: {
+    index: number;
+    marker: string;
+    path: string;
+    url: string;
+    hidden: boolean;
+    bbox?: number[];
+  }[];
+  solutionAssetPlacements: {
+    index: number;
+    marker: string;
+    path: string;
+    url: string;
+    hidden: boolean;
+    bbox?: number[];
+  }[];
   mongoQuestionTextPreview: string;
   mongoSolutionTextPreview: string;
   mongoOptions: McqOptionView[];
+  mongoStatements?: McqOptionView[];
+  mongoMatchListA?: McqOptionView[];
+  mongoMatchListB?: McqOptionView[];
+  mongoAssetPlacements?: {
+    index: number;
+    marker: string;
+    path: string;
+    url: string;
+    hidden: boolean;
+    bbox?: number[];
+  }[];
+  mongoSolutionAssetPlacements?: {
+    index: number;
+    marker: string;
+    path: string;
+    url: string;
+    hidden: boolean;
+    bbox?: number[];
+  }[];
+  mongoRenderMode?: string;
   studentViewStale: boolean;
   studentViewLocked: boolean;
   solutionViewStale: boolean;
@@ -1464,6 +1499,34 @@ export function fixAdminQuestionRawTextLatex(
 ) {
   return request<AdminContentFormatView>(
     `/api/admin/questions/${encodeURIComponent(questionId)}/content-format/fix-raw-text-latex`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export function addAdminContentAssetFromSource(
+  questionId: string,
+  body: {
+    target: "question" | "solution";
+    sourceBbox: number[];
+    insertMarker?: boolean;
+  }
+) {
+  return request<AdminContentFormatView>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/content-format/content-asset/add`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export function cropAdminContentAssetFromSource(
+  questionId: string,
+  body: {
+    target: "question" | "solution";
+    index: number;
+    sourceBbox: number[];
+  }
+) {
+  return request<AdminContentFormatView>(
+    `/api/admin/questions/${encodeURIComponent(questionId)}/content-format/content-asset/crop`,
     { method: "POST", body: JSON.stringify(body) }
   );
 }

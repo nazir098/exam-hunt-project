@@ -69,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/settings/public", "/api/practice-ai/status")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/seo/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/local-files/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                         "/api/auth/me",

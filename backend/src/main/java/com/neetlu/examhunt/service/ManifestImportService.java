@@ -971,10 +971,9 @@ public class ManifestImportService {
             if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_FORMAT)) {
                 doc.setQuestionFormat("matching");
             }
-            if (!parsed.intro().isBlank()
-                    && !AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.QUESTION_TEXT)) {
-                doc.setQuestionTextPreview(sanitize(parsed.intro()));
-            }
+            // Keep the MinerU table in the stem so the client can re-parse List-I/II.
+            // Do not replace the stem with intro-only text (that drops A–D / I–IV when
+            // matchListA is missing from an API response or admin preview).
             if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_A)
                     && !parsed.listA().isEmpty()) {
                 doc.setMatchListA(parsed.listA());
@@ -1204,16 +1203,102 @@ public class ManifestImportService {
     }
 
     /**
+     * True when this API process has a local pdf-qa-extractor checkout ({@code EXTRACTOR_ROOT}/output).
+     * Local admin: edit metadata, crop, publish R2, sync Mongo.
+     * Production: no extractor mount — serve Mongo only (no per-request disk/R2 enrichment).
+     */
+    public boolean isLocalContentWorkspace() {
+        return resolveOutputRootOptional().isPresent();
+    }
+
+    /**
      * Backfill MCQ options, structured text, and diagrams from extractor metadata/{id}.json.
+     * <p>
+     * Production (no {@code EXTRACTOR_ROOT}): no-op. Student/practice GETs must stay Mongo-only.
+     * Run content sync from localhost admin so local + R2 + Mongo stay aligned before deploy traffic.
      */
     public Question enrichFromDisk(Question doc) {
         if (doc == null) {
             return null;
         }
+        if (!isLocalContentWorkspace()) {
+            return doc;
+        }
         if ("ai_variant".equalsIgnoreCase(doc.getSourceType())) {
             return enrichVariantFromDisk(doc);
         }
         return enrichPyqFromDisk(doc);
+    }
+
+    /**
+     * Admin "Update student view" / post-crop: always re-apply extractor metadata into Mongo,
+     * even when the document already looks structured (stem+options present but drifted).
+     * Local EXTRACTOR_ROOT only — production must not run this on the request path.
+     */
+    public Question forceRefreshContentFromDisk(Question doc) {
+        if (doc == null) {
+            return null;
+        }
+        if (!isLocalContentWorkspace()) {
+            return doc;
+        }
+        if ("ai_variant".equalsIgnoreCase(doc.getSourceType())) {
+            try {
+                String folder = resolveSourceFolder(doc.getPackId());
+                return loadVariantMetadataNode(doc)
+                        .map(
+                                node -> {
+                                    applyVariantEnrichment(doc, node, folder);
+                                    applyVariantFormatFields(doc, node, folder);
+                                    attachDiagramSvgs(doc, folder);
+                                    return questionRepository.save(doc);
+                                })
+                        .orElse(doc);
+            } catch (Exception ex) {
+                return doc;
+            }
+        }
+        try {
+            String folder = resolveSourceFolder(doc.getPackId());
+            java.util.Optional<JsonNode> metadata =
+                    loadQuestionMetadataNode(doc.getQuestionId(), folder);
+            if (metadata.isEmpty()) {
+                return doc;
+            }
+            JsonNode meta = metadata.get();
+            // Admin sync must apply hybrid/structured text even when not yet approved.
+            // Previously we forced renderMode=image here and wiped the student structured view.
+            structuredContentService.applyStructuredContent(doc, meta, folder, true);
+            applyVariantEnrichment(doc, meta, folder);
+            structuredContentService.applySolutionAssets(doc, meta, folder);
+            attachDiagramSvgs(doc, folder);
+            return questionRepository.save(doc);
+        } catch (Exception ex) {
+            return doc;
+        }
+    }
+
+    /**
+     * After crop/add-asset: always refresh Mongo diagram URLs from disk (prefers local files).
+     */
+    public Question refreshPyqAssetsFromDisk(Question doc) {
+        if (doc == null || "ai_variant".equalsIgnoreCase(doc.getSourceType())) {
+            return doc;
+        }
+        if (!isLocalContentWorkspace()) {
+            return doc;
+        }
+        try {
+            String folder = resolveSourceFolder(doc.getPackId());
+            java.util.Optional<JsonNode> metadata = loadQuestionMetadataNode(doc.getQuestionId(), folder);
+            if (metadata.isEmpty()) {
+                return doc;
+            }
+            structuredContentService.refreshDiagramAssets(doc, metadata.get(), folder);
+            return questionRepository.save(doc);
+        } catch (Exception ex) {
+            return doc;
+        }
     }
 
     public Question enrichVariantFromDisk(Question doc) {
@@ -1254,8 +1339,59 @@ public class ManifestImportService {
                             && MatchingVariantParser.listsLookCorrupt(
                                     doc.getMatchListA(), doc.getMatchListB());
             if (!needsStructure && !corruptSolution && !corruptMatchLists) {
+                boolean changed = false;
                 if (needsPublicUrls
                         && structuredContentService.rewriteLocalDevAssetUrls(doc, folder)) {
+                    changed = true;
+                }
+                // Local extractor only: detect stem/options/solution drift even when Mongo already
+                // looks structured. Avoid remote/R2 on the student hot path.
+                java.util.Optional<JsonNode> localMeta =
+                        loadLocalQuestionMetadataNode(doc.getQuestionId(), folder);
+                if (localMeta.isPresent()) {
+                    JsonNode meta = localMeta.get();
+                    boolean stemDrift =
+                            structuredContentService.needsPyqStemMetadataRefresh(doc, meta);
+                    boolean solDrift =
+                            structuredContentService.needsSolutionMetadataRefresh(doc, meta);
+                    boolean solAssets =
+                            structuredContentService.needsSolutionAssetRefresh(doc, meta);
+                    boolean missingPlacements =
+                            structuredContentService.needsInlineAssetPlacementRefresh(doc);
+                    boolean matchLists =
+                            structuredContentService.needsMatchListsMetadataRefresh(doc, meta);
+                    if (stemDrift || matchLists) {
+                        if (structuredContentService.applyStructuredContent(doc, meta, folder)) {
+                            changed = true;
+                        }
+                    } else if (missingPlacements || needsPublicUrls) {
+                        // Refresh URLs only — never call applyStructuredContent here (unapproved
+                        // drafts would no-op / used to downgrade hybrid → image on every GET).
+                        structuredContentService.refreshDiagramAssets(doc, meta, folder);
+                        changed = true;
+                    }
+                    if (solDrift || solAssets) {
+                        applyVariantEnrichment(doc, meta, folder);
+                        structuredContentService.applySolutionAssets(doc, meta, folder);
+                        changed = true;
+                    }
+                } else {
+                    boolean missingPlacements =
+                            structuredContentService.needsInlineAssetPlacementRefresh(doc);
+                    if (missingPlacements) {
+                        java.util.Optional<JsonNode> metaOpt =
+                                loadQuestionMetadataNode(doc.getQuestionId(), folder);
+                        if (metaOpt.isPresent()) {
+                            JsonNode meta = metaOpt.get();
+                            if (structuredContentService.needsPyqStemMetadataRefresh(doc, meta)
+                                    || missingPlacements) {
+                                structuredContentService.applyStructuredContent(doc, meta, folder);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+                if (changed) {
                     return questionRepository.save(doc);
                 }
                 return doc;
@@ -1271,18 +1407,8 @@ public class ManifestImportService {
                 return doc;
             }
             JsonNode meta = metadata.get();
-            if (!structuredContentService.structuredExportAllowed(meta)
-                    && structuredContentService.alreadyStructured(doc)) {
-                doc.setRenderMode("image");
-                String compositeUrl = text(meta, "question_image_url");
-                if (compositeUrl.isBlank()) {
-                    compositeUrl = text(meta, "question_image");
-                }
-                if (!compositeUrl.isBlank()) {
-                    doc.setQuestionImageUrl(rewriteAssetUrl(compositeUrl, folder));
-                }
-                return questionRepository.save(doc);
-            }
+            // Do not downgrade live hybrid Mongo just because content_render_approved is false.
+            // Admin "Update student view" publishes drafts; student GET must not undo that.
             boolean shouldRefreshMatchLists =
                     structuredContentService.needsMatchListsMetadataRefresh(doc, meta);
             boolean shouldRefreshStem =
@@ -1331,17 +1457,31 @@ public class ManifestImportService {
         }
     }
 
-    private java.util.Optional<JsonNode> loadQuestionMetadataNode(String questionId, String sourceFolder)
-            throws IOException {
-        Optional<Path> outputRootOptional = resolveOutputRootOptional();
-        if (outputRootOptional.isPresent()) {
+    private java.util.Optional<JsonNode> loadLocalQuestionMetadataNode(
+            String questionId, String sourceFolder) {
+        try {
+            Optional<Path> outputRootOptional = resolveOutputRootOptional();
+            if (outputRootOptional.isEmpty()) {
+                return java.util.Optional.empty();
+            }
             Path file =
                     localYearPath(outputRootOptional.get(), sourceFolder)
                             .resolve("metadata")
                             .resolve(questionId + ".json");
-            if (Files.isRegularFile(file)) {
-                return java.util.Optional.of(objectMapper.readTree(file.toFile()));
+            if (!Files.isRegularFile(file)) {
+                return java.util.Optional.empty();
             }
+            return java.util.Optional.of(objectMapper.readTree(file.toFile()));
+        } catch (Exception ex) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    private java.util.Optional<JsonNode> loadQuestionMetadataNode(String questionId, String sourceFolder)
+            throws IOException {
+        java.util.Optional<JsonNode> local = loadLocalQuestionMetadataNode(questionId, sourceFolder);
+        if (local.isPresent()) {
+            return local;
         }
         String fileName = questionId + ".json";
         for (String url : remoteMetadataFileUrls(sourceFolder, null, fileName)) {
@@ -1370,6 +1510,8 @@ public class ManifestImportService {
     }
 
     private void applyVariantEnrichment(Question doc, JsonNode v, String sourceFolder) {
+        // Prefer question_stem whenever present (incl. unapproved drafts). Never clobber a
+        // structured/hybrid stem with OCR question_text after forceRefresh / Update student view.
         boolean structuredStem = structuredContentService.hasStructuredStemMetadata(v);
         if (!structuredStem) {
             String preview = text(v, "question_text_preview");

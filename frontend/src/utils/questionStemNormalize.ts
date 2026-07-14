@@ -93,6 +93,13 @@ function sanitizeStructuredMcqText(text: string, optionBody = false): string {
     const body = t.replace(/\$/g, "").trim();
     return `$${normalizeMathContent(body)}$`;
   }
+  // Mixed prose + equation: wrap from first math token through end (avoids $\cos$$\left$ shards).
+  if (!t.includes("$") && looksLikeLatex(t) && /=/.test(t)) {
+    const wrapped = wrapInlineEquationInProse(t);
+    if (wrapped) {
+      return normalizeInlineMath(wrapped);
+    }
+  }
   if (!t.includes("$")) {
     t = wrapBareLatexFragments(t);
   }
@@ -104,11 +111,30 @@ function sanitizeStructuredMcqText(text: string, optionBody = false): string {
   return out.trim();
 }
 
+/**
+ * "…given by E_{z} = 60 \\cos\\left(…\\right)\\mathrm{V/m}" →
+ * "…given by $E_{z} = 60 \\cos\\left(…\\right)\\mathrm{V/m}$"
+ */
+function wrapInlineEquationInProse(text: string): string | null {
+  const start = text.search(/(?:[A-Za-z]_\{[a-zA-Z0-9]+\}|[A-Za-z]_[a-zA-Z0-9]|\\[a-zA-Z])/);
+  if (start < 0) return null;
+  const prose = text.slice(0, start);
+  const math = text.slice(start).trim();
+  if (!/=/.test(math) || !looksLikeLatex(math)) return null;
+  // Avoid swallowing long trailing English after a short token like \mu_k mid-sentence.
+  if (math.length > 220 && /\b(the|and|with|when|then|which|that)\b/i.test(math)) {
+    return null;
+  }
+  return `${prose}$${normalizeMathContent(math)}$`;
+}
+
 /** Preserve extractor $...$ blocks; strip duplicated option lines; repair MinerU OCR. */
 export function normalizeQuestionStem(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";
-  return sanitizeStructuredMcqText(ensureMathBoundarySpaces(trimEmbeddedMcqOptions(trimmed)));
+  // Repair \left$$ before ensureMathBoundarySpaces (which would insert `\left $$`).
+  const repaired = repairPseudoDollarDelimiters(trimEmbeddedMcqOptions(trimmed));
+  return sanitizeStructuredMcqText(ensureMathBoundarySpaces(repaired));
 }
 
 /** Bank / search preview — truncate without breaking open $...$ math delimiters. */
@@ -128,7 +154,10 @@ export function truncateStemPreview(text: string, maxLen = 180): string {
 export function normalizeMcqOptionText(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";
-  const withoutMarker = trimmed.replace(/^\(\s*\d+\s*\)\s*/, "");
+  const withoutMarker = trimmed
+    .replace(/^\(\s*\d+\s*\)\s*/, "")
+    .replace(/^from\s+the\s+options?\s+given\s+below\s*:?\s*/i, "")
+    .trim();
   return sanitizeStructuredMcqText(withoutMarker, true);
 }
 
@@ -172,13 +201,45 @@ function cleanProseAdjacentToMath(prose: string): string {
     .trim();
 }
 
+function looksLikeMarkdownTableRow(line: string): boolean {
+  const t = line.trim();
+  return t.startsWith("|") && t.includes("|", 1);
+}
+
 function normalizeProseSolution(text: string): string {
   const lines = text
-    .split(/\n+/)
+    .split(/\n/)
     .map((line) => line.trim())
     .filter((line) => line && line !== "$" && line !== "$$");
   if (lines.length === 0) return "";
-  return lines.map(normalizeSolutionLine).join("\n\n");
+
+  const blocks: string[] = [];
+  let tableRows: string[] = [];
+  let proseLines: string[] = [];
+
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    blocks.push(tableRows.map(normalizeSolutionLine).join("\n"));
+    tableRows = [];
+  };
+  const flushProse = () => {
+    if (!proseLines.length) return;
+    blocks.push(proseLines.map(normalizeSolutionLine).join("\n\n"));
+    proseLines = [];
+  };
+
+  for (const line of lines) {
+    if (looksLikeMarkdownTableRow(line)) {
+      flushProse();
+      tableRows.push(line);
+    } else {
+      flushTable();
+      proseLines.push(line);
+    }
+  }
+  flushTable();
+  flushProse();
+  return blocks.join("\n\n");
 }
 
 function normalizeSolutionWithEnvironments(text: string): string {
@@ -245,6 +306,7 @@ export function normalizeSolutionText(text: string): string {
   let t = text.trim();
   if (!t) return "";
   t = t.replace(/\\n(?![a-zA-Z])/g, "\n");
+  t = repairMarkdownTableSpacing(t);
   t = repairPseudoDollarDelimiters(t);
   t = repairMalformedEnvironmentOpener(t);
   t = t.replace(/\${4,}/g, "\n\n");
@@ -255,5 +317,10 @@ export function normalizeSolutionText(text: string): string {
       prepareSolutionForEnvironments(dedollarizeEnvironmentFragments(result))
     );
   }
-  return result;
+  return repairMarkdownTableSpacing(result);
+}
+
+/** Collapse blank lines between markdown table rows (legacy sanitizer inserted them). */
+export function repairMarkdownTableSpacing(text: string): string {
+  return text.replace(/(\|[^\n]*\|)\n(?:[ \t]*\n)+(?=\|)/g, "$1\n");
 }

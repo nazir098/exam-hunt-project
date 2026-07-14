@@ -4866,8 +4866,7 @@ a.nav-tip {
     z-index: 48;
     margin: 0;
     width: auto;
-    max-width: 430px;
-    margin-inline: auto;
+    max-width: none;
     padding: 0.45rem;
     pointer-events: auto;
     border-radius: 0.75rem;
@@ -5503,6 +5502,15 @@ a.nav-tip {
   max-width: 80rem;
   margin: 0 auto;
   padding: 0 1rem 2rem;
+  box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .practice-run-page {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: 100%;
+  }
 }
 
 .practice-run-page--session-ended .practice-run-header,
@@ -5673,30 +5681,34 @@ a.nav-tip {
   }
 
   .practice-run-page--practice .practice-run-question {
-    padding: 0.65rem 0.75rem 0.75rem;
+    padding: 0.55rem 0.45rem 0.7rem;
     margin-bottom: 0.5rem;
     border-radius: 0.85rem;
   }
 
   .practice-run-page--practice .practice-run-question--variant {
-    padding: 0.55rem 0.55rem 0.65rem;
+    padding: 0.55rem 0.45rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0.85rem;
   }
 
   .practice-run-page--practice .practice-run-question--variant .practice-run-question__media {
-    padding: 0.15rem 0;
+    padding: 0;
+    background: transparent;
+    border: none;
   }
 
   .practice-run-page--practice .text-mcq-paper--variant {
-    padding: 0.75rem 0.8rem 0.85rem;
+    padding: 0;
   }
 
   .practice-run-page--practice .question-variant-switcher {
-    margin-bottom: 0.45rem;
+    margin-bottom: 0;
     max-width: 100%;
   }
 
   .practice-run-page--practice .question-variant-switcher__trigger {
-    padding: 0.32rem 0.45rem;
+    padding: 0.45rem 0.65rem;
     font-size: 0.72rem;
   }
 
@@ -6180,6 +6192,11 @@ a.nav-tip {
   padding: 1rem 1.1rem 1.1rem;
   border-radius: 1.15rem;
   margin-bottom: 1rem;
+  scroll-margin-top: calc(var(--app-header-h, 4rem) + 0.5rem);
+}
+
+.test-review-question {
+  scroll-margin-top: calc(var(--app-header-h, 4rem) + 0.5rem);
 }
 
 .practice-run-question__head {
@@ -6225,6 +6242,50 @@ a.nav-tip {
   margin-bottom: 0.75rem;
   max-width: 18rem;
   font-family: var(--font-ui);
+}
+
+.practice-run-question__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+  max-width: 100%;
+}
+
+.practice-run-question__toolbar .question-variant-switcher {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+  max-width: min(14rem, calc(100% - 7rem));
+}
+
+.practice-run-question__toolbar--variant .question-variant-switcher {
+  max-width: min(14rem, calc(100% - 7rem));
+}
+
+.practice-run-question__toolbar-qno {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 0.25rem;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(240, 238, 255, 0.88);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.practice-run-question__toolbar-bookmark {
+  flex: 0 0 auto;
+}
+
+.practice-run-question__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .question-variant-switcher--compact {
@@ -6678,7 +6739,50 @@ a.nav-tip {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   max-width: 100%;
-  container-type: normal;
+  container-type: inline-size;
+  container-name: mcq-paper;
+}
+
+/* Wide viewport + short classic MCQ: stem | options without scrolling the card. */
+.text-mcq-paper--split.text-mcq-paper--variant {
+  max-width: min(100%, 56rem);
+}
+
+.text-mcq-paper--split .text-mcq-paper__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(12.5rem, 0.95fr);
+  gap: 0.85rem 1.1rem;
+  align-items: start;
+}
+
+.text-mcq-paper--split .text-mcq-paper__split-main {
+  min-width: 0;
+}
+
+.text-mcq-paper--split .text-mcq-paper__stem {
+  margin-bottom: 0;
+}
+
+.text-mcq-paper--split .text-mcq-paper__options {
+  margin: 0;
+  gap: 0.55rem;
+}
+
+.text-mcq-paper--split .text-mcq-paper__option--variant-card {
+  padding: 0.55rem 0.65rem;
+}
+
+.text-mcq-paper--split .text-mcq-paper__option-text,
+.text-mcq-paper--split .text-mcq-paper__option-text .ai-markdown,
+.text-mcq-paper--split .text-mcq-paper__option-text .ai-markdown p {
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 699px) {
+  .text-mcq-paper--split .text-mcq-paper__split {
+    display: block;
+  }
 }
 
 .text-mcq-paper--variant .text-mcq-paper__stem,
@@ -6688,7 +6792,7 @@ a.nav-tip {
 }
 
 .text-mcq-paper--variant .text-mcq-paper__stem {
-  font-size: 1.02rem;
+  font-size: 1.07rem;
   font-weight: 500;
   line-height: 1.68;
   color: #f3f1ff;
@@ -6727,21 +6831,21 @@ a.nav-tip {
 
 @media (min-width: 1024px) {
   .text-mcq-paper--variant .text-mcq-paper__stem {
-    font-size: 1.12rem;
+    font-size: 1.17rem;
     line-height: 1.68;
   }
 
   .text-mcq-paper--variant .ai-markdown--variant,
   .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown,
   .text-mcq-paper--variant .text-mcq-paper__stem .ai-markdown p {
-    font-size: 1.06rem;
+    font-size: 1.11rem;
     line-height: 1.68;
   }
 
   .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text,
   .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown,
   .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text .ai-markdown p {
-    font-size: 1.04rem;
+    font-size: 1.09rem;
     line-height: 1.62;
   }
 }
@@ -6755,7 +6859,7 @@ a.nav-tip {
 
 .text-mcq-paper--variant .text-mcq-paper__stem-note {
   margin-top: 0.1rem;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   line-height: 1.55;
   color: #b8b3d4;
 }
@@ -6770,9 +6874,12 @@ a.nav-tip {
 
 .text-mcq-paper--variant .text-mcq-paper__diagram,
 .text-mcq-paper--variant .text-mcq-paper__diagram--inline {
+  /* Default: compact stem diagram when options 1–4 have real text. */
   margin: 0.5rem auto 0.4rem;
   max-width: min(100%, 17rem);
   width: fit-content;
+  box-sizing: border-box;
+  overflow: visible;
   padding: 0.42rem 0.55rem 0.48rem;
   border-radius: 0.65rem;
   background: rgba(255, 255, 255, 0.04);
@@ -6793,8 +6900,8 @@ a.nav-tip {
   display: block;
   width: auto;
   max-width: 100%;
-  max-height: 10.25rem;
   height: auto;
+  max-height: 10.25rem;
   margin-inline: auto;
   object-fit: contain;
   object-position: center;
@@ -6813,6 +6920,45 @@ a.nav-tip {
   padding: 0.35rem;
   border-radius: 0.45rem;
   background: #f5f6fa;
+}
+
+/* Stem {{asset:N}} figures — a bit roomier than tiny side diagrams, still compact
+   on mobile. Users can tap-to-zoom for detail (wide A–D panels included). */
+.text-mcq-paper--variant.text-mcq-paper--stem-figure .text-mcq-paper__diagram--inline.variant-diagram {
+  max-width: min(100%, 20rem);
+  width: fit-content;
+  margin-inline: auto;
+  align-items: center;
+}
+
+.text-mcq-paper--variant.text-mcq-paper--stem-figure .text-mcq-paper__diagram--inline .variant-diagram__img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 11.5rem;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* Figure-option PYQs: choices are inside the image — full-width strip, no clipping. */
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram,
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline {
+  max-width: 100%;
+  width: 100%;
+}
+
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram .variant-diagram__img,
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline .variant-diagram__img {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(70vh, 28rem);
+}
+
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram .variant-diagram__svg,
+.text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline .variant-diagram__svg {
+  max-width: 100%;
+  width: 100%;
+  max-height: min(70vh, 28rem);
 }
 
 .text-mcq-paper--variant .variant-diagram--zoomable .variant-diagram__zoom-hint {
@@ -6838,19 +6984,50 @@ a.nav-tip {
     max-height: 9rem;
   }
 
+  .text-mcq-paper--variant.text-mcq-paper--stem-figure .text-mcq-paper__diagram--inline {
+    max-width: min(100%, 16.5rem);
+    width: fit-content;
+  }
+
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram,
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline {
+    max-width: 100%;
+  }
+
+  .text-mcq-paper--variant.text-mcq-paper--stem-figure .text-mcq-paper__diagram--inline .variant-diagram__img {
+    width: auto;
+    max-width: 100%;
+    max-height: 9.5rem;
+  }
+
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram .variant-diagram__img,
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline .variant-diagram__img {
+    max-height: min(45vh, 16rem);
+  }
+
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram,
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline {
+    max-width: 100%;
+  }
+
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram .variant-diagram__img,
+  .text-mcq-paper--variant.text-mcq-paper--figure-choices .text-mcq-paper__diagram--inline .variant-diagram__img {
+    max-height: min(70vh, 28rem);
+  }
+
   .text-mcq-paper--variant .variant-diagram--zoomable .variant-diagram__zoom-hint {
     opacity: 0.65;
   }
 }
 
 @media (min-width: 1024px) {
-  .text-mcq-paper--variant .text-mcq-paper__diagram,
-  .text-mcq-paper--variant .text-mcq-paper__diagram--inline {
+  .text-mcq-paper--variant:not(.text-mcq-paper--figure-choices):not(.text-mcq-paper--stem-figure) .text-mcq-paper__diagram,
+  .text-mcq-paper--variant:not(.text-mcq-paper--figure-choices):not(.text-mcq-paper--stem-figure) .text-mcq-paper__diagram--inline {
     max-width: min(100%, 18rem);
   }
 
-  .text-mcq-paper--variant .text-mcq-paper__diagram .variant-diagram__img,
-  .text-mcq-paper--variant .text-mcq-paper__diagram--inline .variant-diagram__img {
+  .text-mcq-paper--variant:not(.text-mcq-paper--figure-choices):not(.text-mcq-paper--stem-figure) .text-mcq-paper__diagram .variant-diagram__img,
+  .text-mcq-paper--variant:not(.text-mcq-paper--figure-choices):not(.text-mcq-paper--stem-figure) .text-mcq-paper__diagram--inline .variant-diagram__img {
     max-height: 11rem;
   }
 }
@@ -6861,6 +7038,11 @@ a.nav-tip {
   justify-content: space-between;
   gap: 0.65rem;
   margin-bottom: 0.85rem;
+}
+
+.variant-question-card__head--actions-only {
+  justify-content: flex-end;
+  margin-bottom: 0.55rem;
 }
 
 .variant-question-card__head-actions {
@@ -6973,7 +7155,44 @@ a.nav-tip {
   gap: 0.55rem;
 }
 
+.text-mcq-paper--variant .text-mcq-paper__options--paired {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__options--paired .text-mcq-paper__option-item {
+  display: flex;
+  min-width: 0;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__options--paired .text-mcq-paper__option--variant-card {
+  width: 100%;
+  height: 100%;
+  min-height: 3.1rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+@media (max-width: 520px) {
+  .text-mcq-paper--variant .text-mcq-paper__options--paired {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stitch phone frame / narrow cards: viewport can stay wide while the card is narrow. */
+@container mcq-paper (max-width: 34rem) {
+  .text-mcq-paper--variant .text-mcq-paper__options--paired {
+    grid-template-columns: 1fr;
+  }
+}
+
 .text-mcq-paper--variant .text-mcq-paper__option--variant-card {
+  display: flex;
+  flex-direction: row;
   align-items: flex-start;
   padding: 0.9rem 1rem;
   border-radius: 0.75rem;
@@ -6987,6 +7206,16 @@ a.nav-tip {
     box-shadow 0.16s ease;
 }
 
+/* Keep number | text on one row even if formula class is present. */
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card.text-mcq-paper__option--formula {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  min-height: 0;
+}
+
 .text-mcq-paper--variant .text-mcq-paper__option--variant-card:hover:not(:disabled) {
   border-color: rgba(196, 181, 253, 0.35);
   background: rgba(124, 58, 237, 0.1);
@@ -6995,10 +7224,40 @@ a.nav-tip {
 .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-badge {
   width: 1.95rem;
   height: 1.95rem;
-  font-size: 0.84rem;
+  flex-shrink: 0;
+  font-size: 0.89rem;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.12);
   color: #d4d2f0;
+}
+
+.text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text {
+  color: #f0eeff;
+  font-weight: 500;
+  font-size: 1.05rem;
+  line-height: 1.58;
+  text-align: left;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Per-option structure crops (asset:1–4); stem reaction stays asset:0. */
+.text-mcq-paper__option-diagram {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.text-mcq-paper__option-diagram .variant-diagram__img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 9rem;
+  object-fit: contain;
+  margin: 0;
+  padding: 0.35rem;
+  border-radius: 0.35rem;
+  background: #f5f6fa;
 }
 
 .text-mcq-paper--variant .text-mcq-paper__option--variant-card.is-selected {
@@ -7035,7 +7294,7 @@ a.nav-tip {
 .text-mcq-paper--variant .text-mcq-paper__option--variant-card .text-mcq-paper__option-text {
   color: #f0eeff;
   font-weight: 500;
-  font-size: 1rem;
+  font-size: 1.05rem;
   line-height: 1.58;
 }
 
@@ -7132,12 +7391,21 @@ a.nav-tip {
 .text-mcq-paper--exam .text-mcq-paper__diagram--inline,
 .text-mcq-paper--exam .text-mcq-paper__diagram--exam {
   margin: 0.65rem auto 0.85rem;
-  max-width: min(100%, 18rem);
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .text-mcq-paper--exam .text-mcq-paper__diagram .variant-diagram__img,
 .text-mcq-paper--exam .text-mcq-paper__diagram--inline .variant-diagram__img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: min(70vh, 28rem);
   margin-inline: auto;
+  object-fit: contain;
 }
 
 .text-mcq-paper--exam .variant-diagram--zoomable .variant-diagram__zoom-hint {
@@ -7647,7 +7915,18 @@ a.nav-tip {
 
 @media (max-width: 640px) {
   .variant-matching-grid {
-    grid-template-columns: 1fr;
+    /* Keep List-I | List-II side-by-side so formulas use the extra width. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.45rem;
+  }
+
+  .variant-matching-col__item {
+    gap: 0.2rem 0.3rem;
+  }
+
+  .variant-matching-col__title {
+    font-size: 0.72rem;
+    margin-bottom: 0.3rem;
   }
 }
 
@@ -8380,9 +8659,10 @@ a.nav-tip {
 }
 
 .solve-page {
-  max-width: min(1280px, 96vw);
+  max-width: min(1280px, 100%);
   margin: 0 auto;
   padding: 0 var(--margin-mobile, 1rem) calc(5rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 @media (max-width: 1023px) {
@@ -8477,6 +8757,174 @@ a.nav-tip {
 
   .solve-page__meta-chips .practice-run-chip--muted {
     color: #9a98b8;
+  }
+
+  .solve-page__meta-chips .practice-run-chip--qno {
+    color: #e8e6ff;
+    font-weight: 700;
+  }
+}
+
+/* Mobile: full-width content with slight official side margins. */
+@media (max-width: 767px) {
+  .stitch-shell .stitch-page-content:has(> main.solve-page),
+  .stitch-shell .stitch-page-content:has(> .practice-run-page--practice),
+  .stitch-shell .stitch-page-content:has(> .practice-run-page--test) {
+    --solve-page-gutter: max(0.75rem, env(safe-area-inset-left, 0px));
+    --solve-page-gutter-end: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-left: var(--solve-page-gutter);
+    padding-right: var(--solve-page-gutter-end);
+  }
+
+  .stitch-shell .stitch-page-content > main.solve-page,
+  .stitch-shell .stitch-page-content > .practice-run-page--practice,
+  .stitch-shell .stitch-page-content > .practice-run-page--test {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  main.solve-page,
+  .practice-run-page--practice,
+  .practice-run-page--test {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .solve-page > .product-mode-banner,
+  .solve-page > .product-mode-banner-twin,
+  .solve-page > .solve-page__meta,
+  .solve-page .practice-run-layout,
+  .solve-page > .solve-page__mobile-rail,
+  .practice-run-page--practice .practice-run-layout,
+  .practice-run-page--test .practice-run-layout {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .solve-page > .solve-page__meta {
+    margin-bottom: 0.55rem;
+    gap: 0.45rem;
+  }
+
+  .solve-page .practice-run-layout,
+  .practice-run-page--practice .practice-run-layout,
+  .practice-run-page--test .practice-run-layout {
+    gap: 0.5rem;
+  }
+
+  .solve-page .practice-run-question.glass-card,
+  .practice-run-page--practice .practice-run-question.glass-card,
+  .practice-run-page--test .practice-run-question.glass-card,
+  .solve-page .practice-run-question--variant.glass-card,
+  .practice-run-page--practice .practice-run-question--variant.glass-card,
+  .solve-page .practice-run-question--variant,
+  .practice-run-page--practice .practice-run-question--variant,
+  .solve-page .practice-run-question,
+  .practice-run-page--practice .practice-run-question {
+    position: relative;
+    background: rgba(22, 22, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    padding: 0.65rem 0.7rem 0.8rem;
+    border-radius: 0.85rem;
+    margin-bottom: 0.45rem;
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .solve-page .practice-run-question--variant .practice-run-question__media,
+  .practice-run-page--practice .practice-run-question--variant .practice-run-question__media {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .practice-run-question__toolbar--variant {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.65rem;
+    max-width: none;
+  }
+
+  .practice-run-question__toolbar--variant .question-variant-switcher {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    max-width: min(11.5rem, calc(100% - 6.5rem));
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+
+  .practice-run-question__toolbar--variant .practice-run-question__toolbar-qno {
+    flex: 1 1 auto;
+    font-size: 0.78rem;
+    color: #f0eeff;
+  }
+
+  .practice-run-question__toolbar--variant .question-variant-switcher__trigger {
+    min-height: 2.35rem;
+    padding: 0.45rem 0.65rem;
+    align-items: center;
+  }
+
+  .practice-run-question__toolbar-bookmark {
+    flex: 0 0 auto;
+    width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: #c4b5fd;
+  }
+
+  .practice-run-question__toolbar-bookmark:hover {
+    border-color: rgba(168, 85, 247, 0.45);
+    background: rgba(88, 28, 135, 0.18);
+  }
+
+  .solve-page .practice-run-question--variant .text-mcq-paper--variant,
+  .practice-run-page--practice .practice-run-question--variant .text-mcq-paper--variant {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+    max-width: none;
+  }
+
+  .solve-page .practice-run-question--variant .text-mcq-paper__option--variant-card,
+  .practice-run-page--practice .practice-run-question--variant .text-mcq-paper__option--variant-card {
+    padding: 0.55rem 0.5rem;
+  }
+
+  .solve-page .practice-run-question--variant .variant-matching-grid,
+  .practice-run-page--practice .practice-run-question--variant .variant-matching-grid {
+    gap: 0.55rem 0.55rem;
+  }
+
+  .solve-page .practice-run-question--variant .variant-matching-col__item,
+  .practice-run-page--practice .practice-run-question--variant .variant-matching-col__item {
+    gap: 0.25rem 0.35rem;
+  }
+
+  .solve-page__meta-chips {
+    width: 100%;
   }
 }
 
@@ -8765,14 +9213,16 @@ a.nav-tip {
   .solve-page__footer-nav--fixed {
     display: flex;
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    transform: none;
     bottom: var(--mobile-tab-bar-h);
     z-index: 48;
     width: 100%;
-    max-width: 430px;
+    max-width: none;
     margin: 0;
-    padding: 0.45rem max(1rem, env(safe-area-inset-left, 0px)) 0.4rem max(1rem, env(safe-area-inset-right, 0px));
+    padding: 0.45rem max(0.75rem, env(safe-area-inset-left, 0px)) 0.4rem
+      max(0.75rem, env(safe-area-inset-right, 0px));
     box-sizing: border-box;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     border-bottom: none;
@@ -8884,6 +9334,38 @@ a.nav-tip {
   margin-top: 0.65rem;
 }
 
+.solve-page__solution-text .ai-markdown table,
+.ai-markdown table {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0.55rem auto;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.solve-page__solution-text .ai-markdown th,
+.solve-page__solution-text .ai-markdown td,
+.ai-markdown th,
+.ai-markdown td {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  vertical-align: middle;
+}
+
+.solve-page__solution-text .ai-markdown th,
+.ai-markdown th {
+  font-weight: 700;
+  color: rgba(240, 238, 255, 0.92);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.solve-page__solution-text .ai-markdown td,
+.ai-markdown td {
+  color: rgba(240, 238, 255, 0.88);
+}
+
 .solve-page__solution-text .katex-display {
   margin: 0.5rem 0;
 }
@@ -8896,17 +9378,19 @@ a.nav-tip {
 .solve-page__solution-text .text-mcq-paper__diagram,
 .solve-page__solution-text .text-mcq-paper__diagram--inline {
   margin: 0.65rem auto 0.85rem;
-  max-width: min(100%, 18rem);
-  width: fit-content;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .solve-page__solution-text .text-mcq-paper__diagram .variant-diagram__img,
 .solve-page__solution-text .text-mcq-paper__diagram--inline .variant-diagram__img {
   display: block;
-  width: auto;
+  width: 100%;
   max-width: 100%;
-  max-height: min(10.25rem, 32vh);
   height: auto;
+  max-height: min(70vh, 28rem);
   margin-inline: auto;
   object-fit: contain;
   object-position: center;
@@ -8916,21 +9400,10 @@ a.nav-tip {
 
 .solve-page__solution-text .text-mcq-paper__diagram .variant-diagram__svg,
 .solve-page__solution-text .text-mcq-paper__diagram--inline .variant-diagram__svg {
-  max-width: min(100%, 18rem);
-  max-height: 10rem;
+  max-width: 100%;
+  max-height: min(70vh, 28rem);
+  width: 100%;
   margin-inline: auto;
-}
-
-@media (max-width: 639px) {
-  .solve-page__solution-text .text-mcq-paper__diagram,
-  .solve-page__solution-text .text-mcq-paper__diagram--inline {
-    max-width: min(100%, 14.25rem);
-  }
-
-  .solve-page__solution-text .text-mcq-paper__diagram .variant-diagram__img,
-  .solve-page__solution-text .text-mcq-paper__diagram--inline .variant-diagram__img {
-    max-height: min(9rem, 28vh);
-  }
 }
 
 .study-assistant__show-solution--toolbar {
@@ -13946,6 +14419,11 @@ html.fonts-loading .material-symbols-outlined::after {
 
 .solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--exam {
   color: #c4b5fd;
+}
+
+.solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--qno {
+  color: #f0eeff;
+  font-weight: 700;
 }
 
 .solve-page--variant .solve-page__meta-chips--variant .practice-run-chip--diff-easy {
@@ -19765,11 +20243,194 @@ html.fonts-loading .material-symbols-outlined::after {
   gap: 0.5rem;
 }
 
+.admin-content-qc__assets-label {
+  margin: 0;
+}
+
+.admin-content-qc__assets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+}
+
+.admin-content-qc__asset-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .admin-content-qc__asset-thumb {
   display: block;
   max-width: 100%;
   margin-top: 0.35rem;
   border-radius: 0.35rem;
+}
+
+.admin-content-qc__asset-missing {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+}
+
+.source-crop-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.source-crop-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 6, 16, 0.72);
+}
+
+.source-crop-dialog__panel {
+  position: relative;
+  z-index: 1;
+  width: min(56rem, 100%);
+  max-height: min(92vh, 52rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 1.05rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #121225;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.source-crop-dialog__head h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.source-crop-dialog__head p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.source-crop-dialog__stage-wrap {
+  overflow: auto;
+  max-height: min(68vh, 38rem);
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0a0a14;
+  touch-action: none;
+}
+
+.source-crop-dialog__stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.source-crop-dialog__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.source-crop-dialog__error {
+  margin: 1.5rem auto;
+  text-align: center;
+  max-width: 28rem;
+}
+
+.source-crop-dialog__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.source-crop-dialog__shade {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.source-crop-dialog__box {
+  position: absolute;
+  border: 2px solid #60a5fa;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.35);
+  cursor: move;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.source-crop-dialog__handle {
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.12rem;
+  background: #93c5fd;
+  border: 1px solid #1e3a8a;
+  pointer-events: auto;
+}
+
+.source-crop-dialog__handle--n {
+  top: -0.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.source-crop-dialog__handle--s {
+  bottom: -0.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.source-crop-dialog__handle--e {
+  right: -0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.source-crop-dialog__handle--w {
+  left: -0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.source-crop-dialog__handle--nw {
+  top: -0.35rem;
+  left: -0.35rem;
+  cursor: nwse-resize;
+}
+
+.source-crop-dialog__handle--ne {
+  top: -0.35rem;
+  right: -0.35rem;
+  cursor: nesw-resize;
+}
+
+.source-crop-dialog__handle--sw {
+  bottom: -0.35rem;
+  left: -0.35rem;
+  cursor: nesw-resize;
+}
+
+.source-crop-dialog__handle--se {
+  bottom: -0.35rem;
+  right: -0.35rem;
+  cursor: nwse-resize;
+}
+
+.source-crop-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .admin-content-qc__lead--warn {

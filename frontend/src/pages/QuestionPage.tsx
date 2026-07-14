@@ -7,6 +7,7 @@ import QuestionSecondaryActions from "../components/QuestionSecondaryActions";
 import QuestionFeedbackPanel from "../components/QuestionFeedbackPanel";
 import QuestionVariantSwitcher from "../components/QuestionVariantSwitcher";
 import TextMcqQuestion from "../components/TextMcqQuestion";
+import BookmarkButton from "../components/BookmarkButton";
 import VariantSwitchLoader from "../components/VariantSwitchLoader";
 import AppLoader from "../components/AppLoader";
 import ZoomableImage from "../components/ZoomableImage";
@@ -17,6 +18,7 @@ import { hasDistinctSolution } from "../utils/questionSolution";
 import OfficialSolutionBody from "../components/OfficialSolutionBody";
 import AdminSolutionEditLink from "../components/AdminSolutionEditLink";
 import { familyParentId, isPackSiblingNavigation, isSamePaperQuestion, variantSwitchLoaderForTarget } from "../utils/questionFamily";
+import { useScrollQuestionIntoView } from "../hooks/useScrollQuestionIntoView";
 import {
   beginVariantSwitch,
   clearVariantSwitchGate,
@@ -120,6 +122,8 @@ export default function QuestionPage() {
       cancelled = true;
     };
   }, [questionId, user?.id]);
+
+  useScrollQuestionIntoView(questionId, Boolean(q && q.questionId === questionId));
 
   useEffect(() => {
     if (q?.questionId !== questionId || !contentLoading) return;
@@ -640,6 +644,7 @@ export default function QuestionPage() {
           <section
             key={questionId}
             className={`practice-run-question glass-card${questionCardChrome ? " practice-run-question--variant" : ""}`}
+            data-question-main
           >
             {!questionCardChrome && (
             <div className="practice-run-question__head">
@@ -659,12 +664,44 @@ export default function QuestionPage() {
             )}
 
             {!questionPending && (
-              <QuestionVariantSwitcher
-                questionId={questionId}
-                family={family}
-                onSelect={goToQuestion}
-                onPrefetchVariants={prefetchFamilyVariants}
-              />
+              <div
+                className={`practice-run-question__toolbar${
+                  questionCardChrome ? " practice-run-question__toolbar--variant" : ""
+                }`}
+              >
+                <QuestionVariantSwitcher
+                  questionId={questionId}
+                  family={family}
+                  onSelect={goToQuestion}
+                  onPrefetchVariants={prefetchFamilyVariants}
+                />
+                {q.questionNo > 0 ? (
+                  <span className="practice-run-question__toolbar-qno" aria-label={`Question ${q.questionNo}`}>
+                    Q{q.questionNo}
+                  </span>
+                ) : null}
+                {questionCardChrome ? (
+                  <div className="practice-run-question__toolbar-actions">
+                    {adminEditHref ? (
+                      <Link
+                        to={adminEditHref}
+                        className="variant-question-card__edit practice-run-question__toolbar-edit"
+                        title="Edit question (admin)"
+                      >
+                        <span className="material-symbols-outlined" aria-hidden>
+                          edit_square
+                        </span>
+                        <span className="variant-question-card__edit-label">Edit</span>
+                      </Link>
+                    ) : null}
+                    <BookmarkButton
+                      questionId={questionId}
+                      variant="icon"
+                      className="practice-run-question__toolbar-bookmark"
+                    />
+                  </div>
+                ) : null}
+              </div>
             )}
 
             <div
@@ -711,6 +748,7 @@ export default function QuestionPage() {
                   sourceType={q.sourceType}
                   contentTextNormalized={q.contentTextNormalized}
                   adminEditHref={adminEditHref}
+                  hideChromeHeader={questionCardChrome}
                   {...mcqCard}
                 />
               )}

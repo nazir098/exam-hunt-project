@@ -2,8 +2,12 @@ import type { McqOptionView } from "../api";
 
 const LIST_A_ITEM = /\b([A-D])\.\s*(.+?)(?=\s+[A-D]\.\s|$)/gis;
 const ANSWER_MAPPING = /\b([A-D])\s*[-–:]\s*(.+?)(?=\s*,\s*[A-D]\s*[-–:]|$)/gis;
-const MATCHING_TABLE_ROW =
+/** 4-col MinerU: | A. | item | I. | item | */
+const MATCHING_TABLE_ROW_4 =
   /^\|\s*([A-D])\.?\s*\|\s*([^|]+?)\s*\|\s*(?:\(?([IVX]+)\)?\.?)\s*\|\s*([^|]+?)\s*\|/i;
+/** 2-col MinerU: | A. item | I. item | */
+const MATCHING_TABLE_ROW_2 =
+  /^\|\s*([A-D])\.\s*([^|]+?)\s*\|\s*(?:\(?([IVX]+)\)?\.?)\s*([^|]+?)\s*\|/i;
 const CHOOSE_OPTIONS = /\bChoose the correct answer\b/i;
 
 export type ParsedMatching = {
@@ -36,12 +40,14 @@ export function parseMatchingTableStem(text: string): ParsedMatching | null {
   for (const line of raw.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("|")) continue;
-    const match = MATCHING_TABLE_ROW.exec(trimmed);
+    const match = MATCHING_TABLE_ROW_4.exec(trimmed) ?? MATCHING_TABLE_ROW_2.exec(trimmed);
     if (!match) continue;
     const idA = match[1].toUpperCase();
     const textA = normalizeSpace(match[2]);
     const idB = match[3].toUpperCase();
     const textB = normalizeSpace(match[4]);
+    // Skip subtitle/header cells like "(Example)" / "(Type of Solution)"
+    if (/^\([^)]+\)$/.test(textA) && /^\([^)]+\)$/.test(textB)) continue;
     if (textA) listA.push({ id: idA, text: textA });
     if (textB) listB.push({ id: idB, text: textB });
   }
@@ -136,6 +142,15 @@ export function parseListBPoolFromOptions(options: McqOptionView[] | undefined):
 export function listRomanLabel(index: number): string {
   const romans = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"];
   return romans[index] ?? String(index + 1);
+}
+
+/** Prefer PDF/table ids (I, II, …) so List-II lines up with option keys A-III. */
+export function listBDisplayLabel(item: McqOptionView, index: number): string {
+  const id = (item.id ?? "").trim();
+  if (/^[IVXLCDM]+$/i.test(id)) {
+    return `${id.toUpperCase()}.`;
+  }
+  return `(${listRomanLabel(index)}).`;
 }
 
 export function isMatchingVariant(

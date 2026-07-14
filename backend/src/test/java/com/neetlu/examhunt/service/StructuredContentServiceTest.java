@@ -130,6 +130,44 @@ class StructuredContentServiceTest {
     }
 
     @Test
+    void skipsOptionStripPlacementsWhenStemHasTextOptionsAndNoFigure() throws Exception {
+        String json =
+                """
+                {
+                  "render_mode": "structured",
+                  "content_render_approved": true,
+                  "has_diagram": false,
+                  "question_stem": "Balloon surface tension stem with text options only.",
+                  "options": [
+                    {"id": "1", "text": "$a=1/2$"},
+                    {"id": "2", "text": "$a=-1/2$"},
+                    {"id": "3", "text": "$a=1$"},
+                    {"id": "4", "text": "$a=-1$"}
+                  ],
+                  "question_asset_placements": [
+                    {
+                      "index": 0,
+                      "marker": "asset:0",
+                      "path": "diagrams/NEET_2025_Q24_fig_0.webp"
+                    }
+                  ],
+                  "mineru_diagrams": ["diagrams/NEET_2025_Q24_fig_0.webp"]
+                }
+                """;
+        Question doc = new Question();
+
+        boolean applied =
+                service.applyStructuredContent(doc, objectMapper.readTree(json), "2025");
+
+        assertThat(applied).isTrue();
+        assertThat(doc.getQuestionTextPreview()).doesNotContain("{{asset:");
+        assertThat(doc.getAssetPlacements()).isEmpty();
+        assertThat(doc.getQuestionImageUrl()).isEmpty();
+        assertThat(doc.isHasDiagram()).isFalse();
+        assertThat(doc.getOptions()).hasSize(4);
+    }
+
+    @Test
     void skipsUnapprovedStructuredDraftFromMetadata() throws Exception {
         String json =
                 """
@@ -151,7 +189,7 @@ class StructuredContentServiceTest {
                 service.applyStructuredContent(doc, objectMapper.readTree(json), "2025");
 
         assertThat(applied).isFalse();
-        assertThat(doc.getRenderMode()).isEqualTo("image");
+        assertThat(doc.getRenderMode()).isNull();
         assertThat(doc.getQuestionTextPreview()).isNull();
     }
 
@@ -177,6 +215,19 @@ class StructuredContentServiceTest {
                 java.util.List.of(
                         option("1", "A"), option("2", "B"), option("3", "C"), option("4", "D")));
         assertThat(service.needsPyqDiskEnrichment(structured)).isFalse();
+
+        Question figureStemWithoutOptions = new Question();
+        figureStemWithoutOptions.setRenderMode("hybrid");
+        figureStemWithoutOptions.setQuestionTextPreview("See figure\n{{asset:0}}");
+        assertThat(service.needsPyqDiskEnrichment(figureStemWithoutOptions)).isTrue();
+
+        Question figureOptionPyq = new Question();
+        figureOptionPyq.setRenderMode("hybrid");
+        figureOptionPyq.setQuestionTextPreview("See figure\n{{asset:0}}");
+        figureOptionPyq.setOptions(
+                java.util.List.of(
+                        option("1", ""), option("2", ""), option("3", ""), option("4", "")));
+        assertThat(service.needsPyqDiskEnrichment(figureOptionPyq)).isFalse();
     }
 
     @Test

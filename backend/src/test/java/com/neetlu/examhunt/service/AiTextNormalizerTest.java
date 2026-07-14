@@ -9,10 +9,62 @@ import org.junit.jupiter.api.Test;
 class AiTextNormalizerTest {
 
     @Test
+    void preservesMarkdownSolutionTablesWithoutBlankLineBreaks() {
+        String table =
+                "|  | Ion | Group number in Cation Analysis |\n"
+                        + "| --- | --- | --- |\n"
+                        + "| A. | Co2+ | Group-IV |\n"
+                        + "| B. | Mg2+ | Group-VI |\n"
+                        + "| C. | Pb2+ | Group-I |\n"
+                        + "| D. | Al3+ | Group-III |";
+        String fixed = AiTextNormalizer.sanitizeSolutionText(table);
+        assertFalse(fixed.contains("|\n\n|"));
+        assertTrue(fixed.contains("$Co^{2+}$"));
+        assertTrue(fixed.contains("$Al^{3+}$"));
+        String broken =
+                "| A. | Co2+ | Group-IV |\n\n| B. | Mg2+ | Group-VI |";
+        assertEquals(
+                "| A. | Co2+ | Group-IV |\n| B. | Mg2+ | Group-VI |",
+                AiTextNormalizer.repairMarkdownTableSpacing(broken));
+    }
+
+    @Test
     void repairsLeftRightDollarDelimitersInVariantOptions() {
         String broken = "g_h=g\\left$$\\frac{R}{R+h}\\right)$$^2";
         String fixed = AiTextNormalizer.normalizeMathContent(broken);
         assertEquals("g_h=g\\left(\\frac{R}{R+h}\\right)^2", fixed);
+    }
+
+    @Test
+    void doesNotCorruptRightarrowIntoRightParenArrow() {
+        String good = "C(s) + 2H_{2}(g) \\rightarrow CH_{4}(g); \\Delta H = -74.8";
+        String fixed = AiTextNormalizer.normalizeMathContent(good);
+        assertTrue(fixed.contains("\\rightarrow"));
+        assertFalse(fixed.contains("\\right)arrow"));
+    }
+
+    @Test
+    void undoesMangledRightParenArrow() {
+        String mangled = "C(s) + 2H_{2}(g) \\right)arrow CH_{4}(g); \\Delta H = -74.8";
+        String fixed = AiTextNormalizer.normalizeMathContent(mangled);
+        assertTrue(fixed.contains("\\rightarrow"));
+        assertFalse(fixed.contains("\\right)arrow"));
+    }
+
+    @Test
+    void unwrapsProseMathAndRepairsStrayDisplayDollars() {
+        assertEquals(
+                "Given below are two statements :",
+                MathRepairCore.unwrapProseMathDelimiters("$Given below are two statements :$"));
+        String broken =
+                "electrons in a $Cr^{2+}$ ion is the same as that of a$$\\mathrm{Nd}^{3+} \\mathrm{ion} \\left( \\mathrm{Z} = 60 \\right)$";
+        String fixed = MathRepairCore.repairPseudoDollarDelimiters(broken);
+        assertFalse(fixed.contains("$$"));
+        assertTrue(fixed.contains("$Cr^{2+}$"));
+        assertTrue(fixed.contains(" ion "));
+        assertFalse(fixed.contains("\\mathrm{ion}"));
+        assertEquals("$Co^{2+}$", MathRepairCore.wrapBareIonSuperscripts("Co2+"));
+        assertEquals("$Al^{3+}$", MathRepairCore.wrapBareIonSuperscripts("Al3+"));
     }
 
     @Test

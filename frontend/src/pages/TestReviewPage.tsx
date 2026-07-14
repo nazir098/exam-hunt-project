@@ -16,6 +16,7 @@ import TestResultRetakeActions from "../components/TestResultRetakeActions";
 import TestReviewAnswerCompare from "../components/TestReviewAnswerCompare";
 import TextMcqQuestion from "../components/TextMcqQuestion";
 import ZoomableImage from "../components/ZoomableImage";
+import { useScrollQuestionIntoView } from "../hooks/useScrollQuestionIntoView";
 import { sessionResultRoute, testReviewRoute } from "../navigation/modes";
 import { difficultyLabel } from "../utils/labels";
 import {
@@ -111,6 +112,11 @@ export default function TestReviewPage() {
       .then(setQuestion)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load question"));
   }, [activeReview?.questionId]);
+
+  useScrollQuestionIntoView(
+    activeReview?.questionId,
+    Boolean(question && activeReview && question.questionId === activeReview.questionId)
+  );
 
   useEffect(() => {
     if (!activeReview || qParam === activeReview.questionId) return;
@@ -252,7 +258,7 @@ export default function TestReviewPage() {
             <div className="test-review-layout__main">
               {activeReview && question && (
                 <>
-                  <section className="test-review-question glass-card">
+                  <section className="test-review-question glass-card" data-question-main>
                     <header className="test-review-question__head">
                       <div>
                         <h2 className="test-review-question__title">

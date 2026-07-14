@@ -32,10 +32,47 @@ const PUBLIC_FILES_BASE = (
 const LOCAL_FILES_URL =
   /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/files\/(.+)$/i;
 
+const PACK_ASSET_PATH =
+  /^(\d{4}\/(?:diagrams|questions|solutions)\/[^?#]+)/i;
+
+function isLocalDevHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+/**
+ * Localhost admin/practice: serve EXTRACTOR_ROOT files instead of R2 so re-crops show
+ * immediately (R2 often still has the old single-panel crop).
+ */
+export function preferLocalFilesUrl(url: string): string {
+  const trimmed = url?.trim() ?? "";
+  if (!trimmed || !isLocalDevHost()) return trimmed;
+  if (trimmed.startsWith("/api/local-files/") || trimmed.startsWith("/api/admin/")) {
+    return trimmed.split("?")[0] ?? trimmed;
+  }
+  try {
+    const path = trimmed.startsWith("http")
+      ? new URL(trimmed).pathname.replace(/^\//, "")
+      : trimmed.replace(/^\//, "");
+    const match = path.match(PACK_ASSET_PATH);
+    if (match) {
+      return `/api/local-files/${match[1]}`;
+    }
+  } catch {
+    // keep original
+  }
+  return trimmed;
+}
+
 /** Rewrite local API file URLs to the public CDN so production browsers can load diagrams. */
 export function publicifyAssetUrl(url: string): string {
   if (!url?.trim()) return "";
-  const trimmed = url.trim();
+  const trimmed = preferLocalFilesUrl(url.trim());
+  // Local extractor crops — keep as-is; do not rewrite to stale R2.
+  if (trimmed.startsWith("/api/local-files/") || trimmed.startsWith("/api/admin/extractor-files/")) {
+    return trimmed;
+  }
   const local = trimmed.match(LOCAL_FILES_URL);
   if (local) {
     return `${PUBLIC_FILES_BASE}/${local[1]}`;
@@ -47,12 +84,17 @@ export function publicifyAssetUrl(url: string): string {
 export function diagramCompositeFallbackUrl(url: string, questionId: string): string {
   const publicUrl = publicifyAssetUrl(url);
   if (!publicUrl || !questionId || !/\/diagrams\//i.test(publicUrl)) return "";
+  // Never fall back to the full PDF crop when serving a local extractor file — that is the
+  // #1 cause of admin vs student figure mismatches after re-crop.
+  if (publicUrl.startsWith("/api/local-files/") || publicUrl.startsWith("/api/admin/")) return "";
   return publicUrl.replace(/\/diagrams\/[^/?#]+/i, `/questions/${encodeURIComponent(questionId)}.webp`);
 }
 
 export function cacheBustImageUrl(url: string, questionId: string) {
   const publicUrl = publicifyAssetUrl(url);
   if (!publicUrl) return "";
+  // Local crops already include ?v=mtime from the API.
+  if (/[?&]v=/.test(publicUrl)) return publicUrl;
   const sep = publicUrl.includes("?") ? "&" : "?";
   return `${publicUrl}${sep}v=${encodeURIComponent(questionId)}`;
 }
@@ -69,6 +111,31 @@ export function isImageRenderMode(renderMode?: string | null) {
 
 export function stemHasInlineAssets(text?: string | null) {
   return Boolean(text?.includes("{{asset:"));
+}
+
+/** Indexes referenced by `{{asset:N}}` markers in stem/option text. */
+export function referencedAssetIndexes(text?: string | null): number[] {
+  if (!text) return [];
+  const out: number[] = [];
+  for (const match of text.matchAll(/\{\{asset:(\d+)\}\}/g)) {
+    out.push(Number(match[1]));
+  }
+  return out;
+}
+
+/**
+ * Auto-bind empty options to asset:1–4 only when the stem itself does not already
+ * embed a figure. Otherwise MinerU's option crops duplicate {{asset:0}} (Q49 composite).
+ */
+export function shouldAutoBindOptionFigures(
+  stemText?: string | null,
+  assetPlacements?: AssetPlacementView[] | null,
+  questionId?: string
+): boolean {
+  if (stemHasInlineAssets(stemText)) return false;
+  return [1, 2, 3, 4].every((assetIndex) =>
+    Boolean(resolveAssetUrl(assetIndex, assetPlacements ?? undefined, questionId ?? ""))
+  );
 }
 
 function hasStructuredDisplayContent(q: QuestionRenderFields) {
@@ -133,12 +200,16 @@ export function hybridDiagramUrl(q: QuestionRenderFields) {
   if (stemHasInlineAssets(q.questionTextPreview)) return "";
   if (!q.hasDiagram) return "";
 
-  const placementUrl = diagramUrlFromPlacements(q.assetPlacements, q.questionId);
-  if (placementUrl) return placementUrl;
-
   const url = q.questionImageUrl?.trim() ?? "";
-  if (!url || isCompositeQuestionImage(url)) return "";
-  return cacheBustImageUrl(url, q.questionId);
+  if (url && !isCompositeQuestionImage(url)) {
+    return cacheBustImageUrl(url, q.questionId);
+  }
+
+  // Text MCQ options: placement rows are often OCR option strips, not a real figure.
+  const textOptions = (q.options ?? []).filter((o) => o.text?.trim()).length >= 2;
+  if (textOptions) return "";
+
+  return diagramUrlFromPlacements(q.assetPlacements, q.questionId);
 }
 
 export type TextMcqDisplayProps = {

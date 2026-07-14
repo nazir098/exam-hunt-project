@@ -90,5 +90,19 @@
     "pipeline": "math",
     "input": "\u0008eta",
     "expectedContains": ["\\beta"]
+  },
+  {
+    "id": "rightarrow-not-right-paren",
+    "pipeline": "math",
+    "input": "C(s) + 2H_{2}(g) \\rightarrow CH_{4}(g); \\Delta H = -74.8",
+    "expectedContains": ["\\rightarrow"],
+    "expectedExcludes": ["\\right)arrow"]
+  },
+  {
+    "id": "undo-right-paren-arrow",
+    "pipeline": "math",
+    "input": "C(s) + 2H_{2}(g) \\right)arrow CH_{4}(g); \\Delta H = -74.8",
+    "expectedContains": ["\\rightarrow"],
+    "expectedExcludes": ["\\right)arrow"]
   }
 ]

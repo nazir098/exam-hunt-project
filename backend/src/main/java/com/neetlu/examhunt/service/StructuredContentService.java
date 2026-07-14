@@ -7,6 +7,7 @@ import com.neetlu.examhunt.model.McqOption;
 import com.neetlu.examhunt.model.Question;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,15 @@ public class StructuredContentService {
      * @return true when structured/hybrid text layout was applied
      */
     public boolean applyStructuredContent(Question doc, JsonNode meta, String sourceFolder) {
+        return applyStructuredContent(doc, meta, sourceFolder, false);
+    }
+
+    /**
+     * @param forceAdminSync when true (admin "Update student view"), apply hybrid/structured text
+     *     even if {@code content_render_approved} is false — do not silently downgrade to image.
+     */
+    public boolean applyStructuredContent(
+            Question doc, JsonNode meta, String sourceFolder, boolean forceAdminSync) {
         if (meta == null || meta.isMissingNode()) {
             return false;
         }
@@ -38,8 +48,9 @@ public class StructuredContentService {
             return false;
         }
 
-        if (!structuredExportAllowed(meta)) {
-            doc.setRenderMode("image");
+        if (!forceAdminSync && !structuredExportAllowed(meta)) {
+            // Leave Mongo alone. Import callers set image when apply returns false.
+            // Mutating renderMode here re-wiped hybrid after admin "Update student view".
             return false;
         }
 
@@ -77,6 +88,18 @@ public class StructuredContentService {
             doc.setStatements(statements);
         }
 
+        if (MatchingVariantParser.isMatchingVariant(meta)) {
+            MatchingVariantParser.ParsedMatching parsed = MatchingVariantParser.parse(meta);
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_A)
+                    && !parsed.listA().isEmpty()) {
+                doc.setMatchListA(parsed.listA());
+            }
+            if (!AdminQuestionPreserve.isLocked(doc, AdminQuestionPreserve.MATCH_LIST_B)
+                    && !parsed.listB().isEmpty()) {
+                doc.setMatchListB(parsed.listB());
+            }
+        }
+
         applyDiagramAssets(doc, meta, sourceFolder, renderMode);
         applySolutionAssets(doc, meta, sourceFolder);
         doc.setContentTextNormalized(true);
@@ -92,7 +115,13 @@ public class StructuredContentService {
             return false;
         }
         String stem = Optional.ofNullable(doc.getQuestionTextPreview()).orElse("").trim();
-        if (stem.contains("{{asset:")) {
+        if (stem.isBlank()) {
+            return false;
+        }
+        // Figure-option PYQs have {{asset:N}} plus empty-text options 1–4. Asset alone is not enough —
+        // without options the student UI cannot present choices.
+        String format = Optional.ofNullable(doc.getQuestionFormat()).orElse("mcq").toLowerCase();
+        if (format.contains("matching") || format.contains("assertion") || format.contains("statement")) {
             return true;
         }
         return doc.getOptions() != null && doc.getOptions().size() >= 4;
@@ -238,6 +267,42 @@ public class StructuredContentService {
                 || hasLocalDevAssetUrls(doc.getSolutionAssetPlacements());
     }
 
+    private static boolean hasLocalDevAssetUrls(java.util.List<AssetPlacement> placements) {
+        if (placements == null || placements.isEmpty()) {
+            return false;
+        }
+        for (AssetPlacement p : placements) {
+            if (p != null && AssetUrlRewriter.isLocalDevFilesUrl(p.getUrl())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Rewrite placement URLs to the public CDN with local mtime cache-bust when available.
+     * Does not write {@code /api/local-files/} into Mongo (that would break production).
+     */
+    public boolean syncAssetUrlsPreferLocal(Question doc, String sourceFolder) {
+        if (doc == null) {
+            return false;
+        }
+        return rewritePlacementList(doc.getAssetPlacements(), sourceFolder)
+                | rewritePlacementList(doc.getSolutionAssetPlacements(), sourceFolder);
+    }
+
+    /** True when stem references {{asset:N}} but Mongo has no placement rows. */
+    public boolean needsInlineAssetPlacementRefresh(Question doc) {
+        if (doc == null) {
+            return false;
+        }
+        String stem = Optional.ofNullable(doc.getQuestionTextPreview()).orElse("");
+        if (!stem.contains("{{asset:")) {
+            return false;
+        }
+        return doc.getAssetPlacements() == null || doc.getAssetPlacements().isEmpty();
+    }
+
     /**
      * Rewrite local-dev {@code /files/} URLs to {@code PUBLIC_FILES_BASE_URL} without fetching R2
      * metadata. Returns true when any field changed.
@@ -293,18 +358,6 @@ public class StructuredContentService {
         return s == null ? "" : s;
     }
 
-    private static boolean hasLocalDevAssetUrls(java.util.List<AssetPlacement> placements) {
-        if (placements == null || placements.isEmpty()) {
-            return false;
-        }
-        for (AssetPlacement p : placements) {
-            if (p != null && AssetUrlRewriter.isLocalDevFilesUrl(p.getUrl())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public void applySolutionAssets(Question doc, JsonNode meta, String sourceFolder) {
         List<AssetPlacement> placements = resolveSolutionAssetPlacements(meta, sourceFolder);
         if (!placements.isEmpty()) {
@@ -357,9 +410,14 @@ public class StructuredContentService {
         return meta.path("content_render_approved").asBoolean(false);
     }
 
-    /** Approved hybrid/structured metadata with a dedicated {@code question_stem} field. */
+    /**
+     * Metadata has a dedicated hybrid/structured {@code question_stem} (vs OCR {@code question_text}).
+     * Does not require {@code content_render_approved} — approval gates pack export / default import,
+     * not whether the stem field exists. Requiring approval here made admin sync write clean stem
+     * then immediately overwrite it with dirty OCR {@code question_text}.
+     */
     public boolean hasStructuredStemMetadata(JsonNode meta) {
-        if (!structuredExportAllowed(meta)) {
+        if (meta == null || meta.isMissingNode()) {
             return false;
         }
         String mode = text(meta, "render_mode").strip().toLowerCase();
@@ -402,6 +460,22 @@ public class StructuredContentService {
 
     private void applyDiagramAssets(Question doc, JsonNode meta, String sourceFolder, String renderMode) {
         List<AssetPlacement> placements = resolveAssetPlacements(meta, sourceFolder);
+        boolean stemAssets = stemHasInlineAssets(doc.getQuestionTextPreview());
+        boolean textOptions = hasTextMcqOptions(doc);
+        boolean metaHasDiagram = meta.path("has_diagram").asBoolean(false);
+
+        // MinerU often stores option-formula crops as question_asset_placements even when
+        // options are already text and there is no real figure (e.g. NEET_2025_Q24).
+        if (("hybrid".equals(renderMode) || "structured".equals(renderMode))
+                && textOptions
+                && !stemAssets
+                && !metaHasDiagram) {
+            doc.setAssetPlacements(List.of());
+            doc.setHasDiagram(false);
+            doc.setQuestionImageUrl("");
+            return;
+        }
+
         if (!placements.isEmpty()) {
             doc.setAssetPlacements(placements);
         }
@@ -424,7 +498,7 @@ public class StructuredContentService {
             if (!diagramUrl.isBlank()) {
                 diagramUrl = preferDiagramOnlyUrl(diagramUrl);
             }
-            if (!diagramUrl.isBlank() && !stemHasInlineAssets(doc.getQuestionTextPreview())) {
+            if (!diagramUrl.isBlank() && !stemAssets) {
                 doc.setQuestionImageUrl(diagramUrl);
                 doc.setHasDiagram(true);
             } else if (!placements.isEmpty()) {
@@ -435,6 +509,20 @@ public class StructuredContentService {
         }
     }
 
+    /** True when MCQ choices are real text (not empty figure-option rows). */
+    private static boolean hasTextMcqOptions(Question doc) {
+        if (doc.getOptions() == null || doc.getOptions().isEmpty()) {
+            return false;
+        }
+        int nonBlank = 0;
+        for (McqOption option : doc.getOptions()) {
+            if (option != null && option.getText() != null && !option.getText().isBlank()) {
+                nonBlank++;
+            }
+        }
+        return nonBlank >= 2;
+    }
+
     /** Backfill {{asset:N}} when metadata placements exist but the stored stem omitted the marker. */
     private void ensureInlineAssetMarkers(Question doc) {
         if (doc.getAssetPlacements() == null || doc.getAssetPlacements().isEmpty()) {
@@ -442,6 +530,10 @@ public class StructuredContentService {
         }
         String stem = Optional.ofNullable(doc.getQuestionTextPreview()).orElse("").trim();
         if (stem.contains("{{asset:")) {
+            return;
+        }
+        // Text options already show choices — do not inject option-strip crops into the stem.
+        if (hasTextMcqOptions(doc)) {
             return;
         }
         String marker = "{{asset:0}}";
@@ -574,7 +666,32 @@ public class StructuredContentService {
     }
 
     private String rewriteAssetUrl(String url, String sourceFolder) {
-        return AssetUrlRewriter.rewrite(url, sourceFolder, appProperties.publicFilesBaseUrl());
+        // Always persist public CDN URLs in Mongo so production (no EXTRACTOR_ROOT) works.
+        String publicUrl =
+                AssetUrlRewriter.rewrite(url, sourceFolder, appProperties.publicFilesBaseUrl());
+        Optional<Path> outputRoot =
+                LocalExtractorAssetUrls.resolveOutputRoot(appProperties.extractorRoot());
+        if (outputRoot.isPresent() && !publicUrl.isBlank()) {
+            return LocalExtractorAssetUrls.appendMtimeQuery(
+                    publicUrl, outputRoot.get(), sourceFolder, url);
+        }
+        return publicUrl;
+    }
+
+    /**
+     * Re-apply diagram / solution asset URLs from metadata without requiring a full stem refresh.
+     * Used after crop-from-source so Mongo points at the new local file.
+     */
+    public void refreshDiagramAssets(Question doc, JsonNode meta, String sourceFolder) {
+        if (doc == null || meta == null || meta.isMissingNode()) {
+            return;
+        }
+        String renderMode = text(meta, "render_mode").strip().toLowerCase();
+        if (renderMode.isBlank()) {
+            renderMode = Optional.ofNullable(doc.getRenderMode()).orElse("image").strip().toLowerCase();
+        }
+        applyDiagramAssets(doc, meta, sourceFolder, renderMode);
+        applySolutionAssets(doc, meta, sourceFolder);
     }
 
     private static List<McqOption> readMcqOptions(JsonNode arr) {
@@ -591,12 +708,14 @@ public class StructuredContentService {
             if (optionText.isBlank()) {
                 optionText = text(node, "option");
             }
-            if (id.isBlank() || optionText.isBlank()) {
+            // Figure-option PYQs often have ids 1–4 with empty text (choices are in the diagram).
+            if (id.isBlank()) {
                 continue;
             }
             McqOption option = new McqOption();
             option.setId(id.strip());
-            option.setText(AiTextNormalizer.sanitizeMcqOptionText(optionText));
+            option.setText(
+                    optionText.isBlank() ? "" : AiTextNormalizer.sanitizeMcqOptionText(optionText));
             out.add(option);
         }
         return out;
