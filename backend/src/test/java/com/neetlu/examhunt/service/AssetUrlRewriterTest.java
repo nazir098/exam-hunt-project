@@ -28,8 +28,22 @@ class AssetUrlRewriterTest {
                         AssetUrlRewriter.isLocalDevFilesUrl(
                                 "http://127.0.0.1:8080/files/2025/diagrams/x.webp"))
                 .isTrue();
+        assertThat(
+                        AssetUrlRewriter.isLocalDevFilesUrl(
+                                "/api/local-files/2025/diagrams/NEET_2025_Q23_fig_0.webp?v=1"))
+                .isTrue();
         assertThat(AssetUrlRewriter.isLocalDevFilesUrl("https://cdn.example/2025/diagrams/x.webp"))
                 .isFalse();
+    }
+
+    @Test
+    void rewritesLocalFilesApiPathToPublicCdn() {
+        String out =
+                AssetUrlRewriter.rewrite(
+                        "/api/local-files/2025/diagrams/NEET_2025_Q23_fig_0.webp?v=1",
+                        "2025",
+                        "https://cdn.example");
+        assertThat(out).isEqualTo("https://cdn.example/2025/diagrams/NEET_2025_Q23_fig_0.webp");
     }
 
     @Test

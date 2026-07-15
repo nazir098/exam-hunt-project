@@ -17,6 +17,10 @@ public final class AssetUrlRewriter {
             Pattern.compile(
                     "(?i)^https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?/files/(.+)$");
 
+    /** Relative or absolute extractor preview URLs that must never ship to production browsers. */
+    private static final Pattern LOCAL_FILES_API =
+            Pattern.compile("(?i)^(?:https?://[^/]+)?/api/local-files/(.+)$");
+
     private static final Pattern LOCAL_HOST =
             Pattern.compile("(?i)^https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?(?:/.*)?$");
 
@@ -26,7 +30,8 @@ public final class AssetUrlRewriter {
         if (url == null || url.isBlank()) {
             return false;
         }
-        return LOCAL_FILES.matcher(url.strip()).matches();
+        String trimmed = url.strip();
+        return LOCAL_FILES.matcher(trimmed).matches() || LOCAL_FILES_API.matcher(trimmed).matches();
     }
 
     /** True when {@code PUBLIC_FILES_BASE_URL} itself points at a local API (misconfigured). */
@@ -59,8 +64,15 @@ public final class AssetUrlRewriter {
         }
         String trimmed = url.strip();
         Matcher local = LOCAL_FILES.matcher(trimmed);
+        Matcher localApi = LOCAL_FILES_API.matcher(trimmed);
         if (local.matches()) {
             trimmed = local.group(1);
+        } else if (localApi.matches()) {
+            trimmed = localApi.group(1);
+            int q = trimmed.indexOf('?');
+            if (q >= 0) {
+                trimmed = trimmed.substring(0, q);
+            }
         } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
             // Never keep a localhost absolute URL as the public asset host.
             if (isLocalDevPublicBase(trimmed)) {

@@ -100,7 +100,10 @@ public final class LocalExtractorAssetUrls {
 
     static String toRelative(String urlOrPath, String folder) {
         String trimmed = urlOrPath;
-        if (AssetUrlRewriter.isLocalDevFilesUrl(trimmed)) {
+        if (trimmed.matches("(?i)^(?:https?://[^/]+)?/api/local-files/.+")) {
+            trimmed =
+                    trimmed.replaceFirst("(?i)^(?:https?://[^/]+)?/api/local-files/", "");
+        } else if (AssetUrlRewriter.isLocalDevFilesUrl(trimmed)) {
             trimmed =
                     trimmed.replaceFirst(
                             "(?i)^https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?/files/", "");

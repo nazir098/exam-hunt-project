@@ -65,13 +65,23 @@ export function preferLocalFilesUrl(url: string): string {
   return trimmed;
 }
 
+const LOCAL_FILES_API =
+  /^(?:https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?)?\/api\/local-files\/(.+)$/i;
+
 /** Rewrite local API file URLs to the public CDN so production browsers can load diagrams. */
 export function publicifyAssetUrl(url: string): string {
   if (!url?.trim()) return "";
   const trimmed = preferLocalFilesUrl(url.trim());
-  // Local extractor crops — keep as-is; do not rewrite to stale R2.
-  if (trimmed.startsWith("/api/local-files/") || trimmed.startsWith("/api/admin/extractor-files/")) {
+  // Admin extractor previews stay relative (auth-gated); never send these to CDN.
+  if (trimmed.startsWith("/api/admin/extractor-files/")) {
     return trimmed;
+  }
+  // Localhost: keep /api/local-files so re-crops show immediately.
+  // Production: Mongo sometimes still has local-files URLs — browsers cannot load them.
+  const localApi = trimmed.match(LOCAL_FILES_API);
+  if (localApi) {
+    if (isLocalDevHost()) return trimmed.startsWith("/") ? trimmed.split("?")[0] ?? trimmed : trimmed;
+    return `${PUBLIC_FILES_BASE}/${localApi[1].replace(/\?.*$/, "")}`;
   }
   const local = trimmed.match(LOCAL_FILES_URL);
   if (local) {

@@ -101,8 +101,11 @@ export default function VariantDiagram({
     });
   }, [candidates.length]);
 
+  const stillTrying = index < candidates.length;
   if (!displaySrc && !markup) {
-    if (candidates.length > 0) {
+    // Only skeleton while a candidate is in flight — never after all URLs failed
+    // (that left a permanent blank grey box on production when /api/local-files 404'd).
+    if (stillTrying && candidates.length > 0) {
       return (
         <figure className={`variant-diagram variant-diagram--loading${className ? ` ${className}` : ""}`}>
           <span className="variant-diagram__skeleton" aria-hidden />
