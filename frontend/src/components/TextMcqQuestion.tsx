@@ -248,7 +248,7 @@ export default function TextMcqQuestion({
   const assertionLabel = parsedAssertionReason?.firstLabel ?? "Assertion (A)";
   const reasonLabel = parsedAssertionReason?.secondLabel ?? "Reason (R)";
   const showStatements =
-    effectiveStatements.length >= 3 &&
+    effectiveStatements.length >= 2 &&
     (format === "statement_based" || Boolean(parsedLetterStatements));
   const sortedStatements = useMemo(
     () =>

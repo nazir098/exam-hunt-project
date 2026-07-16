@@ -13,7 +13,8 @@ export function parseLetterStatementsStem(text: string): ParsedLetterStatements 
   if (!raw) return null;
 
   const matches = [...raw.matchAll(LETTER_MARKER)];
-  if (matches.length < 3) return null;
+  // NEET often has only A/B (two statements); require at least two distinct letters.
+  if (matches.length < 2) return null;
 
   const ids = matches.map((m) => m[1]);
   if (new Set(ids).size !== ids.length) return null;
@@ -40,7 +41,7 @@ export function parseLetterStatementsStem(text: string): ParsedLetterStatements 
     }
   }
 
-  if (statements.length < 3) return null;
+  if (statements.length < 2) return null;
   return { intro, statements };
 }
 
